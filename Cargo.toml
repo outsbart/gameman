@@ -1,0 +1,6 @@
+[package]
+name = "gameman"
+version = "0.1.0"
+authors = ["Bart Merenda <outsbart@gmail.com>"]
+
+[dependencies]
