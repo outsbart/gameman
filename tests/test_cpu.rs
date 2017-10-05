@@ -1,8 +1,9 @@
-extern crate gameman;
+// Integration tests will go here
 
-use gameman::cpu::CPU;
+//extern crate gameman;
+//
+//use gameman::cpu::CPU;
 
-#[test]
-fn it_works() {
-    CPU::new();
-}
+//#[test]
+//fn it_works() {
+//}

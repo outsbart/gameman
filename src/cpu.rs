@@ -38,3 +38,29 @@ impl CPU {
         CPU { clocks: Clocks::new(), registers: Registers::new() }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cpu_inizialization() {
+        let CPU { clocks, registers } = CPU::new();
+
+        assert_eq!(clocks.m, 0);
+        assert_eq!(clocks.t, 0);
+
+        assert_eq!(registers.a, 0);
+        assert_eq!(registers.b, 0);
+        assert_eq!(registers.c, 0);
+        assert_eq!(registers.d, 0);
+        assert_eq!(registers.e, 0);
+        assert_eq!(registers.h, 0);
+        assert_eq!(registers.l, 0);
+        assert_eq!(registers.f, 0);
+        assert_eq!(registers.pc, 0);
+        assert_eq!(registers.sp, 0);
+        assert_eq!(registers.m, 0);
+        assert_eq!(registers.t, 0);
+    }
+}
