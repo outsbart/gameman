@@ -1,3 +1,4 @@
+use mem::MMU;
 
 // Flags poisition in the F register
 const ZERO_FLAG: u8 = 0x80;
@@ -30,7 +31,7 @@ impl Registers {
             a: 0, b: 0, c: 0, d: 0,
             e: 0, h: 0, l:0, f: 0,
 
-            pc: 0, sp: 0,
+            pc: 0, sp: 20, // TODO: change sp
             m: 0, t: 0
         }
     }
@@ -38,13 +39,17 @@ impl Registers {
 
 pub struct CPU {
     clks: Clocks,
-    regs: Registers
+    regs: Registers,
+
+    mmu: MMU
 }
 
 impl CPU {
     pub fn new() -> CPU {
-        CPU { clks: Clocks::new(), regs: Registers::new() }
+        CPU { clks: Clocks::new(), regs: Registers::new(), mmu: MMU::new() }
     }
+
+    // operations
 
     // adds E to A
     fn addr_e(&mut self) {
@@ -79,6 +84,35 @@ impl CPU {
         self.regs.m = 1;
         self.regs.t = 4;
     }
+
+    // push b and c on the stack
+    fn pushbc(&mut self) {
+        self.regs.sp -= 1;
+        self.mmu.write_byte(self.regs.sp, self.regs.b);
+        self.regs.sp -= 1;
+        self.mmu.write_byte(self.regs.sp, self.regs.c);
+
+        self.regs.m = 3; self.regs.t = 12;
+    }
+
+    // pop b and c from the stack
+    fn popbc(&mut self) {
+        self.regs.c = self.mmu.read_byte(self.regs.sp);
+        self.regs.sp += 1;
+        self.regs.b = self.mmu.read_byte(self.regs.sp);
+        self.regs.sp += 1;
+
+        self.regs.m = 3; self.regs.t = 12;
+    }
+
+    // read a word from an absolute location into A
+    fn ldamm(&mut self) {
+        let addr: u16 = self.mmu.read_word(self.regs.pc);
+        self.regs.pc += 2;
+        self.regs.a = self.mmu.read_byte(addr);
+
+        self.regs.m = 4; self.regs.t = 16;
+    }
 }
 
 #[cfg(test)]
@@ -87,7 +121,7 @@ mod tests {
 
     #[test]
     fn cpu_inizialization() {
-        let CPU { clks, regs } = CPU::new();
+        let CPU { clks, regs, mmu } = CPU::new();
 
         assert_eq!(clks.m, 0);
         assert_eq!(clks.t, 0);
@@ -101,7 +135,7 @@ mod tests {
         assert_eq!(regs.l, 0);
         assert_eq!(regs.f, 0);
         assert_eq!(regs.pc, 0);
-        assert_eq!(regs.sp, 0);
+        assert_eq!(regs.sp, 20);
         assert_eq!(regs.m, 0);
         assert_eq!(regs.t, 0);
     }
@@ -145,5 +179,24 @@ mod tests {
 
         assert_eq!(cpu.regs.m, 1);
         assert_eq!(cpu.regs.t, 4);
+    }
+
+
+    #[test]
+    fn op_pushbc() {
+        let mut cpu = CPU::new();
+
+        cpu.regs.b = 1;
+        cpu.regs.c = 2;
+
+        cpu.pushbc();
+
+        cpu.regs.b = 0;
+        cpu.regs.c = 0;
+
+        cpu.popbc();
+
+        assert_eq!(cpu.regs.b, 1);
+        assert_eq!(cpu.regs.c, 2);
     }
 }
