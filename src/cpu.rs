@@ -139,11 +139,28 @@ impl<M: Memory> CPU<M> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mem::MMU;
+
+    struct DummyMMU {
+        values: [u8; 65536]
+    }
+
+    impl DummyMMU {
+        fn new() -> DummyMMU { DummyMMU{ values: [0; 65536] } }
+        fn with(values: [u8; 65536]) -> DummyMMU { DummyMMU{ values } }
+    }
+
+    impl Memory for DummyMMU {
+        fn read_byte(&self, addr: u16) -> u8 {
+            self.values[addr as usize]
+        }
+        fn write_byte(&mut self, addr: u16, byte: u8) {
+            self.values[addr as usize] = byte;
+        }
+    }
 
     #[test]
     fn cpu_inizialization() {
-        let CPU { clks, regs, .. } = CPU::new(MMU::new());
+        let CPU { clks, regs, .. } = CPU::new(DummyMMU::new());
 
         assert_eq!(clks.m, 0);
         assert_eq!(clks.t, 0);
@@ -164,7 +181,7 @@ mod tests {
 
     #[test]
     fn op_nop() {
-        let mut cpu = CPU::new(MMU::new());
+        let mut cpu = CPU::new(DummyMMU::new());
 
         cpu.nop();
 
@@ -174,7 +191,7 @@ mod tests {
 
     #[test]
     fn op_addr_e() {
-        let mut cpu = CPU::new(MMU::new());
+        let mut cpu = CPU::new(DummyMMU::new());
 
         cpu.regs.e = 0xFF;
 
@@ -189,7 +206,7 @@ mod tests {
 
     #[test]
     fn op_addr_e_carry() {
-        let mut cpu = CPU::new(MMU::new());
+        let mut cpu = CPU::new(DummyMMU::new());
 
         cpu.regs.a = 0x01;
         cpu.regs.e = 0xFF;
@@ -206,7 +223,7 @@ mod tests {
 
     #[test]
     fn op_pushbc() {
-        let mut cpu = CPU::new(MMU::new());
+        let mut cpu = CPU::new(DummyMMU::new());
 
         cpu.regs.b = 1;
         cpu.regs.c = 2;
@@ -225,10 +242,7 @@ mod tests {
     #[test]
     fn test_step_nop() {
         /// Test that the cpu test method fetches the instruction and executes
-        let mut cpu = CPU::new(MMU::new());
-
-        // set next op as nop
-        cpu.mmu.write_byte(cpu.regs.pc, 0);
+        let mut cpu = CPU::new(DummyMMU::new());
 
         cpu.step();
 

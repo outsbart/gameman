@@ -27,7 +27,6 @@ impl Memory for MMU {
     fn read_byte(&self, addr: u16) -> u8 {
         self.values[addr as usize]
     }
-
     fn write_byte(&mut self, addr: u16, byte: u8) {
         self.values[addr as usize] = byte;
     }
