@@ -121,7 +121,7 @@ mod tests {
 
     #[test]
     fn cpu_inizialization() {
-        let CPU { clks, regs, mmu } = CPU::new();
+        let CPU { clks, regs, .. } = CPU::new();
 
         assert_eq!(clks.m, 0);
         assert_eq!(clks.t, 0);
