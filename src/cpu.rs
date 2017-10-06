@@ -1,4 +1,4 @@
-use mem::MMU;
+use mem::Memory;
 
 // Flags poisition in the F register
 const ZERO_FLAG: u8 = 0x80;
@@ -31,22 +31,22 @@ impl Registers {
             a: 0, b: 0, c: 0, d: 0,
             e: 0, h: 0, l:0, f: 0,
 
-            pc: 0, sp: 20, // TODO: change sp
+            pc: 0, sp: 20, // TODO: change sp value
             m: 0, t: 0
         }
     }
 }
 
-pub struct CPU {
+pub struct CPU<M: Memory> {
     clks: Clocks,
     regs: Registers,
 
-    mmu: MMU
+    mmu: M
 }
 
-impl CPU {
-    pub fn new() -> CPU {
-        CPU { clks: Clocks::new(), regs: Registers::new(), mmu: MMU::new() }
+impl<M: Memory> CPU<M> {
+    pub fn new(mmu: M) -> CPU<M> {
+        CPU { clks: Clocks::new(), regs: Registers::new(), mmu }
     }
 
     // operations
@@ -139,10 +139,11 @@ impl CPU {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mem::MMU;
 
     #[test]
     fn cpu_inizialization() {
-        let CPU { clks, regs, .. } = CPU::new();
+        let CPU { clks, regs, .. } = CPU::new(MMU::new());
 
         assert_eq!(clks.m, 0);
         assert_eq!(clks.t, 0);
@@ -163,7 +164,7 @@ mod tests {
 
     #[test]
     fn op_nop() {
-        let mut cpu = CPU::new();
+        let mut cpu = CPU::new(MMU::new());
 
         cpu.nop();
 
@@ -173,7 +174,7 @@ mod tests {
 
     #[test]
     fn op_addr_e() {
-        let mut cpu = CPU::new();
+        let mut cpu = CPU::new(MMU::new());
 
         cpu.regs.e = 0xFF;
 
@@ -188,7 +189,7 @@ mod tests {
 
     #[test]
     fn op_addr_e_carry() {
-        let mut cpu = CPU::new();
+        let mut cpu = CPU::new(MMU::new());
 
         cpu.regs.a = 0x01;
         cpu.regs.e = 0xFF;
@@ -205,7 +206,7 @@ mod tests {
 
     #[test]
     fn op_pushbc() {
-        let mut cpu = CPU::new();
+        let mut cpu = CPU::new(MMU::new());
 
         cpu.regs.b = 1;
         cpu.regs.c = 2;
@@ -224,7 +225,7 @@ mod tests {
     #[test]
     fn test_step_nop() {
         /// Test that the cpu test method fetches the instruction and executes
-        let mut cpu = CPU::new();
+        let mut cpu = CPU::new(MMU::new());
 
         // set next op as nop
         cpu.mmu.write_byte(cpu.regs.pc, 0);
