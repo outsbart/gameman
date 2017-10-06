@@ -8,7 +8,7 @@ const CARRY_FLAG: u8 = 0x10;
 
 
 struct Clocks {
-    m: i32, t: i32  // TODO: check if i32 is the right type
+    m: u32, t: u32  // TODO: check if i32 is the right type
 }
 
 impl Clocks {
@@ -77,6 +77,27 @@ impl CPU {
 
         self.regs.m = 1;
         self.regs.t = 4;
+    }
+
+    // fetches the next operation
+    fn fetch_next_op(&mut self) -> u8 {
+        let op = self.mmu.read_byte(self.regs.pc);
+        self.regs.pc += 1;
+        op
+    }
+
+    // fetch the operation, decodes it, fetch parameters if required, and executes it
+    fn step(&mut self) {
+        let operation: u8 = self.fetch_next_op();
+
+        match operation {
+            0x00 => { self.nop(); }
+            _ => { panic!("Operation not found!!") }
+        }
+
+        // add to the clocks
+        self.clks.t += self.regs.t as u32;
+        self.clks.m += self.regs.m as u32;
     }
 
     // no operation
@@ -198,5 +219,20 @@ mod tests {
 
         assert_eq!(cpu.regs.b, 1);
         assert_eq!(cpu.regs.c, 2);
+    }
+
+    #[test]
+    fn test_step_nop() {
+        /// Test that the cpu test method fetches the instruction and executes
+        let mut cpu = CPU::new();
+
+        // set next op as nop
+        cpu.mmu.write_byte(cpu.regs.pc, 0);
+
+        cpu.step();
+
+        // assert that nop has been executed
+        assert_eq!(cpu.regs.m, 1);
+        assert_eq!(cpu.regs.t, 4);
     }
 }
