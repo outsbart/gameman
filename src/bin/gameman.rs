@@ -1,9 +1,7 @@
 extern crate gameman;
 
-use gameman::cpu::CPU;
-
 fn main() {
-    CPU::new();
-    let a = 0u64;
-    println!("{}", a);
+    let i: u64 = u32::max_value() as u64 + u32::max_value() as u64;
+
+    println!("{}", u64::max_value()-i);
 }
