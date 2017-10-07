@@ -40,11 +40,11 @@ pub trait Memory {
 
 impl<M: GPUMemoriesAccess> Memory for MMU<M> {
     fn read_byte(&mut self, addr: u16) -> u8 {
-
         // TODO: once everything works and is tested, refactor using actual ranges
         match addr & 0xF000 {
             // BIOS
             0x0000 => {
+
                 if self.still_bios {
                     if addr < 0x0100 {
                         return self.bios[addr as usize]
@@ -92,7 +92,40 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
         }
     }
     fn write_byte(&mut self, addr: u16, byte: u8) {
-        self.rom[addr as usize] = byte;
+        // TODO: once everything works and is tested, refactor using actual ranges
+        match addr & 0xF000 {
+            0x0000...0x3000 => { return }                // BIOS AND ROM 0
+            0x4000...0x7000 => { return }                // ROM 1
+            0x8000 | 0x9000 => { self.gpu.write_vram(addr &0x1FFF, byte); return } // VRAM
+            0xA000 | 0xB000 => { self.eram[(addr &0x1FFF) as usize] = byte; return }     // External RAM
+            0xC000...0xE000 => { self.wram[(addr &0x1FFF) as usize] = byte; return }     // Working RAM
+
+            0xF000 => {
+                match addr & 0x0F00 {
+                    0x0000...0x0D00 => { self.wram[(addr & 0x1FFF) as usize] = byte; return } // Working RAM echo
+
+                    // GPU OAM
+                    0x0E00 => {
+                        if addr < 0xFEA0 { self.gpu.write_oam(addr & 0x00FF, byte); return }
+                    }
+
+                    // Zero page
+                    0x0F00 => {
+                        if addr >= 0xFF80 { self.zram[(addr & 0x007F) as usize] = byte; return }
+                        else { return }  // TODO: change when IO implemented
+                    }
+
+                    _ => {
+                        panic!("Unhandled memory write")
+                    }
+                }
+            }
+
+            _ => {
+                panic!("Unhandled memory write")
+            }
+
+        }
     }
 }
 
@@ -130,16 +163,16 @@ mod tests {
     fn little_endian() {
         let mut mmu = MMU::new(DummyGPU::new());
 
-        mmu.write_word(0x1000, 0x1FF);
-        assert_eq!(0x1FF, mmu.read_word(0x1000))
+        mmu.write_word(0xC000, 0x1FF);
+        assert_eq!(0x1FF, mmu.read_word(0xC000))
     }
 
     #[test]
     fn read_and_write_byte() {
         let mut mmu = MMU::new(DummyGPU::new());
 
-        mmu.write_byte(0x1000, 0x1);
-        assert_eq!(0x1, mmu.read_byte(0x1000))
+        mmu.write_byte(0xC000, 0x1);
+        assert_eq!(0x1, mmu.read_byte(0xC000))
     }
 
     /// after instruction 0x0100 is reached,
@@ -173,6 +206,21 @@ mod tests {
         assert_eq!(mmu.read_byte(0xC000), 0);
     }
 
+    /// test succesful mapping for eram write
+    /// from 0xA000 to 0xBFFF should write to eram at addr &0x1FFF
+    #[test]
+    fn eram_write() {
+        let mut mmu = MMU::new(DummyGPU::new());
+
+        mmu.write_byte(0xA000, 1);
+        mmu.write_byte(0xB000, 1);
+        mmu.write_byte(0xBFFF, 1);
+
+        assert_eq!(mmu.eram[0xA000 &0x1FFF], 1);
+        assert_eq!(mmu.eram[0xB000 &0x1FFF], 1);
+        assert_eq!(mmu.eram[0xBFFF &0x1FFF], 1);
+    }
+
     /// test succesful mapping for wram access
     /// from 0xC000 to 0xFDFF should access wram
     #[test]
@@ -189,6 +237,23 @@ mod tests {
         assert_eq!(mmu.read_byte(0xFE00), 0);
     }
 
+    /// test succesful mapping for wram write
+    /// from 0xC000 to 0xFDFF should write to wram at addr &0x1FFF
+    #[test]
+    fn wram_write() {
+        let mut mmu = MMU::new(DummyGPU::new());
+
+        mmu.write_byte(0xC000, 1);
+        mmu.write_byte(0xD000, 1);
+        mmu.write_byte(0xE000, 1);
+        mmu.write_byte(0xFDFF, 1);
+
+        assert_eq!(mmu.wram[0xC000 &0x1FFF], 1);
+        assert_eq!(mmu.wram[0xD000 &0x1FFF], 1);
+        assert_eq!(mmu.wram[0xE000 &0x1FFF], 1);
+        assert_eq!(mmu.wram[0xFDFF &0x1FFF], 1);
+    }
+
     /// test succesful mapping for zero ram access
     /// from 0xFF80 to 0xFFFF should access zero ram
     #[test]
@@ -200,6 +265,21 @@ mod tests {
         assert_eq!(mmu.read_byte(0xFF7F), 0);
         assert_eq!(mmu.read_byte(0xFF80), 1);
         assert_eq!(mmu.read_byte(0xFFFF), 1);
+    }
+
+    /// test succesful mapping for zram write
+    /// from 0xFF80 to 0xFFFF should write to zram at addr &0x007F
+    #[test]
+    fn zram_write() {
+        let mut mmu = MMU::new(DummyGPU::new());
+
+        mmu.write_byte(0xFF80, 1);
+        mmu.write_byte(0xFFB0, 1);
+        mmu.write_byte(0xFFFF, 1);
+
+        assert_eq!(mmu.zram[0xFF80 &0x007F], 1);
+        assert_eq!(mmu.zram[0xFFB0 &0x007F], 1);
+        assert_eq!(mmu.zram[0xFFFF &0x007F], 1);
     }
 
     /// test succesful mapping for gpu vram access
@@ -215,6 +295,22 @@ mod tests {
         assert_eq!(mmu.read_byte(0xA000), 0);
     }
 
+    /// test succesful mapping for gpu vram write
+    /// from 0x8000 to 0x9FFF should write to gpu vram at addr &0x1FFF
+    #[test]
+    fn gpu_vram_write() {
+        let mut mmu = MMU::new(DummyGPU::new());
+
+        mmu.write_byte(0x8000, 1);
+        mmu.write_byte(0x9000, 1);
+        mmu.write_byte(0x9FFF, 1);
+
+        // todo: is it good to assume that gpu has vram attribute?
+        assert_eq!(mmu.gpu.vram[0x8000 & 0x1FFF], 1);
+        assert_eq!(mmu.gpu.vram[0x9000 & 0x1FFF], 1);
+        assert_eq!(mmu.gpu.vram[0x9FFF & 0x1FFF], 1);
+    }
+
     /// test succesful mapping for gpu oam access
     /// from 0xFE00 to 0xFE9F should access gpu oam
     #[test]
@@ -226,6 +322,22 @@ mod tests {
         assert_eq!(mmu.read_byte(0xFE70), 1);
         assert_eq!(mmu.read_byte(0xFE9F), 1);
         assert_eq!(mmu.read_byte(0xFEA0), 0);
+    }
+
+    /// test succesful mapping for gpu oam write
+    /// from 0xFE00 to 0xFE9F should write to gpu oam at addr &0x00FF
+    #[test]
+    fn gpu_oam_write() {
+        let mut mmu = MMU::new(DummyGPU::new());
+
+        mmu.write_byte(0xFE00, 1);
+        mmu.write_byte(0xFE70, 1);
+        mmu.write_byte(0xFE9F, 1);
+
+        // todo: is it good to assume that gpu has oam attribute?
+        assert_eq!(mmu.gpu.oam[0xFE00 & 0x00FF], 1);
+        assert_eq!(mmu.gpu.oam[0xFE70 & 0x00FF], 1);
+        assert_eq!(mmu.gpu.oam[0xFE9F & 0x00FF], 1);
     }
 
 }
