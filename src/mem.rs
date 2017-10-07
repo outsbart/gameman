@@ -1,10 +1,10 @@
 use gpu::GPUMemoriesAccess;
 
-pub struct MMU<M: GPUMemoriesAccess> {      // TODO: fix the sizes when tests are implemented
-    still_bios: bool, bios: [u8; 65536],
+pub struct MMU<M: GPUMemoriesAccess> {
+    still_bios: bool, bios: [u8; 0x0100],
 
-    rom: [u8; 65536], wram: [u8; 65536],
-    eram: [u8; 65536], zram: [u8; 65536],
+    rom: [u8; 0x8000], wram: [u8; 0x2000],   // second half of rom is swappable (aka rom banking)
+    eram: [u8; 0x2000], zram: [u8; 0x0080],
 
     gpu: M
 }
@@ -12,10 +12,10 @@ pub struct MMU<M: GPUMemoriesAccess> {      // TODO: fix the sizes when tests ar
 impl<M: GPUMemoriesAccess> MMU<M> {
     pub fn new(gpu: M) -> MMU<M> {
         MMU {
-            still_bios: true, bios: [0; 65536],
+            still_bios: true, bios: [0; 0x0100],
 
-            rom: [0; 65536], wram: [0; 65536],
-            eram: [0; 65536], zram: [0; 65536],
+            rom: [0; 0x8000], wram: [0; 0x2000],
+            eram: [0; 0x2000], zram: [0; 0x0080],
 
             gpu
         }
@@ -44,7 +44,6 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
         match addr & 0xF000 {
             // BIOS
             0x0000 => {
-
                 if self.still_bios {
                     if addr < 0x0100 {
                         return self.bios[addr as usize]
@@ -181,10 +180,9 @@ mod tests {
     fn bios_gets_replaced_by_rom() {
         let mut mmu = MMU::new(DummyGPU::new());
 
-        mmu.rom[0x00FF as usize] = 5;
-        mmu.rom[0x0100 as usize] = 6;
-        mmu.bios[0x00FF as usize] = 3;
-        mmu.bios[0x0100 as usize] = 4;
+        mmu.rom[0x00FF] = 5;
+        mmu.rom[0x0100] = 6;
+        mmu.bios[0x00FF] = 3;
 
         assert_eq!(mmu.read_byte(0x00FF), 3);
         assert_eq!(mmu.read_byte(0x0100), 6);
@@ -197,11 +195,12 @@ mod tests {
     fn eram_access() {
         let mut mmu = MMU::new(DummyGPU::new());
 
-        mmu.eram = [1; 65536];
+        mmu.eram = [1; 0x2000];
+        mmu.eram[0xB000 & 0x1FFF] = 2;
 
         assert_eq!(mmu.read_byte(0x0FFF), 0);
         assert_eq!(mmu.read_byte(0xA000), 1);
-        assert_eq!(mmu.read_byte(0xB000), 1);
+        assert_eq!(mmu.read_byte(0xB000), 2);
         assert_eq!(mmu.read_byte(0xBFFF), 1);
         assert_eq!(mmu.read_byte(0xC000), 0);
     }
@@ -227,11 +226,12 @@ mod tests {
     fn wram_access() {
         let mut mmu = MMU::new(DummyGPU::new());
 
-        mmu.wram = [1; 65536];
+        mmu.wram = [1; 0x2000];
+        mmu.wram[0xD000 & 0x1FFF] = 2;
 
         assert_eq!(mmu.read_byte(0xBFFF), 0);
         assert_eq!(mmu.read_byte(0xC000), 1);
-        assert_eq!(mmu.read_byte(0xD000), 1);
+        assert_eq!(mmu.read_byte(0xD000), 2);
         assert_eq!(mmu.read_byte(0xE000), 1);
         assert_eq!(mmu.read_byte(0xFDFF), 1);
         assert_eq!(mmu.read_byte(0xFE00), 0);
@@ -260,10 +260,11 @@ mod tests {
     fn zram_access() {
         let mut mmu = MMU::new(DummyGPU::new());
 
-        mmu.zram = [1; 65536];
+        mmu.zram = [1; 0x0080];
+        mmu.zram[0xFF80 & 0x007F] = 2;
 
         assert_eq!(mmu.read_byte(0xFF7F), 0);
-        assert_eq!(mmu.read_byte(0xFF80), 1);
+        assert_eq!(mmu.read_byte(0xFF80), 2);
         assert_eq!(mmu.read_byte(0xFFFF), 1);
     }
 
@@ -305,7 +306,6 @@ mod tests {
         mmu.write_byte(0x9000, 1);
         mmu.write_byte(0x9FFF, 1);
 
-        // todo: is it good to assume that gpu has vram attribute?
         assert_eq!(mmu.gpu.vram[0x8000 & 0x1FFF], 1);
         assert_eq!(mmu.gpu.vram[0x9000 & 0x1FFF], 1);
         assert_eq!(mmu.gpu.vram[0x9FFF & 0x1FFF], 1);
@@ -334,7 +334,6 @@ mod tests {
         mmu.write_byte(0xFE70, 1);
         mmu.write_byte(0xFE9F, 1);
 
-        // todo: is it good to assume that gpu has oam attribute?
         assert_eq!(mmu.gpu.oam[0xFE00 & 0x00FF], 1);
         assert_eq!(mmu.gpu.oam[0xFE70 & 0x00FF], 1);
         assert_eq!(mmu.gpu.oam[0xFE9F & 0x00FF], 1);
