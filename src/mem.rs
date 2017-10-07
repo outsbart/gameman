@@ -56,12 +56,11 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
             }
 
             0x1000...0x3000 => { return self.rom[addr as usize] }                // ROM 0
-            0x4000...0x7000 => { return self.rom[addr as usize] }                // ROM 1
+            0x4000...0x7000 => { return self.rom[addr as usize] }                // TODO: banking
             0x8000 | 0x9000 => { return self.gpu.read_vram(addr &0x1FFF) } // VRAM
             0xA000 | 0xB000 => { return self.eram[(addr &0x1FFF) as usize] }     // External RAM
             0xC000...0xE000 => { return self.wram[(addr &0x1FFF) as usize] }     // Working RAM
 
-            // Working RAM shadow, GPU OAM, I/O, Zero-page RAM
             0xF000 => {
                 match addr & 0x0F00 {
                     0x0000...0x0D00 => { return self.wram[(addr & 0x1FFF) as usize] } // Working RAM echo
@@ -187,6 +186,22 @@ mod tests {
         assert_eq!(mmu.read_byte(0x00FF), 3);
         assert_eq!(mmu.read_byte(0x0100), 6);
         assert_eq!(mmu.read_byte(0x00FF), 5);
+    }
+
+    /// test succesful mapping for rom access
+    /// from 0x0000 to 0x7FFF should access rom
+    #[test]
+    fn rom_access() {
+        let mut mmu = MMU::new(DummyGPU::new());
+
+        mmu.rom = [1; 0x8000];
+        mmu.rom[0x6000] = 2;
+
+        assert_eq!(mmu.read_byte(0x0000), 0);
+        assert_eq!(mmu.read_byte(0x3000), 1);
+        assert_eq!(mmu.read_byte(0x6000), 2);
+        assert_eq!(mmu.read_byte(0x7FFF), 1);
+        assert_eq!(mmu.read_byte(0x8000), 0);
     }
 
     /// test succesful mapping for eram access
