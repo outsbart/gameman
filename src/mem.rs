@@ -34,6 +34,8 @@ pub trait Memory {
 
 impl Memory for MMU {
     fn read_byte(&mut self, addr: u16) -> u8 {
+
+        // TODO: once everything works and is tested, refactor using actual ranges
         match addr & 0xF000 {
             // BIOS
             0x0000 => {
@@ -42,13 +44,10 @@ impl Memory for MMU {
                         return self.bios[addr as usize]
                     }
                     else if addr == 0x0100 {
-                        self.still_bios = false;
-                        return self.rom[addr as usize]
-                    }
-                    else {
-                        panic!("FIX BIOS PART")  // TODO: check if it works
+                        self.still_bios = false;    // TODO: check if it actually works
                     }
                 }
+                return self.rom[addr as usize]
             }
 
             0x1000...0x3000 => { return self.rom[addr as usize] }             // ROM 0
@@ -56,17 +55,17 @@ impl Memory for MMU {
             // VRAM
             0x8000 | 0x9000 => { return self.rom[(addr &0x1FFF) as usize] }     // TODO: change when GPU impl
             0xA000 | 0xB000 => { return self.eram[(addr &0x1FFF) as usize] }    // External RAM
-            0xC000 | 0xD000 => { return self.wram[(addr &0x1FFF) as usize] }    // Working RAM
-            0xE000          => { return self.wram[(addr &0x1FFF) as usize] }    // Working RAM shadow
+            0xC000...0xE000 => { return self.wram[(addr &0x1FFF) as usize] }    // Working RAM
 
-            // Working RAM shadow, I/O, Zero-page RAM
+            // Working RAM shadow, GPU OAM, I/O, Zero-page RAM
             0xF000 => {
                 match addr & 0x0F00 {
-                    0x000...0xD00 => { return self.wram[(addr & 0x1FFF) as usize] } // Working RAM hadow
+                    0x0000...0x0D00 => { return self.wram[(addr & 0x1FFF) as usize] } // Working RAM echo
 
                     // GPU OAM
                     0x0E00 => {
-                        if addr < 0xFEA0 { return self.rom[(addr & 0x00FF) as usize] }    // TODO: change when GPU implemented else { return 0 }
+                        if addr < 0xFEA0 { return self.rom[(addr & 0x00FF) as usize] }    // TODO: change when GPU implemented
+                        else { return 0 }
                     }
 
                     // Zero page
@@ -86,8 +85,6 @@ impl Memory for MMU {
             }
 
         }
-
-        self.rom[addr as usize]
     }
     fn write_byte(&mut self, addr: u16, byte: u8) {
         self.rom[addr as usize] = byte;
@@ -118,8 +115,60 @@ mod tests {
     /// after instruction 0x0100 is reached,
     /// for addresses < 0x0100, rom should be accessed instead of bios
     #[test]
-    fn bios_gets_removed() {
+    fn bios_gets_replaced_by_rom() {
+        let mut mmu = MMU::new();
 
-        // let mut mmu = MMU::new();
+        mmu.rom[0x00FF as usize] = 5;
+        mmu.rom[0x0100 as usize] = 6;
+        mmu.bios[0x00FF as usize] = 3;
+        mmu.bios[0x0100 as usize] = 4;
+
+        assert_eq!(mmu.read_byte(0x00FF), 3);
+        assert_eq!(mmu.read_byte(0x0100), 6);
+        assert_eq!(mmu.read_byte(0x00FF), 5);
+    }
+
+    /// test succesful mapping for eram access
+    /// from 0xA000 to 0xBFFF should access eram
+    #[test]
+    fn eram_access() {
+        let mut mmu = MMU::new();
+
+        mmu.eram = [1; 65536];
+
+        assert_eq!(mmu.read_byte(0x0FFF), 0);
+        assert_eq!(mmu.read_byte(0xA000), 1);
+        assert_eq!(mmu.read_byte(0xB000), 1);
+        assert_eq!(mmu.read_byte(0xBFFF), 1);
+        assert_eq!(mmu.read_byte(0xC000), 0);
+    }
+
+    /// test succesful mapping for wram access
+    /// from 0xC000 to 0xFDFF should access wram
+    #[test]
+    fn wram_access() {
+        let mut mmu = MMU::new();
+
+        mmu.wram = [1; 65536];
+
+        assert_eq!(mmu.read_byte(0xBFFF), 0);
+        assert_eq!(mmu.read_byte(0xC000), 1);
+        assert_eq!(mmu.read_byte(0xD000), 1);
+        assert_eq!(mmu.read_byte(0xE000), 1);
+        assert_eq!(mmu.read_byte(0xFDFF), 1);
+        assert_eq!(mmu.read_byte(0xFE00), 0);
+    }
+
+    /// test succesful mapping for zero ram access
+    /// from 0xFF80 to 0xFFFF should access zero ram
+    #[test]
+    fn zram_access() {
+        let mut mmu = MMU::new();
+
+        mmu.zram = [1; 65536];
+
+        assert_eq!(mmu.read_byte(0xFF7F), 0);
+        assert_eq!(mmu.read_byte(0xFF80), 1);
+        assert_eq!(mmu.read_byte(0xFFFF), 1);
     }
 }
