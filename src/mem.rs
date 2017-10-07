@@ -1,17 +1,23 @@
-pub struct MMU {      // TODO: fix the sized when tests are implemented
+use gpu::GPUMemoriesAccess;
+
+pub struct MMU<M: GPUMemoriesAccess> {      // TODO: fix the sizes when tests are implemented
     still_bios: bool, bios: [u8; 65536],
 
     rom: [u8; 65536], wram: [u8; 65536],
     eram: [u8; 65536], zram: [u8; 65536],
+
+    gpu: M
 }
 
-impl MMU {
-    pub fn new() -> MMU {
+impl<M: GPUMemoriesAccess> MMU<M> {
+    pub fn new(gpu: M) -> MMU<M> {
         MMU {
             still_bios: true, bios: [0; 65536],
 
             rom: [0; 65536], wram: [0; 65536],
-            eram: [0; 65536], zram: [0; 65536]
+            eram: [0; 65536], zram: [0; 65536],
+
+            gpu
         }
     }
 }
@@ -32,7 +38,7 @@ pub trait Memory {
 }
 
 
-impl Memory for MMU {
+impl<M: GPUMemoriesAccess> Memory for MMU<M> {
     fn read_byte(&mut self, addr: u16) -> u8 {
 
         // TODO: once everything works and is tested, refactor using actual ranges
@@ -44,18 +50,17 @@ impl Memory for MMU {
                         return self.bios[addr as usize]
                     }
                     else if addr == 0x0100 {
-                        self.still_bios = false;    // TODO: check if it actually works
+                        self.still_bios = false;
                     }
                 }
                 return self.rom[addr as usize]
             }
 
-            0x1000...0x3000 => { return self.rom[addr as usize] }             // ROM 0
-            0x4000...0x7000 => { return self.rom[addr as usize] }             // ROM 1
-            // VRAM
-            0x8000 | 0x9000 => { return self.rom[(addr &0x1FFF) as usize] }     // TODO: change when GPU impl
-            0xA000 | 0xB000 => { return self.eram[(addr &0x1FFF) as usize] }    // External RAM
-            0xC000...0xE000 => { return self.wram[(addr &0x1FFF) as usize] }    // Working RAM
+            0x1000...0x3000 => { return self.rom[addr as usize] }                // ROM 0
+            0x4000...0x7000 => { return self.rom[addr as usize] }                // ROM 1
+            0x8000 | 0x9000 => { return self.gpu.read_vram(addr &0x1FFF) } // VRAM
+            0xA000 | 0xB000 => { return self.eram[(addr &0x1FFF) as usize] }     // External RAM
+            0xC000...0xE000 => { return self.wram[(addr &0x1FFF) as usize] }     // Working RAM
 
             // Working RAM shadow, GPU OAM, I/O, Zero-page RAM
             0xF000 => {
@@ -64,7 +69,7 @@ impl Memory for MMU {
 
                     // GPU OAM
                     0x0E00 => {
-                        if addr < 0xFEA0 { return self.rom[(addr & 0x00FF) as usize] }    // TODO: change when GPU implemented
+                        if addr < 0xFEA0 { return self.gpu.read_oam(addr & 0x00FF) }
                         else { return 0 }
                     }
 
@@ -96,9 +101,34 @@ impl Memory for MMU {
 mod tests {
     use super::*;
 
+    struct DummyGPU {
+        vram: [u8; 65536],
+        oam:  [u8; 65536]
+    }
+
+    impl DummyGPU {
+        fn new() -> DummyGPU { DummyGPU { vram: [0; 65536], oam: [0; 65536] } }
+        fn with(vram: [u8; 65536], oam: [u8; 65536]) -> DummyGPU { DummyGPU { vram, oam } }
+    }
+
+    impl GPUMemoriesAccess for DummyGPU {
+        fn read_vram(&mut self, addr: u16) -> u8 {
+            self.vram[addr as usize]
+        }
+        fn write_vram(&mut self, addr: u16, byte: u8) {
+            self.vram[addr as usize] = byte;
+        }
+        fn read_oam(&mut self, addr: u16) -> u8 {
+        self.oam[addr as usize]
+    }
+        fn write_oam(&mut self, addr: u16, byte: u8) {
+            self.oam[addr as usize] = byte;
+        }
+    }
+
     #[test]
     fn little_endian() {
-        let mut mmu = MMU::new();
+        let mut mmu = MMU::new(DummyGPU::new());
 
         mmu.write_word(0x1000, 0x1FF);
         assert_eq!(0x1FF, mmu.read_word(0x1000))
@@ -106,7 +136,7 @@ mod tests {
 
     #[test]
     fn read_and_write_byte() {
-        let mut mmu = MMU::new();
+        let mut mmu = MMU::new(DummyGPU::new());
 
         mmu.write_byte(0x1000, 0x1);
         assert_eq!(0x1, mmu.read_byte(0x1000))
@@ -116,7 +146,7 @@ mod tests {
     /// for addresses < 0x0100, rom should be accessed instead of bios
     #[test]
     fn bios_gets_replaced_by_rom() {
-        let mut mmu = MMU::new();
+        let mut mmu = MMU::new(DummyGPU::new());
 
         mmu.rom[0x00FF as usize] = 5;
         mmu.rom[0x0100 as usize] = 6;
@@ -132,7 +162,7 @@ mod tests {
     /// from 0xA000 to 0xBFFF should access eram
     #[test]
     fn eram_access() {
-        let mut mmu = MMU::new();
+        let mut mmu = MMU::new(DummyGPU::new());
 
         mmu.eram = [1; 65536];
 
@@ -147,7 +177,7 @@ mod tests {
     /// from 0xC000 to 0xFDFF should access wram
     #[test]
     fn wram_access() {
-        let mut mmu = MMU::new();
+        let mut mmu = MMU::new(DummyGPU::new());
 
         mmu.wram = [1; 65536];
 
@@ -163,7 +193,7 @@ mod tests {
     /// from 0xFF80 to 0xFFFF should access zero ram
     #[test]
     fn zram_access() {
-        let mut mmu = MMU::new();
+        let mut mmu = MMU::new(DummyGPU::new());
 
         mmu.zram = [1; 65536];
 
@@ -171,4 +201,31 @@ mod tests {
         assert_eq!(mmu.read_byte(0xFF80), 1);
         assert_eq!(mmu.read_byte(0xFFFF), 1);
     }
+
+    /// test succesful mapping for gpu vram access
+    /// from 0x8000 to 0x9FFF should access gpu vram
+    #[test]
+    fn gpu_vram_access() {
+        let mut mmu = MMU::new(DummyGPU::with([1; 65536], [0; 65536]));
+
+        assert_eq!(mmu.read_byte(0x7FFF), 0);
+        assert_eq!(mmu.read_byte(0x8000), 1);
+        assert_eq!(mmu.read_byte(0x9000), 1);
+        assert_eq!(mmu.read_byte(0x9FFF), 1);
+        assert_eq!(mmu.read_byte(0xA000), 0);
+    }
+
+    /// test succesful mapping for gpu oam access
+    /// from 0xFE00 to 0xFE9F should access gpu oam
+    #[test]
+    fn gpu_oam_access() {
+        let mut mmu = MMU::new(DummyGPU::with([0; 65536], [1; 65536]));
+
+        assert_eq!(mmu.read_byte(0xFDFF), 0);
+        assert_eq!(mmu.read_byte(0xFE00), 1);
+        assert_eq!(mmu.read_byte(0xFE70), 1);
+        assert_eq!(mmu.read_byte(0xFE9F), 1);
+        assert_eq!(mmu.read_byte(0xFEA0), 0);
+    }
+
 }
