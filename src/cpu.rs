@@ -87,12 +87,17 @@ impl<M: Memory> CPU<M> {
     }
 
     // fetch the operation, decodes it, fetch parameters if required, and executes it
-    fn step(&mut self) {
+    pub fn step(&mut self) {
         let operation: u8 = self.fetch_next_op();
+
+        println!("Found operation {:x}", operation);
+
+
 
         match operation {
             0x00 => { self.nop(); }
-            _ => { panic!("Operation not found!!") }
+            // 0x31 => {  }
+            _ => { panic!("Implementation for operation {:x} not found!! Aborting", operation) }
         }
 
         // add to the clocks
