@@ -20,6 +20,10 @@ impl<M: GPUMemoriesAccess> MMU<M> {
             gpu
         }
     }
+
+    pub fn set_bios(&mut self, bios: [u8; 0x0100]) {
+        self.bios = bios;
+    }
 }
 
 
@@ -194,10 +198,11 @@ mod tests {
     fn rom_access() {
         let mut mmu = MMU::new(DummyGPU::new());
 
+        mmu.still_bios = false;
         mmu.rom = [1; 0x8000];
         mmu.rom[0x6000] = 2;
 
-        assert_eq!(mmu.read_byte(0x0000), 0);
+        assert_eq!(mmu.read_byte(0x0000), 1);
         assert_eq!(mmu.read_byte(0x3000), 1);
         assert_eq!(mmu.read_byte(0x6000), 2);
         assert_eq!(mmu.read_byte(0x7FFF), 1);
