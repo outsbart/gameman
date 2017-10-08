@@ -16,12 +16,13 @@ operations = load_ops()
 
 for op_type in ("unprefixed", "cbprefixed"):
 	with open(f'{op_type}.csv', 'w') as outfile:
-		outfile.write("code,mnemonic,operand1,operand2,flag_z,flag_h,flag_n,flag_c,cycles_ok,cycles_no")
+		outfile.write("code,mnemonic,operand1,operand2,bytes,flag_z,flag_h,flag_n,flag_c,cycles_ok,cycles_no")
 		for op_id, op in operations[op_type].items():
 
 			outfile.write("\n")
 
-			code = op_id,
+			code = int(op_id, base=16)
+			bytes = op["bytes"]
 			mnemonic = op["mnemonic"]
 			flag_z = op["flags_ZHNC"][0]
 			if flag_z == '-':
@@ -44,5 +45,5 @@ for op_type in ("unprefixed", "cbprefixed"):
 			if len(op["cycles"]) > 1:
 				cycles_no = op["cycles"][1]
 
-			outfile.write(f"{op_id},{mnemonic},{operand1},{operand2},{flag_z},{flag_h},{flag_n},{flag_c},{cycles_ok},{cycles_no}")
+			outfile.write(f"{code},{mnemonic},{operand1},{operand2},{bytes},{flag_z},{flag_h},{flag_n},{flag_c},{cycles_ok},{cycles_no}")
 
