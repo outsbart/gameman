@@ -2,7 +2,7 @@ use csv;
 use std::collections::HashMap;
 use std::fs::File;
 
-use cpu::ByteHolder;
+use cpu::ByteStream;
 
 #[derive(Debug,Deserialize)]
 pub struct Operation {
@@ -53,7 +53,7 @@ impl Ops {
         }
     }
 
-    pub fn fetch_operation(&mut self, ih: &mut ByteHolder) -> &Operation {
+    pub fn fetch_operation(&mut self, ih: &mut ByteStream) -> &Operation {
         let byte = ih.read_byte();
         let op = self.ops.get(&byte).expect(&format!("Missing operation {:x}! WTF?", byte));
         if op.code_as_u8() == 0xcb {

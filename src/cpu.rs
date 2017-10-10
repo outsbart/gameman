@@ -7,6 +7,24 @@ const OPERATION_FLAG: u8 = 0x40;
 const HALF_CARRY_FLAG: u8 = 0x20;
 const CARRY_FLAG: u8 = 0x10;
 
+// Registers are saved inside an array so that i can use consecutive indexes to access
+// those registers that can be accessed together like B and C
+// eg: read B with REG_B index, and BC with REG_B and REG_B + 1 indexes
+const REG_A: u16 = 0;
+const REG_F: u16 = 1;
+const REG_B: u16 = 2;
+const REG_C: u16 = 3;
+const REG_D: u16 = 4;
+const REG_E: u16 = 5;
+const REG_H: u16 = 6;
+const REG_L: u16 = 7;
+const REG_SP: u16 = 8;
+const REG_S: u16 = 8;
+const REG_PSP: u16 = 9;
+const REG_PC: u16 = 10;
+const REG_CPC: u16 = 11;
+const REG_M: u16 = 12;
+const REG_T: u16 = 13;
 
 struct Clocks {
     m: u32, t: u32  // TODO: check if i32 is the right type
@@ -18,39 +36,31 @@ impl Clocks {
     }
 }
 
-struct Registers {
-    a: u8, b: u8, c: u8, d: u8,
-    e: u8, h: u8, l: u8, f: u8,
+struct Regs { regs: [u8; 14] }
 
-    pc: u16, sp: u16,
-    m: u8, t: u8
+impl Regs {
+    fn new() -> Regs {
+        Regs { regs: [0; 14] }
+    }
 }
 
-pub trait ByteHolder {
+pub trait ByteStream {
     fn read_byte(&mut self) -> u8;
     fn read_word(&mut self) -> u16;
 }
 
-impl Registers {
-    fn new() -> Registers {
-        Registers {
-            a: 0, b: 0, c: 0, d: 0,
-            e: 0, h: 0, l:0, f: 0,
-
-            pc: 0, sp: 20, // TODO: change sp value. Derive default
-            m: 0, t: 0
-        }
-    }
+impl Memory for Regs {
+    fn read_byte(&mut self, addr: u16) -> u8 { self.regs[addr as usize] }
+    fn write_byte(&mut self, addr: u16, byte: u8) { self.regs[addr as usize] = byte; }
 }
 
 pub struct CPU<M: Memory> {
     clks: Clocks,
-    regs: Registers,
-
+    regs: Regs,
     mmu: M
 }
 
-impl<M: Memory> ByteHolder for CPU<M> {
+impl<M: Memory> ByteStream for CPU<M> {
     fn read_byte(&mut self) -> u8 {
         self.fetch_next_byte()
     }
@@ -61,50 +71,52 @@ impl<M: Memory> ByteHolder for CPU<M> {
 
 impl<M: Memory> CPU<M> {
     pub fn new(mmu: M) -> CPU<M> {
-        CPU { clks: Clocks::new(), regs: Registers::new(), mmu }
+        CPU { clks: Clocks::new(), regs: Regs::new(), mmu }
     }
 
     // operations
 
     // adds E to A
-    fn addr_e(&mut self) {
-        let result = self.regs.a as u32 + self.regs.e as u32;
-
-        self.regs.f = 0; // reset the flags!
-
-        // Zero
-        if (result & 0xFF) == 0 {
-            self.regs.f |= ZERO_FLAG; // if result is 0 set the first bit to 1
-        }
-
-        // Half Carry
-//        if ((self.regs.a & 0xF) + (self.regs.e & 0xF)) & 0x10 {
-//            self.regs.f |= HALF_CARRY_FLAG;
+//    fn addr_e(&mut self) {
+//        let result = self.regs.read_byte(REG_A) as u32 + self.regs.read_byte(REG_E) as u32;
+//
+//        self.regs.write_byte(REG_F,0); // reset the flags!
+//
+//        // Zero
+//        if (result & 0xFF) == 0 {
+//            self.regs[REG_F] |= ZERO_FLAG; // if result is 0 set the first bit to 1
 //        }
-
-        // Carry
-        if result > 0xFF {
-            self.regs.f |= CARRY_FLAG;
-        }
-
-        // save it in the A register
-        self.regs.a = (result & 0xFF) as u8;
-
-        self.regs.m = 1;
-        self.regs.t = 4;
-    }
+//
+//        // Half Carry
+////        if ((self.regs.a & 0xF) + (self.regs.e & 0xF)) & 0x10 {
+////            self.regs.f |= HALF_CARRY_FLAG;
+////        }
+//
+//        // Carry
+//        if result > 0xFF {
+//            self.regs[REG_F] |= CARRY_FLAG;
+//        }
+//
+//        // save it in the A register
+//        self.regs[REG_A] = (result & 0xFF) as u8;
+//
+//        self.regs[REG_M] = 1;
+//        self.regs[REG_T] = 4;
+//    }
 
     // fetches the next byte from the ram
     fn fetch_next_byte(&mut self) -> u8 {
-        let op = self.mmu.read_byte(self.regs.pc);
-        self.regs.pc += 1;
+        let op = self.mmu.read_byte(self.regs.read_word(REG_PC));
+        let pc_value = self.regs.read_word(REG_PC);
+        self.regs.write_word(REG_PC, pc_value + 1);
         op
     }
 
     // fetches the next word from the ram
     fn fetch_next_word(&mut self) -> u16 {
-        let word = self.mmu.read_word(self.regs.pc);
-        self.regs.pc += 2;
+        let word = self.mmu.read_word(self.regs.read_word(REG_PC));
+        let pc_value = self.regs.read_word(REG_PC);
+        self.regs.write_word(REG_PC, pc_value + 2);
         word
     }
 
@@ -117,8 +129,8 @@ impl<M: Memory> CPU<M> {
         self.execute(op);
 
         // add to the clocks
-        self.clks.t += self.regs.t as u32;
-        self.clks.m += self.regs.m as u32;
+        self.clks.t += self.regs.read_byte(REG_T) as u32;
+        self.clks.m += self.regs.read_byte(REG_M) as u32;
     }
 
     pub fn execute(&mut self, op: &Operation) {
@@ -132,43 +144,23 @@ impl<M: Memory> CPU<M> {
             }
         }
 
-        self.regs.t = op.cycles_ok;
+        self.regs.write_byte(REG_T, op.cycles_ok);
     }
 
     // no operation
     fn nop(&mut self) {
-        self.regs.m = 1;
-        self.regs.t = 4;
+        self.regs.write_byte(REG_M, 1);
+        self.regs.write_byte(REG_T, 4);
     }
 
-    // push b and c on the stack
-    fn pushbc(&mut self) {
-        self.regs.sp -= 1;
-        self.mmu.write_byte(self.regs.sp, self.regs.b);
-        self.regs.sp -= 1;
-        self.mmu.write_byte(self.regs.sp, self.regs.c);
-
-        self.regs.m = 3; self.regs.t = 12;
-    }
-
-    // pop b and c from the stack
-    fn popbc(&mut self) {
-        self.regs.c = self.mmu.read_byte(self.regs.sp);
-        self.regs.sp += 1;
-        self.regs.b = self.mmu.read_byte(self.regs.sp);
-        self.regs.sp += 1;
-
-        self.regs.m = 3; self.regs.t = 12;
-    }
-
-    // read a word from an absolute location into A
-    fn ldamm(&mut self) {
-        let addr: u16 = self.mmu.read_word(self.regs.pc);
-        self.regs.pc += 2;
-        self.regs.a = self.mmu.read_byte(addr);
-
-        self.regs.m = 4; self.regs.t = 16;
-    }
+//    // read a word from an absolute location into A
+//    fn ldamm(&mut self) {
+//        let addr: u16 = self.mmu.read_word(self.regs.pc); // TODO FIX
+//        self.regs[Reg.PC] += 2;  //TODO FIX
+//        self.regs[Reg.A] = self.mmu.read_byte(addr);
+//
+//        self.regs[Reg.M] = 4; self.regs[Reg.T] = 16;
+//    }
 }
 
 #[cfg(test)]
@@ -195,23 +187,23 @@ mod tests {
 
     #[test]
     fn cpu_inizialization() {
-        let CPU { clks, regs, .. } = CPU::new(DummyMMU::new());
+        let CPU { clks, mut regs, .. } = CPU::new(DummyMMU::new());
 
         assert_eq!(clks.m, 0);
         assert_eq!(clks.t, 0);
 
-        assert_eq!(regs.a, 0);
-        assert_eq!(regs.b, 0);
-        assert_eq!(regs.c, 0);
-        assert_eq!(regs.d, 0);
-        assert_eq!(regs.e, 0);
-        assert_eq!(regs.h, 0);
-        assert_eq!(regs.l, 0);
-        assert_eq!(regs.f, 0);
-        assert_eq!(regs.pc, 0);
-        assert_eq!(regs.sp, 20);
-        assert_eq!(regs.m, 0);
-        assert_eq!(regs.t, 0);
+        assert_eq!(regs.read_byte(REG_A), 0);
+        assert_eq!(regs.read_byte(REG_B), 0);
+        assert_eq!(regs.read_byte(REG_C), 0);
+        assert_eq!(regs.read_byte(REG_D), 0);
+        assert_eq!(regs.read_byte(REG_E), 0);
+        assert_eq!(regs.read_byte(REG_H), 0);
+        assert_eq!(regs.read_byte(REG_L), 0);
+        assert_eq!(regs.read_byte(REG_F), 0);
+        assert_eq!(regs.read_word(REG_PC), 0);
+        assert_eq!(regs.read_word(REG_SP), 0);
+        assert_eq!(regs.read_byte(REG_M), 0);
+        assert_eq!(regs.read_byte(REG_T), 0);
     }
 
     #[test]
@@ -220,69 +212,38 @@ mod tests {
 
         cpu.nop();
 
-        assert_eq!(cpu.regs.m, 1);
-        assert_eq!(cpu.regs.t, 4);
-    }
-
-    #[test]
-    fn op_addr_e() {
-        let mut cpu = CPU::new(DummyMMU::new());
-
-        cpu.regs.e = 0xFF;
-
-        cpu.addr_e();
-
-        assert_eq!(cpu.regs.a, 0xFF);
-        assert_eq!(cpu.regs.f, 0);
-
-        assert_eq!(cpu.regs.m, 1);
-        assert_eq!(cpu.regs.t, 4);
-    }
-
-    #[test]
-    fn op_addr_e_carry() {
-        let mut cpu = CPU::new(DummyMMU::new());
-
-        cpu.regs.a = 0x01;
-        cpu.regs.e = 0xFF;
-
-        cpu.addr_e();
-
-        assert_eq!(cpu.regs.a, 0);
-        assert_eq!(cpu.regs.f, ZERO_FLAG | CARRY_FLAG);
-
-        assert_eq!(cpu.regs.m, 1);
-        assert_eq!(cpu.regs.t, 4);
-    }
-
-
-    #[test]
-    fn op_pushbc() {
-        let mut cpu = CPU::new(DummyMMU::new());
-
-        cpu.regs.b = 1;
-        cpu.regs.c = 2;
-
-        cpu.pushbc();
-
-        cpu.regs.b = 0;
-        cpu.regs.c = 0;
-
-        cpu.popbc();
-
-        assert_eq!(cpu.regs.b, 1);
-        assert_eq!(cpu.regs.c, 2);
+        assert_eq!(cpu.regs.read_byte(REG_M), 1);
+        assert_eq!(cpu.regs.read_byte(REG_T), 4);
     }
 
 //    #[test]
-//    fn test_step_nop() {
-//        /// Test that the cpu test method fetches the instruction and executes
+//    fn op_addr_e() {
 //        let mut cpu = CPU::new(DummyMMU::new());
 //
-//        cpu.step();
+//        cpu.regs[Reg.E] = 0xFF;
 //
-//        // assert that nop has been executed
-//        assert_eq!(cpu.regs.m, 1);
-//        assert_eq!(cpu.regs.t, 4);
+//        cpu.addr_e();
+//
+//        assert_eq!(cpu.regs[Reg.A], 0xFF);
+//        assert_eq!(cpu.regs[Reg.F], 0);
+//
+//        assert_eq!(cpu.regs[Reg.M], 1);
+//        assert_eq!(cpu.regs[Reg.T], 4);
+//    }
+//
+//    #[test]
+//    fn op_addr_e_carry() {
+//        let mut cpu = CPU::new(DummyMMU::new());
+//
+//        cpu.regs[Reg.A] = 0x01;
+//        cpu.regs[Reg.E] = 0xFF;
+//
+//        cpu.addr_e();
+//
+//        assert_eq!(cpu.regs[Reg.A], 0);
+//        assert_eq!(cpu.regs[Reg.F], ZERO_FLAG | CARRY_FLAG);
+//
+//        assert_eq!(cpu.regs[Reg.M], 1);
+//        assert_eq!(cpu.regs[Reg.T], 4);
 //    }
 }
