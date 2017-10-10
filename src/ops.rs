@@ -2,24 +2,28 @@ use csv;
 use std::collections::HashMap;
 use std::fs::File;
 
+use cpu::ByteHolder;
 
 #[derive(Debug,Deserialize)]
 pub struct Operation {
-    code: u8,
-    mnemonic: String,
-    operand1: Option<String>,
-    operand2: Option<String>,
-    bytes: u8,
-    flag_z: Option<char>,
-    flag_h: Option<char>,
-    flag_n: Option<char>,
-    flag_c: Option<char>,
-    cycles_ok: u8,
-    cycles_no: Option<u8>
+    pub code: String,
+    pub mnemonic: String,
+    pub operand1: Option<String>,
+    pub operand2: Option<String>,
+    pub bytes: u8,
+    pub flag_z: Option<char>,
+    pub flag_h: Option<char>,
+    pub flag_n: Option<char>,
+    pub flag_c: Option<char>,
+    pub cycles_ok: u8,
+    pub cycles_no: Option<u8>
 }
 
 impl Operation {
-
+    pub fn code_as_u8(&self) -> u8 {
+        u8::from_str_radix(&self.code[2..], 16)
+            .expect(&format!("Opcode is not a number! {}, op", self.code))
+    }
 }
 
 pub struct Ops {
@@ -28,7 +32,11 @@ pub struct Ops {
 }
 
 impl Ops {
-    pub fn new() -> Ops { Ops { ops: HashMap::new(), cb_ops: HashMap::new() } }
+    pub fn new() -> Ops {
+        let mut ops = Ops { ops: HashMap::new(), cb_ops: HashMap::new() };
+        ops.load_ops();
+        ops
+    }
 
     pub fn load_ops(&mut self) {
         Ops::load_op_type(&mut self.ops, "data/unprefixed.csv");
@@ -36,28 +44,19 @@ impl Ops {
     }
 
     pub fn load_op_type(map: &mut HashMap<u8, Operation>, filepath: &str) {
-        let file = match File::open(filepath) {
-            Ok(f) => { f },
-            Err(_) => { panic!("File not found: {}", filepath) }
-        };
+        let file = File::open(filepath).expect(&format!("File not found: {}", filepath));
 
-        let mut rdr = csv::Reader::from_reader(file);
-
-        for result in rdr.deserialize() {
-            let op: Operation = match result {
-                Ok(r) => { r },
-                Err(_) => { panic!("Opcodes CSV file is broken! {}", filepath) }
-            };
-            map.insert(op.code, op);
+        for result in csv::Reader::from_reader(file).deserialize() {
+            let op: Operation = result.expect(&format!("Opcodes CSV file is broken! {}", filepath));
+            map.insert(op.code_as_u8(), op);
         }
     }
-}
 
-/// returns an error with the amount of extra bytes required to decode the operation
-pub fn decode_op(op: u16) -> Result<Operation, u8> {
-    return Err(1)
+    pub fn fetch_operation(&mut self, ih: &mut ByteHolder) -> &Operation {
+        let byte = ih.read_byte();
+        self.ops.get(&byte).expect(&format!("Missing operation {:x}! WTF?", byte))
+    }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -65,8 +64,7 @@ mod tests {
 
     #[test]
     fn test_load_ops() {
-        let mut ops = Ops::new();
-        ops.load_ops();
+        let ops = Ops::new();
 
         assert_eq!(ops.ops.get(&0x3e).unwrap().mnemonic, "LD")
     }
