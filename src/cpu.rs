@@ -113,23 +113,26 @@ impl<M: Memory> CPU<M> {
         let mut ops = Ops::new();  // todo: make it an attribute...
         let op: &Operation = ops.fetch_operation(self);
 
-        match op.bytes {
-            1 => { self.read_byte(); }
-            2 => { self.read_word(); }
-            _ => {}
-        }
-
         println!("0x{:x}\t{}\t{:?}\t{:?}", op.code_as_u8(), op.mnemonic, op.operand1, op.operand2);
-
-//        match op.code {
-//            0x00 => { self.nop(); }
-//            // 0x31 => {  }
-//            _ => { panic!("Implementation for operation {:x} not found!! Aborting", op.code) }
-//        }
+        self.execute(op);
 
         // add to the clocks
         self.clks.t += self.regs.t as u32;
         self.clks.m += self.regs.m as u32;
+    }
+
+    pub fn execute(&mut self, op: &Operation) {
+        match op.mnemonic.as_ref() {
+            "NOP" => {},
+            "LD" => {
+
+            },
+            _ => {
+                panic!("0x{:x}\t{} not implemented yet!", op.code_as_u8(), op.mnemonic);
+            }
+        }
+
+        self.regs.t = op.cycles_ok;
     }
 
     // no operation

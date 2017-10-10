@@ -8,6 +8,7 @@ use cpu::ByteHolder;
 pub struct Operation {
     pub code: String,
     pub mnemonic: String,
+    pub into: String,
     pub operand1: Option<String>,
     pub operand2: Option<String>,
     pub bytes: u8,
@@ -54,7 +55,12 @@ impl Ops {
 
     pub fn fetch_operation(&mut self, ih: &mut ByteHolder) -> &Operation {
         let byte = ih.read_byte();
-        self.ops.get(&byte).expect(&format!("Missing operation {:x}! WTF?", byte))
+        let op = self.ops.get(&byte).expect(&format!("Missing operation {:x}! WTF?", byte));
+        if op.code_as_u8() == 0xcb {
+            let cb_byte = ih.read_byte();
+            return self.cb_ops.get(&cb_byte).expect(&format!("Missing operation {:x}! WTF?", cb_byte));
+        }
+        op
     }
 }
 
