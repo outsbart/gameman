@@ -4,7 +4,7 @@ use std::fs::File;
 
 use cpu::ByteStream;
 
-#[derive(Debug,Deserialize)]
+#[derive(Debug,Deserialize,Clone)]
 pub struct Operation {
     pub code: String,
     pub mnemonic: String,
@@ -53,14 +53,16 @@ impl Ops {
         }
     }
 
-    pub fn fetch_operation(&mut self, ih: &mut ByteStream) -> &Operation {
+    pub fn fetch_operation(&mut self, ih: &mut ByteStream) -> Operation {
         let byte = ih.read_byte();
-        let op = self.ops.get(&byte).expect(&format!("Missing operation {:x}! WTF?", byte));
+        let mut op = self.ops.get(&byte).expect(&format!("Missing operation {:x}! WTF?", byte));
+
         if op.code_as_u8() == 0xcb {
             let cb_byte = ih.read_byte();
-            return self.cb_ops.get(&cb_byte).expect(&format!("Missing operation {:x}! WTF?", cb_byte));
+            op = self.cb_ops.get(&cb_byte).expect(&format!("Missing operation {:x}! WTF?", cb_byte));
         }
-        op
+
+        (*op).clone()
     }
 }
 
