@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use mem::Memory;
 use ops::{Ops, Operation};
 
@@ -28,21 +26,6 @@ const REG_CPC: u16 = 11;
 const REG_M: u16 = 12;
 const REG_T: u16 = 13;
 
-//const REG_A: String = format!("A");
-//const REG_F: String = format!("F");
-//const REG_B: String = format!("B");
-//const REG_C: String = format!("C");
-//const REG_D: String = format!("D");
-//const REG_E: String = format!("E");
-//const REG_H: String = format!("H");
-//const REG_L: String = format!("L");
-//const REG_SP: String = format!("SP");
-//const REG_S: String = format!("S");
-//const REG_PSP: String = format!("PSP");
-//const REG_PC: String = format!("PC");
-//const REG_CPC: String = format!("CPC");
-//const REG_M: String = format!("M");
-//const REG_T: String = format!("T");
 
 struct Clocks {
     m: u32, t: u32  // TODO: check if i32 is the right type
@@ -54,43 +37,18 @@ impl Clocks {
     }
 }
 
-struct Regs {
-  //regs_map: HashMap<String, u16>,
-    regs: [u8; 14]
-}
+struct Regs { regs: [u8; 14] }
 
 impl Regs {
-    fn new() -> Regs {
-//        let mut map = HashMap::new();
-//        map.insert(REG_A, 0);
-//        map.insert(REG_F, 1);
-//        map.insert(REG_B, 2);
-//        map.insert(REG_C, 3);
-//        map.insert(REG_D, 4);
-//        map.insert(REG_E, 5);
-//        map.insert(REG_H, 6);
-//        map.insert(REG_L, 7);
-//        map.insert(REG_SP, 8);
-//        map.insert(REG_S, 8);
-//        map.insert(REG_PSP, 9);
-//        map.insert(REG_PC, 10);
-//        map.insert(REG_CPC, 11);
-//        map.insert(REG_M, 12);
-//        map.insert(REG_T, 13);
-
-        Regs {
-            //regs_map: map,
-            regs: [0; 14]
-        }
-    }
+    fn new() -> Regs { Regs { regs: [0; 14] } }
 
     pub fn get_flags(&mut self) -> (bool, bool, bool, bool) {
         let f = self.read_byte(REG_F) as u16;
         (get_bit(ZERO_FLAG, f), get_bit(OPERATION_FLAG, f), get_bit(HALF_CARRY_FLAG, f), get_bit(CARRY_FLAG, f))
     }
 
-    pub fn set_flags(&mut self, z: bool, o: bool, h: bool, c: bool) {
-        let value = ((z as u8) << ZERO_FLAG) | ((o as u8) << OPERATION_FLAG) | ((h as u8) << HALF_CARRY_FLAG) | ((c as u8) << CARRY_FLAG);
+    pub fn set_flags(&mut self, z: bool, n: bool, h: bool, c: bool) {
+        let value = ((z as u8) << ZERO_FLAG) | ((n as u8) << OPERATION_FLAG) | ((h as u8) << HALF_CARRY_FLAG) | ((c as u8) << CARRY_FLAG);
         self.write_byte(REG_F, value)
     }
 }
@@ -226,7 +184,29 @@ impl<M: Memory> CPU<M> {
             None => { 0 }
         };
         let mut result: u16 = 0;
-        let (mut z, mut o, mut h, mut c) = self.regs.get_flags();
+
+        let (mut z, mut n, mut h, mut c) = self.regs.get_flags();
+
+        match op.flag_z.unwrap_or(' ') {
+            '0' => { z = false },
+            '1' => { z = true },
+            _ => {}
+        };
+        match op.flag_n.unwrap_or(' ') {
+            '0' => { n = false },
+            '1' => { n = true },
+            _ => {}
+        };
+        match op.flag_h.unwrap_or(' ') {
+            '0' => { h = false },
+            '1' => { h = true },
+            _ => {}
+        };
+        match op.flag_c.unwrap_or(' ') {
+            '0' => { c = false },
+            '1' => { c = true },
+            _ => {}
+        }
 
         println!("0x{:x}\t{}\t{:x}\t{:x}", op.code_as_u8(), op.mnemonic, op1, op2);
 
@@ -234,7 +214,7 @@ impl<M: Memory> CPU<M> {
             "NOP" => {},
             "LD" => { result = op1 },
             "LDD" => {
-                println!("Implement decrease!");
+                println!("Implement LDD dude!");
                 result = op1
             },
             "XOR" => { result = op1 ^ op2 },
@@ -250,7 +230,7 @@ impl<M: Memory> CPU<M> {
             self.store_result(op.into.as_ref(), result);
         }
 
-        self.regs.set_flags(z, o, h, c);
+        self.regs.set_flags(z, n, h, c);
         self.regs.write_byte(REG_T, op.cycles_ok);
     }
 
@@ -343,10 +323,10 @@ mod tests {
         let mut cpu = CPU::new(DummyMMU::new());
 
         cpu.regs.set_flags(true,false,true,false);
-        let (z, o, h, c) = cpu.regs.get_flags();
+        let (z, n, h, c) = cpu.regs.get_flags();
 
         assert_eq!(z, true);
-        assert_eq!(o, false);
+        assert_eq!(n, false);
         assert_eq!(h, true);
         assert_eq!(c, false);
     }
