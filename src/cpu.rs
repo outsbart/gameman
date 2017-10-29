@@ -1,5 +1,6 @@
 use mem::Memory;
 use ops::{Ops, Operation};
+use utils::{u8_to_i8, u16_to_i16};
 
 // Flags bit poisition in the F register
 const ZERO_FLAG: u8 = 7;
@@ -43,7 +44,7 @@ impl Regs {
     fn new() -> Regs { Regs { regs: [0; 14] } }
 
     pub fn get_flags(&mut self) -> (bool, bool, bool, bool) {
-        let f = self.read_byte(REG_F) as u16;
+        let f = u16::from(self.read_byte(REG_F));
         (get_bit(ZERO_FLAG, f), get_bit(OPERATION_FLAG, f), get_bit(HALF_CARRY_FLAG, f), get_bit(CARRY_FLAG, f))
     }
 
@@ -114,8 +115,8 @@ impl<M: Memory> CPU<M> {
         self.execute(&op);
 
         // add to the clocks
-        self.clks.t += self.regs.read_byte(REG_T) as u32;
-        self.clks.m += self.regs.read_byte(REG_M) as u32;
+        self.clks.t += u32::from(self.regs.read_byte(REG_T));
+        self.clks.m += u32::from(self.regs.read_byte(REG_M));
     }
 
     fn registry_name_to_index(&mut self, registry: &str) -> u16 {
@@ -167,7 +168,8 @@ impl<M: Memory> CPU<M> {
             "BC"|"DE"|"HL"|"PC"|"SP"|
             "A"|"B"|"C"|"D"|"E"|"H"|"L" => { self.get_registry_value(operand) }
             "d16" => { self.fetch_next_word() }
-            "d8" => { self.fetch_next_byte() as u16 }
+            "d8"|"r8" => { self.fetch_next_byte() as u16 }
+            "NZ" => { !self.regs.get_flags().0 as u16 }
             _ => {
                 operand.parse::<u16>().expect(format!("cant read {} yet!!!", operand).as_ref())
             }
@@ -214,12 +216,17 @@ impl<M: Memory> CPU<M> {
             "NOP" => {},
             "LD" => { result = op1 },
             "LDD" => {
-                println!("Implement LDD dude!");
-                result = op1
+                result = op1;
+                let reg: &str = op.into[1..op.into.len()-1].as_ref();
+                let value = self.get_registry_value(reg);
+                self.store_result(reg,  value - 1);
             },
             "XOR" => { result = op1 ^ op2 },
             "BIT" => {
                 z = !get_bit(op1 as u8, op2)
+            }
+            "JR" => {
+                result = (u16_to_i16(op1) + u8_to_i8(op2 as u8) as i16) as u16
             }
             _ => {
                 panic!("0x{:x}\t{} not implemented yet!", op.code_as_u8(), op.mnemonic);
@@ -329,6 +336,34 @@ mod tests {
         assert_eq!(n, false);
         assert_eq!(h, true);
         assert_eq!(c, false);
+    }
+
+    #[test]
+    fn test_jr_positive() {
+        let mut cpu = CPU::new(DummyMMU::new());
+
+        cpu.set_registry_value("PC", 500);
+        cpu.mmu.values[500] = 0x18;
+        cpu.mmu.values[501] = 0b0000_0010; // jump by 2
+
+        cpu.step();
+
+        assert_eq!(cpu.get_registry_value("PC"), 503);
+    }
+
+    #[test]
+    fn test_jr_negative() {
+        let mut cpu = CPU::new(DummyMMU::new());
+
+        cpu.set_registry_value("PC", 500);
+        cpu.mmu.values[500] = 0x18;
+        cpu.mmu.values[501] = 0b1111_1110; // jump by -2
+
+        cpu.step();
+
+
+        //TODO: MAKE SURE IT SHOULD GO BACK BY 2 CONSIDERING THE OPERAND READING
+        assert_eq!(cpu.get_registry_value("PC"), 499);
     }
 
 //    #[test]

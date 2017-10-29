@@ -56,29 +56,29 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                         self.still_bios = false;
                     }
                 }
-                return self.rom[addr as usize]
+                self.rom[addr as usize]
             }
 
-            0x1000...0x3000 => { return self.rom[addr as usize] }                // ROM 0
-            0x4000...0x7000 => { return self.rom[addr as usize] }                // TODO: banking
-            0x8000 | 0x9000 => { return self.gpu.read_vram(addr &0x1FFF) } // VRAM
-            0xA000 | 0xB000 => { return self.eram[(addr &0x1FFF) as usize] }     // External RAM
-            0xC000...0xE000 => { return self.wram[(addr &0x1FFF) as usize] }     // Working RAM
+            0x1000...0x3000 => { self.rom[addr as usize] }                // ROM 0
+            0x4000...0x7000 => { self.rom[addr as usize] }                // TODO: banking
+            0x8000 | 0x9000 => { self.gpu.read_vram(addr &0x1FFF) } // VRAM
+            0xA000 | 0xB000 => { self.eram[(addr &0x1FFF) as usize] }     // External RAM
+            0xC000...0xE000 => { self.wram[(addr &0x1FFF) as usize] }     // Working RAM
 
             0xF000 => {
                 match addr & 0x0F00 {
-                    0x0000...0x0D00 => { return self.wram[(addr & 0x1FFF) as usize] } // Working RAM echo
+                    0x0000...0x0D00 => { self.wram[(addr & 0x1FFF) as usize] } // Working RAM echo
 
                     // GPU OAM
                     0x0E00 => {
-                        if addr < 0xFEA0 { return self.gpu.read_oam(addr & 0x00FF) }
-                        else { return 0 }
+                        if addr < 0xFEA0 { self.gpu.read_oam(addr & 0x00FF) }
+                        else { 0 }
                     }
 
                     // Zero page
                     0x0F00 => {
-                        if addr >= 0xFF80 { return self.zram[(addr & 0x007F) as usize] }
-                        else { return 0 }  // TODO: change when IO implemented
+                        if addr >= 0xFF80 { self.zram[(addr & 0x007F) as usize] }
+                        else { 0 }  // TODO: change when IO implemented
                     }
 
                     _ => {

@@ -23,7 +23,7 @@ code,mnemonic,into,operand1,operand2,bytes,flag_z,flag_h,flag_n,flag_c,cycles_ok
 0x15,DEC,D,D,,1,Z,1,H,,4,
 0x16,LD,D,d8,,2,,,,,8,
 0x17,RLA,A,A,,1,0,0,0,C,4,
-0x18,JR,PC,r8,,2,,,,,12,
+0x18,JR,PC,PC,d8,2,,,,,12,
 0x19,ADD,HL,HL,DE,1,,0,H,C,8,
 0x1a,LD,A,(DE),,1,,,,,8,
 0x1b,DEC,DE,DE,,1,,,,,8,
@@ -31,7 +31,7 @@ code,mnemonic,into,operand1,operand2,bytes,flag_z,flag_h,flag_n,flag_c,cycles_ok
 0x1d,DEC,E,E,,1,Z,1,H,,4,
 0x1e,LD,E,d8,,2,,,,,8,
 0x1f,RRA,A,A,,1,0,0,0,C,4,
-0x20,JR,PC,NZ,r8,2,,,,,12,8
+0x20,JR,PC,NZ,PC,2,,,,,12,8
 0x21,LD,HL,d16,,3,,,,,12,
 0x22,LDI,HL,A,,1,,,,,8,
 0x23,INC,HL,HL,,1,,,,,8,
@@ -39,7 +39,7 @@ code,mnemonic,into,operand1,operand2,bytes,flag_z,flag_h,flag_n,flag_c,cycles_ok
 0x25,DEC,H,H,,1,Z,1,H,,4,
 0x26,LD,H,d8,,2,,,,,8,
 0x27,DAA,A,A,,1,Z,,0,C,4,
-0x28,JR,PC,Z,r8,2,,,,,12,8
+0x28,JR,PC,Z,PC,2,,,,,12,8
 0x29,ADD,HL,HL,HL,1,,0,H,C,8,
 0x2a,LDI,A,(HL),,1,,,,,8,
 0x2b,DEC,HL,HL,,1,,,,,8,
@@ -47,7 +47,7 @@ code,mnemonic,into,operand1,operand2,bytes,flag_z,flag_h,flag_n,flag_c,cycles_ok
 0x2d,DEC,L,L,,1,Z,1,H,,4,
 0x2e,LD,L,d8,,2,,,,,8,
 0x2f,CPL,A,A,,1,,1,1,,4,
-0x30,JR,PC,NC,r8,2,,,,,12,8
+0x30,JR,PC,NC,PC,2,,,,,12,8
 0x31,LD,SP,d16,,3,,,,,12,
 0x32,LDD,(HL),A,,1,,,,,8,
 0x33,INC,SP,SP,,1,,,,,8,
@@ -55,7 +55,7 @@ code,mnemonic,into,operand1,operand2,bytes,flag_z,flag_h,flag_n,flag_c,cycles_ok
 0x35,DEC,(HL),(HL),,1,Z,1,H,,12,
 0x36,LD,(HL),d8,,2,,,,,12,
 0x37,SCF,,,,1,,0,0,1,4,
-0x38,JR,PC,C,r8,2,,,,,12,8
+0x38,JR,PC,C,PC,2,,,,,12,8
 0x39,ADD,HL,HL,SP,1,,0,H,C,8,
 0x3a,LDD,A,(HL),,1,,,,,8,
 0x3b,DEC,SP,SP,,1,,,,,8,

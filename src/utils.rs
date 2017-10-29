@@ -1,5 +1,6 @@
 use std::io::Read;
 use std::fs::File;
+use std::mem;
 
 pub fn load_boot_rom() -> [u8; 0x0100] {
     let mut boot_rom: [u8; 0x0100] = [0; 0x0100];
@@ -16,9 +17,23 @@ pub fn load_boot_rom() -> [u8; 0x0100] {
 
 }
 
+pub fn u16_to_i16(unsigned: u16) -> i16 {
+    unsafe {
+        mem::transmute::<u16, i16>(unsigned)
+    }
+}
 
+pub fn u8_to_i8(unsigned: u8) -> i8 {
+    unsafe {
+        mem::transmute::<u8, i8>(unsigned)
+    }
+}
+
+
+#[allow(overflowing_literals)]
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     /// test that the bot rom file is succesfully found and loaded
@@ -28,5 +43,13 @@ mod tests {
 
         assert_ne!(boot_rom[0], 0);
         assert_ne!(boot_rom[255], 0);
+    }
+
+    #[test]
+    fn test_u8_to_i8() {
+        assert_eq!(u8_to_i8(0b0111_1111u8), 0b0111_1111i8);
+        assert_eq!(u8_to_i8(0b1111_1111u8), 0b1111_1111i8);
+        assert_eq!(u8_to_i8(0b0000_1111u8), 0b0000_1111i8);
+        assert_eq!(u8_to_i8(0b1111_1110u8), 0b1111_1110i8);
     }
 }
