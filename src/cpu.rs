@@ -110,7 +110,7 @@ impl<M: Memory> CPU<M> {
         let mut ops = Ops::new();  // todo: make it an attribute...
         let op: Operation = ops.fetch_operation(self);
 
-        println!("0x{:x}\t{}\t{}\t{:?}\t{:?}", op.code_as_u8(), op.into, op.mnemonic, op.operand1, op.operand2);
+        println!("0x{:x}\t0x{:x}\t{}\t{:?}\t{:?}", self.get_registry_value("PC"), op.code_as_u8(), op.mnemonic, op.operand1, op.operand2);
 
         self.execute(&op);
 
@@ -177,6 +177,8 @@ impl<M: Memory> CPU<M> {
     }
 
     pub fn execute(&mut self, op: &Operation) {
+        let mut do_action = true;
+
         let op1 = match op.operand1 {
             Some (ref x) => { self.get_operand_value(x) }
             None => { 0 }
@@ -185,6 +187,7 @@ impl<M: Memory> CPU<M> {
             Some (ref x) => { self.get_operand_value(x) }
             None => { 0 }
         };
+
         let mut result: u16 = 0;
 
         let (mut z, mut n, mut h, mut c) = self.regs.get_flags();
@@ -210,32 +213,45 @@ impl<M: Memory> CPU<M> {
             _ => {}
         }
 
-        println!("0x{:x}\t{}\t{:x}\t{:x}", op.code_as_u8(), op.mnemonic, op1, op2);
+        println!("\t0x{:x}\t{}\t{:x}\t{:x}", op.code_as_u8(), op.mnemonic, op1, op2);
 
         match op.mnemonic.as_ref() {
             "NOP" => {},
-            "LD" => { result = op1 },
-            "LDD" => {
-                result = op1;
-                let reg: &str = op.into[1..op.into.len()-1].as_ref();
-                let value = self.get_registry_value(reg);
-                self.store_result(reg,  value - 1);
-            },
+            "LD"|"LDD" => { result = op1 },
             "XOR" => { result = op1 ^ op2 },
             "BIT" => {
                 z = !get_bit(op1 as u8, op2)
             }
             "JR" => {
-                result = (u16_to_i16(op1) + u8_to_i8(op2 as u8) as i16) as u16
+                let op3 = match op.operand3 {
+                    Some (ref x) => { self.get_operand_value(x) }
+                    None => { 0 }
+                };
+                if op3 == 0 {
+                    do_action = false;
+                    //TODO: handle possible overflow
+                }
+                result = (u16_to_i16(op1)+1 + u8_to_i8(op2 as u8) as i16) as u16;
             }
             _ => {
                 panic!("0x{:x}\t{} not implemented yet!", op.code_as_u8(), op.mnemonic);
             }
         }
 
-        if op.into != "" {
+        if do_action && op.into != "" {
             self.store_result(op.into.as_ref(), result);
         }
+
+        // postaction
+        match op.mnemonic.as_ref() {
+            "LDD" => {
+                let reg: &str = op.into[1..op.into.len() - 1].as_ref();
+                let value = self.get_registry_value(reg);
+                self.store_result(reg, value - 1);
+            }
+            _ => {}
+        }
+
 
         self.regs.set_flags(z, n, h, c);
         self.regs.write_byte(REG_T, op.cycles_ok);
@@ -348,7 +364,7 @@ mod tests {
 
         cpu.step();
 
-        assert_eq!(cpu.get_registry_value("PC"), 503);
+        assert_eq!(cpu.get_registry_value("PC"), 504);
     }
 
     #[test]
@@ -363,7 +379,7 @@ mod tests {
 
 
         //TODO: MAKE SURE IT SHOULD GO BACK BY 2 CONSIDERING THE OPERAND READING
-        assert_eq!(cpu.get_registry_value("PC"), 499);
+        assert_eq!(cpu.get_registry_value("PC"), 500);
     }
 
 //    #[test]
