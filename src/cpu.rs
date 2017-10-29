@@ -1,7 +1,6 @@
 use mem::Memory;
 use ops::{Ops, Operation};
 use utils::{u8_to_i8, u16_to_i16, rotate_left};
-use std::panic;
 
 // Flags bit poisition in the F register
 const ZERO_FLAG: u8 = 7;
@@ -117,6 +116,8 @@ impl<M: Memory> CPU<M> {
 
     // fetch the operation, decodes it, fetch parameters if required, and executes it
     pub fn step(&mut self) {
+        let line_number = self.get_registry_value("PC");
+
         let mut prefixed = false;
         let mut byte = self.read_byte();
 
@@ -127,7 +128,7 @@ impl<M: Memory> CPU<M> {
 
         let op: Operation = self.ops.fetch_operation(byte, prefixed);
 
-        println!("0x{:x}\t0x{:x}\t{}\t{:?}\t{:?}", self.get_registry_value("PC"), op.code_as_u8(), op.mnemonic, op.operand1, op.operand2);
+        println!("0x{:x}\t0x{:x}\t{}\t{:?}\t{:?}", line_number, op.code_as_u8(), op.mnemonic, op.operand1, op.operand2);
 
         self.execute(&op);
 
@@ -162,7 +163,7 @@ impl<M: Memory> CPU<M> {
     }
 
     pub fn store_result(&mut self, into: &str, value: u16) {
-        println!("Storing into {} value {}", into, value);
+        println!("Storing into {} value 0x{:x}", into, value);
         match into.as_ref() {
             "(BC)"|"(DE)"|"(HL)"|"(PC)"|"(SP)" => {
                 let reg = into[1..into.len()-1].as_ref();
@@ -177,7 +178,7 @@ impl<M: Memory> CPU<M> {
                 self.mmu.write_word(addr, value);
             }
             "(a8)" => {
-                let addr = u16::from(self.fetch_next_byte() + 0xFF00);
+                let addr = u16::from(self.fetch_next_byte()) + 0xFF00;
                 self.mmu.write_word(addr, value);
             }
             _ => { panic!("cant write to {} yet!!!", into) }
@@ -273,7 +274,7 @@ impl<M: Memory> CPU<M> {
                 result = op1 - 1;
                 z = result == 0;
                 n = true;
-                // Or put differently, H=1 if and only if the upper nibble had to change as a result of the operation on the lower nibble.
+                // H=1 if and only if the upper nibble had to change as a result of the operation on the lower nibble.
                 // This general rule holds true for all arithmetic operations: inc, dec, add, sub.
                 h = result & 0xF0 != op1 & 0xF0;
             }
@@ -302,6 +303,7 @@ impl<M: Memory> CPU<M> {
                 }
             }
             "CP" => {
+                println!("Comparing {} with {}", op1, op2);
                 z = op1 == op2;
                 n = true;
                 // TODO: DO THIS
@@ -381,7 +383,7 @@ mod tests {
         assert_eq!(regs.read_byte(REG_L), 0);
         assert_eq!(regs.read_byte(REG_F), 0);
         assert_eq!(regs.read_word(REG_PC), 0);
-        assert_eq!(regs.read_word(REG_SP), 0);
+        assert_eq!(regs.read_word(REG_SP), 0xFFFE);
         assert_eq!(regs.read_byte(REG_M), 0);
         assert_eq!(regs.read_byte(REG_T), 0);
     }
