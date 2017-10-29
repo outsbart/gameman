@@ -29,6 +29,10 @@ pub fn u8_to_i8(unsigned: u8) -> i8 {
     }
 }
 
+pub fn rotate_left(unsigned: u8) -> u16 {
+    u16::from(unsigned.rotate_left(1))
+}
+
 
 #[allow(overflowing_literals)]
 #[cfg(test)]

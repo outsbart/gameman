@@ -1,6 +1,6 @@
 use mem::Memory;
 use ops::{Ops, Operation};
-use utils::{u8_to_i8, u16_to_i16};
+use utils::{u8_to_i8, u16_to_i16, rotate_left};
 
 // Flags bit poisition in the F register
 const ZERO_FLAG: u8 = 7;
@@ -207,6 +207,13 @@ impl<M: Memory> CPU<M> {
         self.store_result("(SP)", value);
     }
 
+    pub fn pop(&mut self) -> u16 {
+        let sp = self.get_registry_value("SP");
+        let value = self.mmu.read_word(sp);
+        self.set_registry_value("SP",sp+2);
+        value
+    }
+
     pub fn execute(&mut self, op: &Operation) {
         let mut do_action = true;
 
@@ -278,6 +285,12 @@ impl<M: Memory> CPU<M> {
                     result = op1;
                 }
             }
+            "PUSH" => { self.push(op1) }
+            "POP" => { result = self.pop() }
+            "RL"|"RLA" => { result = rotate_left(op1 as u8) }
+//            "RES" => {
+//                result = !(1u16<<op1) ^ op2;
+//            }
             _ => {
                 panic!("0x{:x}\t{} not implemented yet!", op.code_as_u8(), op.mnemonic);
             }
