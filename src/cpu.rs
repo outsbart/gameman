@@ -137,7 +137,7 @@ impl<M: Memory> CPU<M> {
 
     fn registry_name_to_index(&mut self, registry: &str) -> u16 {
         match registry {
-            "A" => { 0 }, "F" => { 1 }, "B" => { 2 }, "C" => { 3 }, "D"|"DE" => { 4 }
+            "A" => { 0 }, "F" => { 1 }, "B"|"BC" => { 2 }, "C" => { 3 }, "D"|"DE" => { 4 }
             "E" => { 5 }, "H" => { 6 }, "HL" => { 6 }, "L" => { 7 }, "SP" => { 8 }, "S" => { 8 }
             "PSP" => { 9 }, "PC" => { 10 }, "CPC" => { 11 }, "M" => { 12 }, "T" => { 13 }
             _ => { panic!("What kind of register is {}??", registry) }
@@ -218,6 +218,10 @@ impl<M: Memory> CPU<M> {
             Some (ref x) => { self.get_operand_value(x) }
             None => { 0 }
         };
+        let op3 = match op.operand3 {
+            Some (ref x) => { self.get_operand_value(x) }
+            None => { 0 }
+        };
 
         let mut result: u16 = 0;
 
@@ -258,10 +262,6 @@ impl<M: Memory> CPU<M> {
                 h = ((op1 & 0xF) + 1) & 0x10 != 0; // TODO: should be ok
             }
             "JR" => {
-                let op3 = match op.operand3 {
-                    Some (ref x) => { self.get_operand_value(x) }
-                    None => { 0 }
-                };
                 if op3 == 0 {
                     do_action = false;
                 }
@@ -269,8 +269,14 @@ impl<M: Memory> CPU<M> {
                 result = (u16_to_i16(op1)+1 + u8_to_i8(op2 as u8) as i16) as u16;
             }
             "CALL" => {
-                let value = self.get_registry_value("PC");
-                self.push(value);
+                if op3 == 0 {
+                    do_action = false;
+                }
+                else {
+                    let value = self.get_registry_value("PC");
+                    self.push(value);
+                    result = op1;
+                }
             }
             _ => {
                 panic!("0x{:x}\t{} not implemented yet!", op.code_as_u8(), op.mnemonic);
