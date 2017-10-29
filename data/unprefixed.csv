@@ -33,7 +33,7 @@ code,mnemonic,into,operand1,operand2,operand3,bytes,flag_z,flag_h,flag_n,flag_c,
 0x1f,RRA,A,A,,,1,0,0,0,C,4,
 0x20,JR,PC,PC,d8,NZ,2,,,,,12,8
 0x21,LD,HL,d16,,,3,,,,,12,
-0x22,LDI,HL,A,,,1,,,,,8,
+0x22,LDI,(HL),A,,,1,,,,,8,
 0x23,INC,HL,HL,,,1,,,,,8,
 0x24,INC,H,H,,,1,Z,0,H,,4,
 0x25,DEC,H,H,,,1,Z,1,H,,4,

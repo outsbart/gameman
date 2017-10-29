@@ -259,14 +259,22 @@ impl<M: Memory> CPU<M> {
 
         match op.mnemonic.as_ref() {
             "NOP" => {},
-            "LD"|"LDD"|"LDH" => { result = op1 },
+            "LD"|"LDD"|"LDH"|"LDI" => { result = op1 },
             "XOR" => { result = op1 ^ op2 },
             "BIT" => { z = !get_bit(op1 as u8, op2) }
             "INC" => {
                 result = op1 + 1;
                 z = result == 0;
                 n = false;
-                h = ((op1 & 0xF) + 1) & 0x10 != 0; // TODO: should be ok
+                h = result & 0xF0 != op1 & 0xF0; // TODO: should be ok
+            }
+            "DEC" => {
+                result = op1 - 1;
+                z = result == 0;
+                n = true;
+                // Or put differently, H=1 if and only if the upper nibble had to change as a result of the operation on the lower nibble.
+                // This general rule holds true for all arithmetic operations: inc, dec, add, sub.
+                h = result & 0xF0 != op1 & 0xF0; // TODO: should be ok
             }
             "JR" => {
                 if op3 == 0 {
@@ -284,6 +292,10 @@ impl<M: Memory> CPU<M> {
                     self.push(value);
                     result = op1;
                 }
+            }
+            "RET" => {
+                let addr = self.pop();
+                self.store_result("PC", addr);
             }
             "PUSH" => { self.push(op1) }
             "POP" => { result = self.pop() }
@@ -306,6 +318,11 @@ impl<M: Memory> CPU<M> {
                 let reg: &str = op.into[1..op.into.len() - 1].as_ref();
                 let value = self.get_registry_value(reg);
                 self.store_result(reg, value - 1);
+            }
+            "LDI" => {
+                let reg: &str = op.into[1..op.into.len() - 1].as_ref();
+                let value = self.get_registry_value(reg);
+                self.store_result(reg, value + 1);
             }
             _ => {}
         }
