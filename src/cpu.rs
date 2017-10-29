@@ -72,7 +72,8 @@ impl Memory for Regs {
 pub struct CPU<M: Memory> {
     clks: Clocks,
     regs: Regs,
-    mmu: M
+    mmu: M,
+    ops: Ops
 }
 
 impl<M: Memory> ByteStream for CPU<M> {
@@ -86,7 +87,7 @@ impl<M: Memory> ByteStream for CPU<M> {
 
 impl<M: Memory> CPU<M> {
     pub fn new(mmu: M) -> CPU<M> {
-        CPU { clks: Clocks::new(), regs: Regs::new(), mmu }
+        CPU { clks: Clocks::new(), regs: Regs::new(), mmu, ops: Ops::new() }
     }
 
     // fetches the next byte from the ram
@@ -107,8 +108,15 @@ impl<M: Memory> CPU<M> {
 
     // fetch the operation, decodes it, fetch parameters if required, and executes it
     pub fn step(&mut self) {
-        let mut ops = Ops::new();  // todo: make it an attribute...
-        let op: Operation = ops.fetch_operation(self);
+        let mut prefixed = false;
+        let mut byte = self.read_byte();
+
+        if byte == 0xcb {
+            byte = self.read_byte();
+            prefixed = true;
+        }
+
+        let op: Operation = self.ops.fetch_operation(byte, prefixed);
 
         println!("0x{:x}\t0x{:x}\t{}\t{:?}\t{:?}", self.get_registry_value("PC"), op.code_as_u8(), op.mnemonic, op.operand1, op.operand2);
 

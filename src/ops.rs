@@ -2,8 +2,6 @@ use csv;
 use std::collections::HashMap;
 use std::fs::File;
 
-use cpu::ByteStream;
-
 #[derive(Debug,Deserialize,Clone)]
 pub struct Operation {
     pub code: String,
@@ -54,16 +52,10 @@ impl Ops {
         }
     }
 
-    pub fn fetch_operation(&mut self, ih: &mut ByteStream) -> Operation {
-        let byte = ih.read_byte();
-        let mut op = self.ops.get(&byte).expect(&format!("Missing operation {:x}! WTF?", byte));
-
-        if op.code_as_u8() == 0xcb {
-            let cb_byte = ih.read_byte();
-            op = self.cb_ops.get(&cb_byte).expect(&format!("Missing operation {:x}! WTF?", cb_byte));
-        }
-
-        (*op).clone()
+    pub fn fetch_operation(&self, byte: u8, prefixed: bool) -> Operation {
+        let map = if prefixed { &self.cb_ops } else { &self.ops };
+        let op = map.get(&byte).expect(&format!("Missing {}prefixed operation {:x}! WTF?", if prefixed { "" } else { "un" }, byte));
+        (*op).clone()  //todo: HOW DO I NOT CLONE THAT?
     }
 }
 
