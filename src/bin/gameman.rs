@@ -39,7 +39,7 @@ fn main() {
     memory.set_bios(load_boot_rom());
     let mut cpu = CPU::new(memory);
 
-    for _ in 0..100 {
+    for _ in 0..1000 {
         cpu.step();
     }
 }

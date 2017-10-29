@@ -33,7 +33,7 @@ struct Clocks {
 }
 
 impl Clocks {
-    fn new() -> Clocks {
+    fn new() -> Self {
         Clocks { m: 0, t: 0 }
     }
 }
@@ -87,7 +87,15 @@ impl<M: Memory> ByteStream for CPU<M> {
 
 impl<M: Memory> CPU<M> {
     pub fn new(mmu: M) -> CPU<M> {
-        CPU { clks: Clocks::new(), regs: Regs::new(), mmu, ops: Ops::new() }
+        let mut cpu = CPU { clks: Clocks::new(), regs: Regs::new(), mmu, ops: Ops::new() };
+        cpu.reset();
+        cpu
+    }
+
+    // initalize
+    fn reset(&mut self) {
+        self.set_registry_value("SP", 0xFFFE);
+        //TODO: set all registry to zero. RAM as well
     }
 
     // fetches the next byte from the ram
@@ -129,7 +137,7 @@ impl<M: Memory> CPU<M> {
 
     fn registry_name_to_index(&mut self, registry: &str) -> u16 {
         match registry {
-            "A" => { 0 }, "F" => { 1 }, "B" => { 2 }, "C" => { 3 }, "D" => { 4 }
+            "A" => { 0 }, "F" => { 1 }, "B" => { 2 }, "C" => { 3 }, "D"|"DE" => { 4 }
             "E" => { 5 }, "H" => { 6 }, "HL" => { 6 }, "L" => { 7 }, "SP" => { 8 }, "S" => { 8 }
             "PSP" => { 9 }, "PC" => { 10 }, "CPC" => { 11 }, "M" => { 12 }, "T" => { 13 }
             _ => { panic!("What kind of register is {}??", registry) }
@@ -162,6 +170,15 @@ impl<M: Memory> CPU<M> {
             }
             "BC"|"DE"|"HL"|"PC"|"SP"|
             "A"|"B"|"C"|"D"|"E"|"H"|"L" => { self.set_registry_value(into, value) }
+            "(C)" => {
+                let reg = into[1..into.len()-1].as_ref();
+                let addr = self.get_registry_value(reg) + 0xFF00;
+                self.mmu.write_word(addr, value);
+            }
+            "(a8)" => {
+                let addr = u16::from(self.fetch_next_byte() + 0xFF00);
+                self.mmu.write_word(addr, value);
+            }
             _ => { panic!("cant write to {} yet!!!", into) }
         }
     }
@@ -175,13 +192,19 @@ impl<M: Memory> CPU<M> {
             }
             "BC"|"DE"|"HL"|"PC"|"SP"|
             "A"|"B"|"C"|"D"|"E"|"H"|"L" => { self.get_registry_value(operand) }
-            "d16" => { self.fetch_next_word() }
+            "d16"|"a16" => { self.fetch_next_word() }
             "d8"|"r8" => { self.fetch_next_byte() as u16 }
             "NZ" => { !self.regs.get_flags().0 as u16 }
             _ => {
                 operand.parse::<u16>().expect(format!("cant read {} yet!!!", operand).as_ref())
             }
         }
+    }
+
+    pub fn push(&mut self, value: u16) {
+        let sp = self.get_registry_value("SP");
+        self.set_registry_value("SP", sp-2);
+        self.store_result("(SP)", value);
     }
 
     pub fn execute(&mut self, op: &Operation) {
@@ -225,10 +248,14 @@ impl<M: Memory> CPU<M> {
 
         match op.mnemonic.as_ref() {
             "NOP" => {},
-            "LD"|"LDD" => { result = op1 },
+            "LD"|"LDD"|"LDH" => { result = op1 },
             "XOR" => { result = op1 ^ op2 },
-            "BIT" => {
-                z = !get_bit(op1 as u8, op2)
+            "BIT" => { z = !get_bit(op1 as u8, op2) }
+            "INC" => {
+                result = op1 + 1;
+                z = result == 0;
+                n = false;
+                h = ((op1 & 0xF) + 1) & 0x10 != 0; // TODO: should be ok
             }
             "JR" => {
                 let op3 = match op.operand3 {
@@ -237,9 +264,13 @@ impl<M: Memory> CPU<M> {
                 };
                 if op3 == 0 {
                     do_action = false;
-                    //TODO: handle possible overflow
                 }
+                //TODO: handle possible overflow
                 result = (u16_to_i16(op1)+1 + u8_to_i8(op2 as u8) as i16) as u16;
+            }
+            "CALL" => {
+                let value = self.get_registry_value("PC");
+                self.push(value);
             }
             _ => {
                 panic!("0x{:x}\t{} not implemented yet!", op.code_as_u8(), op.mnemonic);
@@ -260,50 +291,9 @@ impl<M: Memory> CPU<M> {
             _ => {}
         }
 
-
         self.regs.set_flags(z, n, h, c);
         self.regs.write_byte(REG_T, op.cycles_ok);
     }
-
-
-    // operations
-
-    // adds E to A
-//    fn addr_e(&mut self) {
-//        let result = self.regs.read_byte(REG_A) as u32 + self.regs.read_byte(REG_E) as u32;
-//
-//        self.regs.write_byte(REG_F,0); // reset the flags!
-//
-//        // Zero
-//        if (result & 0xFF) == 0 {
-//            self.regs[REG_F] |= ZERO_FLAG; // if result is 0 set the first bit to 1
-//        }
-//
-//        // Half Carry
-////        if ((self.regs.a & 0xF) + (self.regs.e & 0xF)) & 0x10 {
-////            self.regs.f |= HALF_CARRY_FLAG;
-////        }
-//
-//        // Carry
-//        if result > 0xFF {
-//            self.regs[REG_F] |= CARRY_FLAG;
-//        }
-//
-//        // save it in the A register
-//        self.regs[REG_A] = (result & 0xFF) as u8;
-//
-//        self.regs[REG_M] = 1;
-//        self.regs[REG_T] = 4;
-//    }
-
-//    // read a word from an absolute location into A
-//    fn ldamm(&mut self) {
-//        let addr: u16 = self.mmu.read_word(self.regs.pc); // TODO FIX
-//        self.regs[Reg.PC] += 2;  //TODO FIX
-//        self.regs[Reg.A] = self.mmu.read_byte(addr);
-//
-//        self.regs[Reg.M] = 4; self.regs[Reg.T] = 16;
-//    }
 }
 
 #[cfg(test)]
