@@ -1,6 +1,7 @@
 use mem::Memory;
 use ops::{Ops, Operation};
 use utils::{u8_to_i8, u16_to_i16, rotate_left};
+use std::panic;
 
 // Flags bit poisition in the F register
 const ZERO_FLAG: u8 = 7;
@@ -255,7 +256,7 @@ impl<M: Memory> CPU<M> {
             _ => {}
         }
 
-        println!("\t0x{:x}\t{}\t{:x}\t{:x}", op.code_as_u8(), op.mnemonic, op1, op2);
+        //println!("\t0x{:x}\t{}\t{:x}\t{:x}", op.code_as_u8(), op.mnemonic, op1, op2);
 
         match op.mnemonic.as_ref() {
             "NOP" => {},
@@ -266,7 +267,7 @@ impl<M: Memory> CPU<M> {
                 result = op1 + 1;
                 z = result == 0;
                 n = false;
-                h = result & 0xF0 != op1 & 0xF0; // TODO: should be ok
+                h = result & 0xF0 != op1 & 0xF0;
             }
             "DEC" => {
                 result = op1 - 1;
@@ -274,7 +275,7 @@ impl<M: Memory> CPU<M> {
                 n = true;
                 // Or put differently, H=1 if and only if the upper nibble had to change as a result of the operation on the lower nibble.
                 // This general rule holds true for all arithmetic operations: inc, dec, add, sub.
-                h = result & 0xF0 != op1 & 0xF0; // TODO: should be ok
+                h = result & 0xF0 != op1 & 0xF0;
             }
             "JR" => {
                 if op3 == 0 {
@@ -294,8 +295,18 @@ impl<M: Memory> CPU<M> {
                 }
             }
             "RET" => {
-                let addr = self.pop();
-                self.store_result("PC", addr);
+                if op3 == 0 {
+                    do_action = false;
+                } else {
+                    result = self.pop();
+                }
+            }
+            "CP" => {
+                z = op1 == op2;
+                n = true;
+                // TODO: DO THIS
+                // h = result & 0xF0 != op1 & 0xF0;
+                c = op1 < op2;
             }
             "PUSH" => { self.push(op1) }
             "POP" => { result = self.pop() }
