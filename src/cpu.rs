@@ -205,9 +205,14 @@ impl<M: Memory> CPU<M> {
             }
             "BC"|"DE"|"HL"|"PC"|"SP"|
             "A"|"B"|"C"|"D"|"E"|"H"|"L" => { self.get_registry_value(operand) }
+            "(a8)" => {
+                let addr = 0xFF00 + u16::from(self.fetch_next_byte());
+                u16::from(self.mmu.read_byte(addr))
+            }
             "d16"|"a16" => { self.fetch_next_word() }
             "d8"|"r8" => { self.fetch_next_byte() as u16 }
             "NZ" => { !self.regs.get_flags().0 as u16 }
+            "Z" => { self.regs.get_flags().0 as u16 }
             _ => {
                 operand.parse::<u16>().expect(format!("cant read {} yet!!!", operand).as_ref())
             }
