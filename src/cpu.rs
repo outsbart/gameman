@@ -135,7 +135,7 @@ impl<M: Memory> CPU<M> {
 
         let op: Operation = self.ops.fetch_operation(byte, prefixed);
 
-        println!("0x{:x}\t0x{:x}\t{}\t{:?}\t{:?}", line_number, op.code_as_u8(), op.mnemonic, op.operand1, op.operand2);
+//        println!("0x{:x}\t0x{:x}\t{}\t{:?}\t{:?}", line_number, op.code_as_u8(), op.mnemonic, op.operand1, op.operand2);
 
         self.execute(&op);
 
@@ -170,7 +170,7 @@ impl<M: Memory> CPU<M> {
     }
 
     pub fn store_result(&mut self, into: &str, value: u16) {
-        println!("Storing into {} value 0x{:x}", into, value);
+//        println!("Storing into {} value 0x{:x}", into, value);
         match into.as_ref() {
             "(BC)"|"(DE)"|"(HL)"|"(PC)"|"(SP)" => {
                 let reg = into[1..into.len()-1].as_ref();
@@ -320,7 +320,7 @@ impl<M: Memory> CPU<M> {
                 }
             }
             "CP" => {
-                println!("Comparing {} with {}", op1, op2);
+//                println!("Comparing {} with {}", op1, op2);
                 z = op1 == op2;
                 n = true;
                 // TODO: DO THIS

@@ -7,30 +7,30 @@ pub trait GPUMemoriesAccess {
 }
 
 pub struct GPU {
+    vram: [u8; 8192],
+    oam: [u8; 256],
+
     modeclock: usize,
     mode: u8,
-    line: u8
+    line: u8,
+
+    scroll_x: u8,
+    scroll_y: u8,
+    palette: u8
 }
 
 impl GPUMemoriesAccess for GPU {
-    fn read_oam(&mut self, addr: u16) -> u8 {
-        unimplemented!()
-    }
-
-    fn write_oam(&mut self, addr: u16, byte: u8) {
-        unimplemented!()
-    }
-
-    fn read_vram(&mut self, addr: u16) -> u8 {
-        unimplemented!()
-    }
-
-    fn write_vram(&mut self, addr: u16, byte: u8) {
-        unimplemented!()
-    }
+    fn read_oam(&mut self, addr: u16) -> u8 { self.oam[addr as usize] }
+    fn write_oam(&mut self, addr: u16, byte: u8) { self.oam[addr as usize] = byte }
+    fn read_vram(&mut self, addr: u16) -> u8 { self.vram[addr as usize] }
+    fn write_vram(&mut self, addr: u16, byte: u8) { self.vram[addr as usize] = byte }
 }
 
 impl GPU {
+    pub fn new() -> Self {
+        GPU { vram: [0; 8192], oam: [0; 256], modeclock: 0, mode: 0, line: 0, scroll_x: 0, scroll_y: 0, palette: 0 }
+    }
+
     pub fn render_scan_to_buffer(&mut self) {
 
     }
