@@ -66,7 +66,14 @@ pub trait ByteStream {
 
 impl Memory for Regs {
     fn read_byte(&mut self, addr: u16) -> u8 { self.regs[addr as usize] }
+    fn read_word(&mut self, addr: u16) -> u16 {
+        (self.read_byte(addr+1) as u16) | ((self.read_byte(addr) as u16) << 8)
+    }
     fn write_byte(&mut self, addr: u16, byte: u8) { self.regs[addr as usize] = byte; }
+    fn write_word(&mut self, addr: u16, word: u16) -> () {
+        self.write_byte(addr+1, (word & 0x00FF) as u8);
+        self.write_byte(addr, ((word & 0xFF00) >> 8) as u8);
+    }
 }
 
 pub struct CPU<M: Memory> {
@@ -179,6 +186,10 @@ impl<M: Memory> CPU<M> {
             }
             "(a8)" => {
                 let addr = u16::from(self.fetch_next_byte()) + 0xFF00;
+                self.mmu.write_word(addr, value);
+            }
+            "(a16)" => {
+                let addr = self.fetch_next_word();
                 self.mmu.write_word(addr, value);
             }
             _ => { panic!("cant write to {} yet!!!", into) }
