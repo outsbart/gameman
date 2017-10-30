@@ -234,6 +234,7 @@ impl<M: Memory> CPU<M> {
 
     pub fn execute(&mut self, op: &Operation) {
         let mut do_action = true;
+        let mut cycles = op.cycles_ok;
 
         let op1 = match op.operand1 {
             Some (ref x) => { self.get_operand_value(x) }
@@ -337,8 +338,16 @@ impl<M: Memory> CPU<M> {
             }
         }
 
-        if do_action && op.into != "" {
-            self.store_result(op.into.as_ref(), result);
+        if do_action {
+            if op.into != "" {
+                self.store_result(op.into.as_ref(), result);
+            }
+        }
+        else {
+            cycles = match op.cycles_no {
+                Some (x) => { x }
+                None => { panic!("Operation skipped but cycles_no not set.") }
+            };
         }
 
         // postaction
@@ -357,7 +366,7 @@ impl<M: Memory> CPU<M> {
         }
 
         self.regs.set_flags(z, n, h, c);
-        self.regs.write_byte(REG_T, op.cycles_ok);
+        self.regs.write_byte(REG_T, cycles);
     }
 }
 
