@@ -29,7 +29,7 @@ fn main() {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
 
-    let window = video_subsystem.window("rust-sdl2 demo: Video", 800, 600)
+    let window = video_subsystem.window("rust-sdl2 demo: Video", 256, 256)
         .position_centered()
         .opengl()
         .build()
@@ -74,10 +74,9 @@ fn main() {
                 },
                 Event::KeyDown { keycode: Some(Keycode::Space), .. } => {
                     texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
-                        let mut i = 0;
                         let mut j = 0;
                         for tile in 0..256 {
-                            for row_of_pixel in 0..8 {
+                            for row_of_pixel in 0..8u8 {
                                 let byte_1 = cpu.mmu.read_byte(0x8000 + j);
                                 j+=1;
                                 let byte_2 = cpu.mmu.read_byte(0x8000 + j);
@@ -86,9 +85,7 @@ fn main() {
                                 if byte_1 != 0 {
                                     println!("0x{:x} 0x{:x}", byte_1, byte_2);
 
-                                    i = 0;
-
-                                    for pixel in 0..8 {
+                                    for pixel in 0..8u8 {
                                         let ix = 7 - pixel;
                                         let high_bit = if get_bit(ix, byte_2 as u16) { 1 } else { 0 };
                                         let low_bit = if get_bit(ix, byte_1 as u16) { 1 } else { 0 };
@@ -103,23 +100,21 @@ fn main() {
                                             _ => { 128 }
                                         };
 
-                                        let y = row_of_pixel * pitch;
-                                        let x = i * 3;
+                                        let y = row_of_pixel as usize * pitch;
+                                        let x = pixel as usize * 3;
 
                                         println!("{} {}", x, y);
 
                                         buffer[y + x] = color;
                                         buffer[y + x + 1] = color;
                                         buffer[y + x + 2] = color;
-
-                                        i += 1;
                                     }
                                 }
                             }
                         }
                     }).unwrap();
                     canvas.clear();
-                    canvas.copy(&texture, None, Some(Rect::new(0, 0, 800, 600))).unwrap();
+                    canvas.copy(&texture, None, Some(Rect::new(0, 0, 256, 256))).unwrap();
                     canvas.present();
                 }
                 _ => {}
