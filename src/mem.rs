@@ -24,6 +24,7 @@ impl<M: GPUMemoriesAccess> MMU<M> {
     pub fn set_bios(&mut self, bios: [u8; 0x0100]) {
         self.bios = bios;
     }
+    pub fn set_rom(&mut self, rom: [u8; 0x8000]) { self.rom = rom; }
 }
 
 

@@ -121,7 +121,7 @@ impl<M: Memory> CPU<M> {
         word
     }
 
-    // fetch the operation, decodes it, fetch parameters if required, and executes it.
+    // fetch the operation, decodes it, fetch parameters if required and executes it.
     // returns the address of the executed instruction
     pub fn step(&mut self) -> u16 {
         let line_number = self.get_registry_value("PC");

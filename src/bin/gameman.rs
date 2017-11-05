@@ -24,18 +24,31 @@ fn main() {
     let mut gpu = GPU::new();
     let mut memory = MMU::new(gpu);
     memory.set_bios(load_boot_rom());
+
+    let mut rom: [u8; 0x8000] = [0; 0x8000];
+
+    // copy bios logo from 0xa8 into 0x104
+    for i in 0..48 {
+        let byte = memory.read_byte(0xa8 + i);
+//        println!("Copying 0x{:x}", byte);
+        rom[(0x104 + i) as usize] = byte;
+//        cpu.mmu.write_byte(0x8010 + i, byte);
+    }
+    memory.set_rom(rom);
+
     let mut cpu = CPU::new(memory);
 
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
 
-    let window = video_subsystem.window("rust-sdl2 demo: Video", 256, 256)
+    let window = video_subsystem.window("rust-sdl2 demo: Video", 512, 512)
         .position_centered()
         .opengl()
         .build()
         .unwrap();
 
     let mut canvas = window.into_canvas().build().unwrap();
+    canvas.set_scale(2f32, 2f32);
     let texture_creator = canvas.texture_creator();
 
     let mut texture = texture_creator.create_texture_streaming(
@@ -44,18 +57,10 @@ fn main() {
     // exec the bios till the part that zeros vram
     while cpu.step() != 0x1c {}
 
-    // copy bios logo from 0xa8 into 0x104
-    for i in 0..48 {
-       let byte = cpu.mmu.read_byte(0xa8 + i);
-//        println!("Copying 0x{:x}", byte);
-       cpu.mmu.write_byte(0x104 + i, byte);
-//       cpu.mmu.write_byte(0x8010 + i, byte);
-    }
-
-    for i in 0..48 {
-        let byte = cpu.mmu.read_byte(0x104 + i);
-        println!("I see 0x{:x}", byte);
-    }
+//    for i in 0..48 {
+//        let byte = cpu.mmu.read_byte(0x104 + i);
+//        print!("{:x} ", byte);
+//    }
 
 //    for i in 0..1000 {
 //        cpu.step();
