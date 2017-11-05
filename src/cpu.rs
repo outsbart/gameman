@@ -413,7 +413,6 @@ mod tests {
 
         cpu.step();
 
-
         //TODO: MAKE SURE IT SHOULD GO BACK BY 2 CONSIDERING THE OPERAND READING
         assert_eq!(cpu.get_registry_value("PC"), 500);
     }

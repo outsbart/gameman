@@ -30,9 +30,7 @@ fn main() {
     // copy bios logo from 0xa8 into 0x104
     for i in 0..48 {
         let byte = memory.read_byte(0xa8 + i);
-//        println!("Copying 0x{:x}", byte);
         rom[(0x104 + i) as usize] = byte;
-//        cpu.mmu.write_byte(0x8010 + i, byte);
     }
     memory.set_rom(rom);
 
@@ -41,7 +39,7 @@ fn main() {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
 
-    let window = video_subsystem.window("rust-sdl2 demo: Video", 512, 512)
+    let window = video_subsystem.window("GameMan", 512, 512)
         .position_centered()
         .opengl()
         .build()
@@ -56,15 +54,6 @@ fn main() {
 
     // exec the bios till the part that zeros vram
     while cpu.step() != 0x1c {}
-
-//    for i in 0..48 {
-//        let byte = cpu.mmu.read_byte(0x104 + i);
-//        print!("{:x} ", byte);
-//    }
-
-//    for i in 0..1000 {
-//        cpu.step();
-//    }
 
     // stop after executing 0x64
     while cpu.step() != 0x64 {}

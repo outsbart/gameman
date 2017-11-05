@@ -30,14 +30,13 @@ pub fn u8_to_i8(unsigned: u8) -> i8 {
 }
 
 pub fn rotate_left(unsigned: u8) -> u16 {
-    u16::from(unsigned.rotate_left(1))
+    u16::from(unsigned << 1)
 }
 
 
 #[allow(overflowing_literals)]
 #[cfg(test)]
 mod tests {
-
     use super::*;
 
     /// test that the bot rom file is succesfully found and loaded
@@ -59,7 +58,8 @@ mod tests {
 
     #[test]
     fn test_rotate_left() {
+        // it doesnt really rotate... it's a shift and adds the Carry
         assert_eq!(rotate_left(0b00000001u8), 0b0000000000000010u16);
-        assert_eq!(rotate_left(0b10000000u8), 0b0000000000000001u16);
+        assert_eq!(rotate_left(0b10000000u8), 0b0000000000000000u16);
     }
 }
