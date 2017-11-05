@@ -55,7 +55,7 @@ impl Regs {
 }
 
 
-fn get_bit(pos: u8, value: u16) -> bool {
+pub fn get_bit(pos: u8, value: u16) -> bool {
     value & (1u16 << pos) != 0
 }
 
@@ -79,7 +79,7 @@ impl Memory for Regs {
 pub struct CPU<M: Memory> {
     clks: Clocks,
     regs: Regs,
-    mmu: M,
+    pub mmu: M,
     ops: Ops
 }
 
@@ -121,8 +121,9 @@ impl<M: Memory> CPU<M> {
         word
     }
 
-    // fetch the operation, decodes it, fetch parameters if required, and executes it
-    pub fn step(&mut self) {
+    // fetch the operation, decodes it, fetch parameters if required, and executes it.
+    // returns the address of the executed instruction
+    pub fn step(&mut self) -> u16 {
         let line_number = self.get_registry_value("PC");
 
         let mut prefixed = false;
@@ -142,6 +143,8 @@ impl<M: Memory> CPU<M> {
         // add to the clocks
         self.clks.t += u32::from(self.regs.read_byte(REG_T));
         self.clks.m += u32::from(self.regs.read_byte(REG_M));
+
+        line_number
     }
 
     fn registry_name_to_index(&mut self, registry: &str) -> u16 {
