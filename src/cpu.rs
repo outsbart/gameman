@@ -257,7 +257,7 @@ impl<M: Memory> CPU<M> {
             return;
         }
 
-        let mut result: u16 = 0;
+        let mut result: u16 = 1;
         let (mut z, mut n, mut h, mut c) = self.regs.get_flags();
 
         println!("\t0x{:x}\t{}\t{:x}\t{:x}", op.code_as_u8(), op.mnemonic, op1, op2);
@@ -296,34 +296,25 @@ impl<M: Memory> CPU<M> {
             }
         }
 
+        // set the flags!
+        z = match op.flag_z.unwrap_or(' ') {
+            '0' => { false }, '1' => { true }, 'Z' => { result == 0 }, _ => { z }
+        };
+        n = match op.flag_n.unwrap_or(' ') {
+            '0' => { false }, '1' => { true }, _ => { n }
+        };
+        h = match op.flag_h.unwrap_or(' ') {
+            '0' => { false }, '1' => { true },
+            'H' => { result & 0xF0 != op1 & 0xF0 }, _ => { h }
+        };
+        c = match op.flag_c.unwrap_or(' ') {
+            '0' => { false }, '1' => { true }, _ => { c }
+        };
+
+        // store the operation result
         if op.into != "" { self.store_result(op.into.as_ref(), result); }
 
-        // set the flags!
-        match op.flag_z.unwrap_or(' ') {
-            '0' => { z = false }, '1' => { z = true },
-            'Z' => {
-                // why can't i enable this thing?
-                z = result == 0;
-            }
-            _ => {}
-        };
-        match op.flag_n.unwrap_or(' ') {
-            '0' => { n = false }, '1' => { n = true }, _ => {}
-        };
-        match op.flag_h.unwrap_or(' ') {
-            '0' => { h = false }, '1' => { h = true },
-            'H' => {
-                // H=1 if and only if the upper nibble had to change as a result of the operation on the lower nibble.
-                // This general rule holds true for all arithmetic operations: inc, dec, add, sub.
-                h = result & 0xF0 != op1 & 0xF0;
-            }
-            _ => {}
-        };
-        match op.flag_c.unwrap_or(' ') {
-            '0' => { c = false }, '1' => { c = true }, _ => {}
-        }
-
-        // postaction
+        // perform postactions if necessary
         match op.mnemonic.as_ref() {
             "LDD" => {
                 let reg: &str = op.into[1..op.into.len() - 1].as_ref();
