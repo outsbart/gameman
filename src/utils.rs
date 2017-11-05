@@ -56,4 +56,10 @@ mod tests {
         assert_eq!(u8_to_i8(0b0000_1111u8), 0b0000_1111i8);
         assert_eq!(u8_to_i8(0b1111_1110u8), 0b1111_1110i8);
     }
+
+    #[test]
+    fn test_rotate_left() {
+        assert_eq!(rotate_left(0b00000001u8), 0b0000000000000010u16);
+        assert_eq!(rotate_left(0b10000000u8), 0b0000000000000001u16);
+    }
 }

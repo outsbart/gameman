@@ -136,7 +136,7 @@ impl<M: Memory> CPU<M> {
 
         let op: Operation = self.ops.fetch_operation(byte, prefixed);
 
-//        println!("0x{:x}\t0x{:x}\t{}\t{:?}\t{:?}", line_number, op.code_as_u8(), op.mnemonic, op.operand1, op.operand2);
+        println!("0x{:x}\t0x{:x}\t{}\t{:?}\t{:?}", line_number, op.code_as_u8(), op.mnemonic, op.operand1, op.operand2);
 
         self.execute(&op);
 
@@ -173,7 +173,7 @@ impl<M: Memory> CPU<M> {
     }
 
     pub fn store_result(&mut self, into: &str, value: u16) {
-//        println!("Storing into {} value 0x{:x}", into, value);
+        println!("Storing into {} value 0x{:x}", into, value);
         match into.as_ref() {
             "(BC)"|"(DE)"|"(HL)"|"(PC)"|"(SP)" => {
                 let reg = into[1..into.len()-1].as_ref();
@@ -256,48 +256,17 @@ impl<M: Memory> CPU<M> {
 
         let (mut z, mut n, mut h, mut c) = self.regs.get_flags();
 
-        match op.flag_z.unwrap_or(' ') {
-            '0' => { z = false },
-            '1' => { z = true },
-            _ => {}
-        };
-        match op.flag_n.unwrap_or(' ') {
-            '0' => { n = false },
-            '1' => { n = true },
-            _ => {}
-        };
-        match op.flag_h.unwrap_or(' ') {
-            '0' => { h = false },
-            '1' => { h = true },
-            _ => {}
-        };
-        match op.flag_c.unwrap_or(' ') {
-            '0' => { c = false },
-            '1' => { c = true },
-            _ => {}
-        }
-
-        //println!("\t0x{:x}\t{}\t{:x}\t{:x}", op.code_as_u8(), op.mnemonic, op1, op2);
+        println!("\t0x{:x}\t{}\t{:x}\t{:x}", op.code_as_u8(), op.mnemonic, op1, op2);
 
         match op.mnemonic.as_ref() {
             "NOP" => {},
             "LD"|"LDD"|"LDH"|"LDI" => { result = op1 },
-            "XOR" => { result = op1 ^ op2 },
-            "BIT" => { z = !is_bit_set(op1 as u8, op2) }
-            "INC" => {
-                result = op1 + 1;
-                z = result == 0;
-                n = false;
-                h = result & 0xF0 != op1 & 0xF0;
-            }
-            "DEC" => {
-                result = op1 - 1;
-                z = result == 0;
-                n = true;
-                // H=1 if and only if the upper nibble had to change as a result of the operation on the lower nibble.
-                // This general rule holds true for all arithmetic operations: inc, dec, add, sub.
-                h = result & 0xF0 != op1 & 0xF0;
-            }
+            "XOR" => { result = op1 ^ op2; },
+            "BIT" => { result = !is_bit_set(op1 as u8, op2) as u16; }
+            "INC" => { result = op1 + 1; }
+            "DEC" => { result = op1 - 1; }
+            "PUSH" => { self.push(op1) }
+            "POP" => { result = self.pop() }
             "JR" => {
                 if op3 == 0 {
                     do_action = false;
@@ -323,16 +292,13 @@ impl<M: Memory> CPU<M> {
                 }
             }
             "CP" => {
-//                println!("Comparing {} with {}", op1, op2);
-                z = op1 == op2;
-                n = true;
-                // TODO: DO THIS
-                // h = result & 0xF0 != op1 & 0xF0;
+                result = if op1 == op2 { 0 } else { 1 }; //note: this is for the Z flag
                 c = op1 < op2;
             }
-            "PUSH" => { self.push(op1) }
-            "POP" => { result = self.pop() }
-            "RL"|"RLA" => { result = rotate_left(op1 as u8) }
+            "RL"|"RLA" => {
+                result = rotate_left(op1 as u8) + c as u16;
+                c = op1 & 0x80 != 0;
+            }
 //            "RES" => {
 //                result = !(1u16<<op1) ^ op2;
 //            }
@@ -345,27 +311,52 @@ impl<M: Memory> CPU<M> {
             if op.into != "" {
                 self.store_result(op.into.as_ref(), result);
             }
+
+            // set the flags!
+            match op.flag_z.unwrap_or(' ') {
+                '0' => { z = false }, '1' => { z = true },
+                'Z' => {
+                    // why can't i enable this thing?
+                    z = result == 0;
+                }
+                _ => {}
+            };
+            match op.flag_n.unwrap_or(' ') {
+                '0' => { n = false }, '1' => { n = true }, _ => {}
+            };
+            match op.flag_h.unwrap_or(' ') {
+                '0' => { h = false }, '1' => { h = true },
+                'H' => {
+                    // H=1 if and only if the upper nibble had to change as a result of the operation on the lower nibble.
+                    // This general rule holds true for all arithmetic operations: inc, dec, add, sub.
+                    h = result & 0xF0 != op1 & 0xF0;
+                }
+                _ => {}
+            };
+            match op.flag_c.unwrap_or(' ') {
+                '0' => { c = false }, '1' => { c = true }, _ => {}
+            }
+
+            // postaction
+            match op.mnemonic.as_ref() {
+                "LDD" => {
+                    let reg: &str = op.into[1..op.into.len() - 1].as_ref();
+                    let value = self.get_registry_value(reg);
+                    self.store_result(reg, value - 1);
+                }
+                "LDI" => {
+                    let reg: &str = op.into[1..op.into.len() - 1].as_ref();
+                    let value = self.get_registry_value(reg);
+                    self.store_result(reg, value + 1);
+                }
+                _ => {}
+            }
         }
         else {
             cycles = match op.cycles_no {
                 Some (x) => { x }
                 None => { panic!("Operation skipped but cycles_no not set.") }
             };
-        }
-
-        // postaction
-        match op.mnemonic.as_ref() {
-            "LDD" => {
-                let reg: &str = op.into[1..op.into.len() - 1].as_ref();
-                let value = self.get_registry_value(reg);
-                self.store_result(reg, value - 1);
-            }
-            "LDI" => {
-                let reg: &str = op.into[1..op.into.len() - 1].as_ref();
-                let value = self.get_registry_value(reg);
-                self.store_result(reg, value + 1);
-            }
-            _ => {}
         }
 
         self.regs.set_flags(z, n, h, c);

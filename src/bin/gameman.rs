@@ -41,7 +41,27 @@ fn main() {
     let mut texture = texture_creator.create_texture_streaming(
         PixelFormatEnum::RGB24, 256, 256).unwrap();
 
-    // stop before executing 0x64
+    // exec the bios till the part that zeros vram
+    while cpu.step() != 0x1c {}
+
+    // copy bios logo from 0xa8 into 0x104
+    for i in 0..48 {
+       let byte = cpu.mmu.read_byte(0xa8 + i);
+//        println!("Copying 0x{:x}", byte);
+       cpu.mmu.write_byte(0x104 + i, byte);
+//       cpu.mmu.write_byte(0x8010 + i, byte);
+    }
+
+    for i in 0..48 {
+        let byte = cpu.mmu.read_byte(0x104 + i);
+        println!("I see 0x{:x}", byte);
+    }
+
+//    for i in 0..1000 {
+//        cpu.step();
+//    }
+
+    // stop after executing 0x64
     while cpu.step() != 0x64 {}
 
     println!("Graphics loaded into vram!");
@@ -63,7 +83,6 @@ fn main() {
                             let y_offset = (tile / 32)*8;
 
                             for row_of_pixel in 0..8u8 {
-                                println!("0x{:x}", 0x8000 + j);
                                 let byte_1 = cpu.mmu.read_byte(0x8000 + j);
                                 let byte_2 = cpu.mmu.read_byte(0x8000 + j+1);
                                 j+=2;
