@@ -9,7 +9,7 @@ pub struct Operation {
     pub into: String,
     pub operand1: Option<String>,
     pub operand2: Option<String>,
-    pub operand3: Option<String>,
+    pub condition: Option<String>,
     pub bytes: u8,
     pub flag_z: Option<char>,
     pub flag_h: Option<char>,

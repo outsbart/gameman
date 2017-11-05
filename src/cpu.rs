@@ -236,9 +236,7 @@ impl<M: Memory> CPU<M> {
     }
 
     pub fn execute(&mut self, op: &Operation) {
-        let mut do_action = true;
-        let mut cycles = op.cycles_ok;
-
+        // care, some of this might send PC forward
         let op1 = match op.operand1 {
             Some (ref x) => { self.get_operand_value(x) }
             None => { 0 }
@@ -247,13 +245,19 @@ impl<M: Memory> CPU<M> {
             Some (ref x) => { self.get_operand_value(x) }
             None => { 0 }
         };
-        let op3 = match op.operand3 {
+        let condition = match op.condition {
             Some (ref x) => { self.get_operand_value(x) }
-            None => { 0 }
+            None => { 1 }
         };
 
-        let mut result: u16 = 0;
+        // early stop
+        if condition == 0 {
+            let cycles = op.cycles_no.expect("Operation skipped but cycles_no not set.");
+            self.regs.write_byte(REG_T, cycles);
+            return;
+        }
 
+        let mut result: u16 = 0;
         let (mut z, mut n, mut h, mut c) = self.regs.get_flags();
 
         println!("\t0x{:x}\t{}\t{:x}\t{:x}", op.code_as_u8(), op.mnemonic, op1, op2);
@@ -266,30 +270,15 @@ impl<M: Memory> CPU<M> {
             "INC" => { result = op1 + 1; }
             "DEC" => { result = op1 - 1; }
             "PUSH" => { self.push(op1) }
-            "POP" => { result = self.pop() }
+            "POP"|"RET" => { result = self.pop() }
             "JR" => {
-                if op3 == 0 {
-                    do_action = false;
-                }
                 //TODO: handle possible overflow
                 result = (u16_to_i16(op1)+1 + u8_to_i8(op2 as u8) as i16) as u16;
             }
             "CALL" => {
-                if op3 == 0 {
-                    do_action = false;
-                }
-                else {
-                    let value = self.get_registry_value("PC");
-                    self.push(value);
-                    result = op1;
-                }
-            }
-            "RET" => {
-                if op3 == 0 {
-                    do_action = false;
-                } else {
-                    result = self.pop();
-                }
+                let value = self.get_registry_value("PC");
+                self.push(value);
+                result = op1;
             }
             "CP" => {
                 result = if op1 == op2 { 0 } else { 1 }; //note: this is for the Z flag
@@ -307,60 +296,50 @@ impl<M: Memory> CPU<M> {
             }
         }
 
-        if do_action {
-            if op.into != "" {
-                self.store_result(op.into.as_ref(), result);
-            }
+        if op.into != "" { self.store_result(op.into.as_ref(), result); }
 
-            // set the flags!
-            match op.flag_z.unwrap_or(' ') {
-                '0' => { z = false }, '1' => { z = true },
-                'Z' => {
-                    // why can't i enable this thing?
-                    z = result == 0;
-                }
-                _ => {}
-            };
-            match op.flag_n.unwrap_or(' ') {
-                '0' => { n = false }, '1' => { n = true }, _ => {}
-            };
-            match op.flag_h.unwrap_or(' ') {
-                '0' => { h = false }, '1' => { h = true },
-                'H' => {
-                    // H=1 if and only if the upper nibble had to change as a result of the operation on the lower nibble.
-                    // This general rule holds true for all arithmetic operations: inc, dec, add, sub.
-                    h = result & 0xF0 != op1 & 0xF0;
-                }
-                _ => {}
-            };
-            match op.flag_c.unwrap_or(' ') {
-                '0' => { c = false }, '1' => { c = true }, _ => {}
+        // set the flags!
+        match op.flag_z.unwrap_or(' ') {
+            '0' => { z = false }, '1' => { z = true },
+            'Z' => {
+                // why can't i enable this thing?
+                z = result == 0;
             }
-
-            // postaction
-            match op.mnemonic.as_ref() {
-                "LDD" => {
-                    let reg: &str = op.into[1..op.into.len() - 1].as_ref();
-                    let value = self.get_registry_value(reg);
-                    self.store_result(reg, value - 1);
-                }
-                "LDI" => {
-                    let reg: &str = op.into[1..op.into.len() - 1].as_ref();
-                    let value = self.get_registry_value(reg);
-                    self.store_result(reg, value + 1);
-                }
-                _ => {}
+            _ => {}
+        };
+        match op.flag_n.unwrap_or(' ') {
+            '0' => { n = false }, '1' => { n = true }, _ => {}
+        };
+        match op.flag_h.unwrap_or(' ') {
+            '0' => { h = false }, '1' => { h = true },
+            'H' => {
+                // H=1 if and only if the upper nibble had to change as a result of the operation on the lower nibble.
+                // This general rule holds true for all arithmetic operations: inc, dec, add, sub.
+                h = result & 0xF0 != op1 & 0xF0;
             }
+            _ => {}
+        };
+        match op.flag_c.unwrap_or(' ') {
+            '0' => { c = false }, '1' => { c = true }, _ => {}
         }
-        else {
-            cycles = match op.cycles_no {
-                Some (x) => { x }
-                None => { panic!("Operation skipped but cycles_no not set.") }
-            };
+
+        // postaction
+        match op.mnemonic.as_ref() {
+            "LDD" => {
+                let reg: &str = op.into[1..op.into.len() - 1].as_ref();
+                let value = self.get_registry_value(reg);
+                self.store_result(reg, value - 1);
+            }
+            "LDI" => {
+                let reg: &str = op.into[1..op.into.len() - 1].as_ref();
+                let value = self.get_registry_value(reg);
+                self.store_result(reg, value + 1);
+            }
+            _ => {}
         }
 
         self.regs.set_flags(z, n, h, c);
-        self.regs.write_byte(REG_T, cycles);
+        self.regs.write_byte(REG_T, op.cycles_ok);
     }
 }
 

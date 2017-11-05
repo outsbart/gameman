@@ -1,4 +1,4 @@
-code,mnemonic,into,operand1,operand2,operand3,bytes,flag_z,flag_h,flag_n,flag_c,cycles_ok,cycles_no
+code,mnemonic,into,operand1,operand2,condition,bytes,flag_z,flag_h,flag_n,flag_c,cycles_ok,cycles_no
 0x0,NOP,,,,,1,,,,,4,
 0x1,LD,BC,d16,,,3,,,,,12,
 0x2,LD,(BC),A,,,1,,,,,8,
