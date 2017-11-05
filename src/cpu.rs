@@ -45,7 +45,7 @@ impl Regs {
 
     pub fn get_flags(&mut self) -> (bool, bool, bool, bool) {
         let f = u16::from(self.read_byte(REG_F));
-        (get_bit(ZERO_FLAG, f), get_bit(OPERATION_FLAG, f), get_bit(HALF_CARRY_FLAG, f), get_bit(CARRY_FLAG, f))
+        (is_bit_set(ZERO_FLAG, f), is_bit_set(OPERATION_FLAG, f), is_bit_set(HALF_CARRY_FLAG, f), is_bit_set(CARRY_FLAG, f))
     }
 
     pub fn set_flags(&mut self, z: bool, n: bool, h: bool, c: bool) {
@@ -55,7 +55,7 @@ impl Regs {
 }
 
 
-pub fn get_bit(pos: u8, value: u16) -> bool {
+pub fn is_bit_set(pos: u8, value: u16) -> bool {
     value & (1u16 << pos) != 0
 }
 
@@ -283,7 +283,7 @@ impl<M: Memory> CPU<M> {
             "NOP" => {},
             "LD"|"LDD"|"LDH"|"LDI" => { result = op1 },
             "XOR" => { result = op1 ^ op2 },
-            "BIT" => { z = !get_bit(op1 as u8, op2) }
+            "BIT" => { z = !is_bit_set(op1 as u8, op2) }
             "INC" => {
                 result = op1 + 1;
                 z = result == 0;

@@ -9,7 +9,7 @@ use sdl2::rect::Rect;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 
-use gameman::cpu::get_bit;
+use gameman::cpu::is_bit_set;
 
 const SCREEN_WIDTH: u32 = 800;
 const SCREEN_HEIGHT: u32 = 600;
@@ -40,23 +40,6 @@ fn main() {
 
     let mut texture = texture_creator.create_texture_streaming(
         PixelFormatEnum::RGB24, 256, 256).unwrap();
-    // Create a red-green gradient
-//    texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
-//        for y in 0..256 {
-//            for x in 0..256 {
-//                let offset = y*pitch + x*3;
-//                buffer[offset] = 255 as u8;
-//                buffer[offset + 1] = 255 as u8;
-//                buffer[offset + 2] = 255 as u8;
-//            }
-//        }
-//    }).unwrap();
-//
-//    canvas.clear();
-//    canvas.copy(&texture, None, Some(Rect::new(100, 100, 256, 256))).unwrap();
-//    canvas.copy_ex(&texture, None,
-//        Some(Rect::new(450, 100, 256, 256)), 30.0, None, false, false).unwrap();
-//    canvas.present();
 
     // stop before executing 0x64
     while cpu.step() != 0x64 {}
@@ -75,40 +58,37 @@ fn main() {
                 Event::KeyDown { keycode: Some(Keycode::Space), .. } => {
                     texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
                         let mut j = 0;
-                        for tile in 0..256 {
+                        for tile in 0..384 {
+                            let x_offset = (tile % 32)*8;
+                            let y_offset = (tile / 32)*8;
+
                             for row_of_pixel in 0..8u8 {
+                                println!("0x{:x}", 0x8000 + j);
                                 let byte_1 = cpu.mmu.read_byte(0x8000 + j);
-                                j+=1;
-                                let byte_2 = cpu.mmu.read_byte(0x8000 + j);
-                                j+=1;
+                                let byte_2 = cpu.mmu.read_byte(0x8000 + j+1);
+                                j+=2;
 
-                                if byte_1 != 0 {
-                                    println!("0x{:x} 0x{:x}", byte_1, byte_2);
+                                for pixel in 0..8u8 {
+                                    let ix = 7 - pixel;
+                                    let high_bit: u8 = if is_bit_set(ix, byte_2 as u16) { 1 } else { 0 };
+                                    let low_bit: u8 = if is_bit_set(ix, byte_1 as u16) { 1 } else { 0 };
 
-                                    for pixel in 0..8u8 {
-                                        let ix = 7 - pixel;
-                                        let high_bit = if get_bit(ix, byte_2 as u16) { 1 } else { 0 };
-                                        let low_bit = if get_bit(ix, byte_1 as u16) { 1 } else { 0 };
+                                    let color: u8 = (high_bit << 1) + low_bit;
 
-                                        let white: u8 = ((high_bit as u8) << 1) + (low_bit as u8);
+                                    let paletted_color = match color {
+                                        0x00 => { 255 }
+                                        0x01 => { 192 }
+                                        0x10 => { 96 }
+                                        0x11 => { 0 }
+                                        _ => { 128 }
+                                    };
 
-                                        let color = match white {
-                                            0x00 => { 255 }
-                                            0x01 => { 192 }
-                                            0x10 => { 96 }
-                                            0x11 => { 0 }
-                                            _ => { 128 }
-                                        };
+                                    let y = (y_offset + row_of_pixel as usize) * pitch;
+                                    let x = (x_offset + pixel as usize) * 3;
 
-                                        let y = row_of_pixel as usize * pitch;
-                                        let x = pixel as usize * 3;
-
-                                        println!("{} {}", x, y);
-
-                                        buffer[y + x] = color;
-                                        buffer[y + x + 1] = color;
-                                        buffer[y + x + 2] = color;
-                                    }
+                                    buffer[y + x] = paletted_color;
+                                    buffer[y + x + 1] = paletted_color;
+                                    buffer[y + x + 2] = paletted_color;
                                 }
                             }
                         }
