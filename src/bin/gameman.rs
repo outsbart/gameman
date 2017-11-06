@@ -39,14 +39,14 @@ fn main() {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
 
-    let window = video_subsystem.window("GameMan", 512, 512)
+    let window = video_subsystem.window("gameman", 512, 512)
         .position_centered()
         .opengl()
         .build()
         .unwrap();
 
     let mut canvas = window.into_canvas().build().unwrap();
-    canvas.set_scale(2f32, 2f32);
+//    canvas.set_scale(2f32, 2f32);
     let texture_creator = canvas.texture_creator();
 
     let mut texture = texture_creator.create_texture_streaming(
@@ -65,11 +65,13 @@ fn main() {
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
-                Event::Quit {..}
+                Event::Quit {..} | Event::KeyDown { keycode: Some(Keycode::Q), .. }
                 | Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
                     break 'running
                 },
+                Event::KeyDown { keycode: Some(Keycode::N), .. } => { cpu.step(); }
                 Event::KeyDown { keycode: Some(Keycode::Space), .. } => {
+                    canvas.clear();
                     texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
                         let mut j = 0;
                         for tile in 0..384 {
@@ -83,8 +85,8 @@ fn main() {
 
                                 for pixel in 0..8u8 {
                                     let ix = 7 - pixel;
-                                    let high_bit: u8 = if is_bit_set(ix, byte_2 as u16) { 1 } else { 0 };
-                                    let low_bit: u8 = if is_bit_set(ix, byte_1 as u16) { 1 } else { 0 };
+                                    let high_bit: u8 = is_bit_set(ix, byte_2 as u16) as u8;
+                                    let low_bit: u8 = is_bit_set(ix, byte_1 as u16) as u8;
 
                                     let color: u8 = (high_bit << 1) + low_bit;
 
@@ -106,8 +108,26 @@ fn main() {
                             }
                         }
                     }).unwrap();
-                    canvas.clear();
                     canvas.copy(&texture, None, Some(Rect::new(0, 0, 256, 256))).unwrap();
+
+                    for tile in 0..1024u16 {
+                        let x_out: i32 = ((tile % 32) * 8) as i32;
+                        let y_out = ((tile / 32) * 8) as i32;
+
+                        let pos = cpu.mmu.read_byte(0x9800 + tile);
+
+//                        if pos != 0 { println!("0x{:x} ", pos); }
+
+                        let x_in = ((pos % 32) * 8) as i32;
+                        let y_in = ((pos / 32) * 8) as i32;
+
+                        canvas.copy(
+                            &texture,
+                            Some(Rect::new(x_in, y_in, 8, 8)),
+                            Some(Rect::new(x_out, 128+y_out, 8, 8))
+                        ).unwrap();
+                    }
+
                     canvas.present();
                 }
                 _ => {}

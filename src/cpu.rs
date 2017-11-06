@@ -136,7 +136,7 @@ impl<M: Memory> CPU<M> {
 
         let op: Operation = self.ops.fetch_operation(byte, prefixed);
 
-        println!("0x{:x}\t0x{:x}\t{}\t{:?}\t{:?}", line_number, op.code_as_u8(), op.mnemonic, op.operand1, op.operand2);
+//        println!("0x{:x}\t0x{:x}\t{}\t{:?}\t{:?}", line_number, op.code_as_u8(), op.mnemonic, op.operand1, op.operand2);
 
         self.execute(&op);
 
@@ -173,27 +173,32 @@ impl<M: Memory> CPU<M> {
     }
 
     pub fn store_result(&mut self, into: &str, value: u16) {
-        println!("Storing into {} value 0x{:x}", into, value);
+//        println!("Storing into {} value 0x{:x}", into, value);
         match into.as_ref() {
             "(BC)"|"(DE)"|"(HL)"|"(PC)"|"(SP)" => {
                 let reg = into[1..into.len()-1].as_ref();
                 let addr = self.get_registry_value(reg);
-                self.mmu.write_word(addr, value);
+                if (value & 0xFF00) != 0 {  // todo: important: handle better byte and word
+                    self.mmu.write_word(addr, value);
+                }
+                else {
+                    self.mmu.write_byte(addr, value as u8);
+                }
             }
             "BC"|"DE"|"HL"|"PC"|"SP"|
             "A"|"B"|"C"|"D"|"E"|"H"|"L" => { self.set_registry_value(into, value) }
             "(C)" => {
                 let reg = into[1..into.len()-1].as_ref();
                 let addr = self.get_registry_value(reg) + 0xFF00;
-                self.mmu.write_word(addr, value);
+                self.mmu.write_byte(addr, value as u8);
             }
             "(a8)" => {
                 let addr = u16::from(self.fetch_next_byte()) + 0xFF00;
-                self.mmu.write_word(addr, value);
+                self.mmu.write_byte(addr, value as u8);
             }
             "(a16)" => {
                 let addr = self.fetch_next_word();
-                self.mmu.write_word(addr, value);
+                self.mmu.write_word(addr, value); // todo: important: handle byte and word situation
             }
             _ => { panic!("cant write to {} yet!!!", into) }
         }
@@ -260,7 +265,7 @@ impl<M: Memory> CPU<M> {
         let mut result: u16 = 1;
         let (mut z, mut n, mut h, mut c) = self.regs.get_flags();
 
-        println!("\t0x{:x}\t{}\t{:x}\t{:x}", op.code_as_u8(), op.mnemonic, op1, op2);
+//        println!("\t0x{:x}\t{}\t{:x}\t{:x}", op.code_as_u8(), op.mnemonic, op1, op2);
 
         match op.mnemonic.as_ref() {
             "NOP" => {},
