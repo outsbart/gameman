@@ -6,6 +6,7 @@ use std::fs::File;
 pub struct Operation {
     pub code: String,
     pub mnemonic: String,
+    pub result_is_byte: Option<u8>,
     pub into: String,
     pub operand1: Option<String>,
     pub operand2: Option<String>,

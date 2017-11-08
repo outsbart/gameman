@@ -172,36 +172,26 @@ impl<M: Memory> CPU<M> {
         }
     }
 
-    pub fn store_result(&mut self, into: &str, value: u16) {
+    pub fn store_result(&mut self, into: &str, value: u16, is_byte: bool) {
+
 //        println!("Storing into {} value 0x{:x}", into, value);
-        match into.as_ref() {
+        let addr:u16 = match into.as_ref() {
+            "BC"|"DE"|"HL"|"PC"|"SP"|
+            "A"|"B"|"C"|"D"|"E"|"H"|"L" => { return self.set_registry_value(into, value); }
             "(BC)"|"(DE)"|"(HL)"|"(PC)"|"(SP)" => {
                 let reg = into[1..into.len()-1].as_ref();
-                let addr = self.get_registry_value(reg);
-                if (value & 0xFF00) != 0 {  // todo: important: handle better byte and word
-                    self.mmu.write_word(addr, value);
-                }
-                else {
-                    self.mmu.write_byte(addr, value as u8);
-                }
+                self.get_registry_value(reg)
             }
-            "BC"|"DE"|"HL"|"PC"|"SP"|
-            "A"|"B"|"C"|"D"|"E"|"H"|"L" => { self.set_registry_value(into, value) }
             "(C)" => {
                 let reg = into[1..into.len()-1].as_ref();
-                let addr = self.get_registry_value(reg) + 0xFF00;
-                self.mmu.write_byte(addr, value as u8);
+                self.get_registry_value(reg) + 0xFF00
             }
-            "(a8)" => {
-                let addr = u16::from(self.fetch_next_byte()) + 0xFF00;
-                self.mmu.write_byte(addr, value as u8);
-            }
-            "(a16)" => {
-                let addr = self.fetch_next_word();
-                self.mmu.write_word(addr, value); // todo: important: handle byte and word situation
-            }
+            "(a8)" => { u16::from(self.fetch_next_byte()) + 0xFF00 }
+            "(a16)" => { self.fetch_next_word() }
             _ => { panic!("cant write to {} yet!!!", into) }
-        }
+        };
+        if is_byte { self.mmu.write_byte(addr, value as u8) }
+        else       { self.mmu.write_word(addr, value) }
     }
 
     pub fn get_operand_value(&mut self, operand: &str) -> u16 {
@@ -230,7 +220,7 @@ impl<M: Memory> CPU<M> {
     pub fn push(&mut self, value: u16) {
         let sp = self.get_registry_value("SP");
         self.set_registry_value("SP", sp-2);
-        self.store_result("(SP)", value);
+        self.store_result("(SP)", value, false);
     }
 
     pub fn pop(&mut self) -> u16 {
@@ -261,6 +251,10 @@ impl<M: Memory> CPU<M> {
             self.regs.write_byte(REG_T, cycles);
             return;
         }
+
+        let result_is_byte: bool = match op.result_is_byte {
+            Some(_x) => { true }, None => { false }
+        };
 
         let mut result: u16 = 1;
         let (mut z, mut n, mut h, mut c) = self.regs.get_flags();
@@ -317,19 +311,19 @@ impl<M: Memory> CPU<M> {
         };
 
         // store the operation result
-        if op.into != "" { self.store_result(op.into.as_ref(), result); }
+        if op.into != "" { self.store_result(op.into.as_ref(), result, result_is_byte); }
 
         // perform postactions if necessary
         match op.mnemonic.as_ref() {
             "LDD" => {
                 let reg: &str = op.into[1..op.into.len() - 1].as_ref();
                 let value = self.get_registry_value(reg);
-                self.store_result(reg, value - 1);
+                self.store_result(reg, value - 1, result_is_byte);
             }
             "LDI" => {
                 let reg: &str = op.into[1..op.into.len() - 1].as_ref();
                 let value = self.get_registry_value(reg);
-                self.store_result(reg, value + 1);
+                self.store_result(reg, value + 1, result_is_byte);
             }
             _ => {}
         }
