@@ -10,7 +10,7 @@ code,mnemonic,into,operand1,operand2,condition,bytes,flag_z,flag_h,flag_n,flag_c
 0x8,LD,(a16),SP,,,3,,,,,20,
 0x9,ADD,HL,HL,BC,,1,,0,H,C,8,
 0xa,LD,A,(BC),,,1,,,,,8,
-0xb,DEC,C,BC,,,1,,,,,8,
+0xb,DEC,BC,BC,,,1,,,,,8,
 0xc,INC,C,C,,,1,Z,0,H,,4,
 0xd,DEC,C,C,,,1,Z,1,H,,4,
 0xe,LD,C,d8,,,2,,,,,8,
