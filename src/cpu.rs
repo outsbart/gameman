@@ -280,7 +280,7 @@ impl<M: Memory> CPU<M> {
                 result = op1;
             }
             "SUB" => {
-                result = op1 - op2;
+                result = op1 - op2; //TODO: handle possible underflow
             }
             "CP" => {
                 result = if op1 == op2 { 0 } else { 1 }; //note: this is for the Z flag
@@ -346,8 +346,8 @@ mod tests {
     }
 
     impl DummyMMU {
-        fn new() -> DummyMMU { DummyMMU{ values: [0; 65536] } }
-        fn with(values: [u8; 65536]) -> DummyMMU { DummyMMU{ values } }
+        fn new() -> DummyMMU { DummyMMU { values: [0; 65536] } }
+        fn with(values: [u8; 65536]) -> DummyMMU { DummyMMU { values } }
     }
 
     impl Memory for DummyMMU {
@@ -384,7 +384,7 @@ mod tests {
     fn get_flags() {
         let mut cpu = CPU::new(DummyMMU::new());
 
-        cpu.regs.set_flags(true,false,true,false);
+        cpu.regs.set_flags(true, false, true, false);
         let (z, n, h, c) = cpu.regs.get_flags();
 
         assert_eq!(z, true);
@@ -419,35 +419,4 @@ mod tests {
         //TODO: MAKE SURE IT SHOULD GO BACK BY 2 CONSIDERING THE OPERAND READING
         assert_eq!(cpu.get_registry_value("PC"), 500);
     }
-
-//    #[test]
-//    fn op_addr_e() {
-//        let mut cpu = CPU::new(DummyMMU::new());
-//
-//        cpu.regs[Reg.E] = 0xFF;
-//
-//        cpu.addr_e();
-//
-//        assert_eq!(cpu.regs[Reg.A], 0xFF);
-//        assert_eq!(cpu.regs[Reg.F], 0);
-//
-//        assert_eq!(cpu.regs[Reg.M], 1);
-//        assert_eq!(cpu.regs[Reg.T], 4);
-//    }
-//
-//    #[test]
-//    fn op_addr_e_carry() {
-//        let mut cpu = CPU::new(DummyMMU::new());
-//
-//        cpu.regs[Reg.A] = 0x01;
-//        cpu.regs[Reg.E] = 0xFF;
-//
-//        cpu.addr_e();
-//
-//        assert_eq!(cpu.regs[Reg.A], 0);
-//        assert_eq!(cpu.regs[Reg.F], ZERO_FLAG | CARRY_FLAG);
-//
-//        assert_eq!(cpu.regs[Reg.M], 1);
-//        assert_eq!(cpu.regs[Reg.T], 4);
-//    }
 }

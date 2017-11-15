@@ -59,18 +59,24 @@ impl GPU {
         return &self.buffer;
     }
 
-    pub fn render_scan_to_buffer(&mut self) {
-        let tilemap_row: usize = (self.line + self.scroll_y) as usize / 8;  //todo: go back on top if line > 256
-        let pixel_row = self.line % 8;
+    // draws a line on the buffer
+    pub fn render_scan_to_buffer(&mut self) {  // todo: reuse some calculations
+        let (tiles_in_a_tilemap_row, tiles_in_a_screen_row, tile_size) = (32, 20, 8);
+        let line_to_draw: usize = (self.line + self.scroll_y) as usize;
+        let tilemap_row: usize = line_to_draw / tile_size;  //todo: go back on top if line > 256
+        let pixel_row: usize = line_to_draw % tile_size;
+        
         let tilemap0_offset = 0x9800 - 0x8000;
 
         for tile in 0..20 {  // todo: right now only draws the first 20 tiles from the left, use scroll X
-            let pos = self.vram[tilemap0_offset + (tilemap_row * 32 + tile) as usize];
+            let tilemap_index = tilemap0_offset + (tilemap_row * tiles_in_a_tilemap_row + tile) as usize;
+            let pos = self.vram[tilemap_index];
+            
+            let tile_in_tileset: usize = (2*tile_size* (pos as usize) + (pixel_row as usize) *2) as usize;
 
-            let tile_vram_start: usize = (2*8* (pos as usize) + (pixel_row as usize) *2) as usize;
-
-            let byte_1 = self.vram[tile_vram_start];
-            let byte_2 = self.vram[tile_vram_start+1];
+            // a tile pixel line is encoded in two consecutive bytes
+            let byte_1 = self.vram[tile_in_tileset];
+            let byte_2 = self.vram[tile_in_tileset+1];
 
             for pixel in 0..8u8 {
                 let ix = 7 - pixel;
@@ -78,16 +84,14 @@ impl GPU {
                 let low_bit: u8 = is_bit_set(ix, byte_1 as u16) as u8;
 
                 let color: u8 = (high_bit << 1) + low_bit;
-                let index: usize = (self.line as usize * 160) + (tile as usize) *8 + pixel as usize;
+                let index: usize = (self.line as usize * tiles_in_a_screen_row * tile_size) + (tile as usize) *tile_size + pixel as usize;
 
                 self.buffer[index] = color;
             }
         }
     }
 
-    pub fn render_buffer_to_screen(&mut self) {
-    }
-
+    // go forward based on the cpu's last operation clocks
     pub fn step(&mut self, t: u8) {
         self.modeclock += t as u16;
 
@@ -119,7 +123,6 @@ impl GPU {
                     if self.line == 143 {
                         // enter vblank mode
                         self.mode = 1;
-                        self.render_buffer_to_screen();
                     }
                     else {
                         self.mode = 2;
