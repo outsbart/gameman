@@ -81,19 +81,19 @@ fn main() {
                 | Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
                     break 'running
                 },
-                Event::KeyDown { keycode: Some(Keycode::Space), .. } => {
-                    let stop_clock = cpu.clks.t + frame_size;
-
-                    // step a frame forward!
-                    loop {
-                        let (_line, t) = cpu.step();
-                        cpu.mmu.gpu.step(t);
-                        if cpu.clks.t >= stop_clock {
-                            break
-                        }
-                    }
-                }
+                Event::KeyDown { keycode: Some(Keycode::Space), .. } => {}
                 _ => {}
+            }
+
+            let stop_clock = cpu.clks.t + frame_size;
+
+            // step a frame forward!
+            loop {
+                let (_line, t) = cpu.step();
+                cpu.mmu.gpu.step(t);
+                if cpu.clks.t >= stop_clock {
+                    break
+                }
             }
 
             canvas.clear();

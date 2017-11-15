@@ -279,6 +279,9 @@ impl<M: Memory> CPU<M> {
                 self.push(value);
                 result = op1;
             }
+            "SUB" => {
+                result = op1 - op2;
+            }
             "CP" => {
                 result = if op1 == op2 { 0 } else { 1 }; //note: this is for the Z flag
                 c = op1 < op2;
