@@ -19,6 +19,7 @@ pub struct GPU {
     mode: u8,
     line: u8,
 
+    control: u8,
     scroll_x: u8,
     scroll_y: u8,
     palette: u8
@@ -30,16 +31,28 @@ impl GPUMemoriesAccess for GPU {
     fn read_vram(&mut self, addr: u16) -> u8 { self.vram[addr as usize] }
     fn write_vram(&mut self, addr: u16, byte: u8) { self.vram[addr as usize] = byte }
     fn read_byte(&mut self, addr: u16) -> u8 {
-        unimplemented!()
+        match addr {
+            0xFF40 => { self.control }
+            0xFF42 => { self.scroll_y }
+            0xFF43 => { self.scroll_x }
+            0xFF44 => { self.line }
+            _ => { 0 }
+        }
     }
     fn write_byte(&mut self, addr: u16, byte: u8) {
-        unimplemented!()
+        match addr {
+            0xFF40 => { self.control = byte; }
+            0xFF42 => { self.scroll_y = byte; }
+            0xFF43 => { self.scroll_x = byte; }
+            0xFF47 => { self.palette = byte; }
+            _ => {}
+        }
     }
 }
 
 impl GPU {
     pub fn new() -> Self {
-        GPU { vram: [0; 8192], oam: [0; 256], buffer: [0; 160 * 144], modeclock: 0, mode: 2, line: 0, scroll_x: 0, scroll_y: 0, palette: 0 }
+        GPU { vram: [0; 8192], oam: [0; 256], buffer: [0; 160 * 144], modeclock: 0, mode: 2, line: 0, scroll_x: 0, scroll_y: 0, palette: 0, control: 0 }
     }
 
     pub fn get_buffer(&self) -> &[u8; 160*144] {
@@ -132,5 +145,79 @@ impl GPU {
             _ => { panic!("Sorry what?") }
         }
 
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // test scroll_y write and read access, as well as the default value
+    #[test]
+    fn test_scroll_y() {
+        let mut gpu = GPU::new();
+
+        assert_eq!(gpu.scroll_y, 0);
+
+        gpu.write_byte(0xFF42, 1);
+
+        assert_eq!(gpu.scroll_y, 1);
+        assert_eq!(gpu.read_byte(0xFF42), 1);
+    }
+
+    // test scroll_x write and read access, as well as the default value
+    #[test]
+    fn test_scroll_x() {
+        let mut gpu = GPU::new();
+
+        assert_eq!(gpu.scroll_x, 0);
+
+        gpu.write_byte(0xFF43, 1);
+
+        assert_eq!(gpu.scroll_x, 1);
+        assert_eq!(gpu.read_byte(0xFF43), 1);
+    }
+
+    // test palette write and read access, as well as the default value
+    #[test]
+    fn test_palette() {
+        let mut gpu = GPU::new();
+
+        // default value
+        assert_eq!(gpu.palette, 0);
+
+        gpu.write_byte(0xFF47, 1);
+
+        assert_eq!(gpu.palette, 1);
+        // no read access
+        assert_eq!(gpu.read_byte(0xFF47), 0);
+    }
+
+    // test control write and read access, as well as the default value
+    #[test]
+    fn test_control() {
+        let mut gpu = GPU::new();
+
+        assert_eq!(gpu.control, 0);
+
+        gpu.write_byte(0xFF40, 1);
+
+        assert_eq!(gpu.control, 1);
+        assert_eq!(gpu.read_byte(0xFF40), 1);
+    }
+
+    // test line read and write access
+    #[test]
+    fn test_line() {
+        let mut gpu = GPU::new();
+
+        assert_eq!(gpu.line, 0);
+        gpu.write_byte(0xFF44, 1);
+        // no write access
+        assert_eq!(gpu.line, 0);
+
+        gpu.line = 15;
+        assert_eq!(gpu.read_byte(0xFF44), 15);
     }
 }
