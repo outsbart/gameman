@@ -28,8 +28,8 @@ const REG_M: u16 = 12;
 const REG_T: u16 = 13;
 
 
-struct Clocks {
-    m: u32, t: u32  // TODO: check if i32 is the right type
+pub struct Clocks {  // todo: remove pub
+    m: u32, pub t: u32  // TODO: remove pub
 }
 
 impl Clocks {
@@ -77,7 +77,7 @@ impl Memory for Regs {
 }
 
 pub struct CPU<M: Memory> {
-    clks: Clocks,
+    pub clks: Clocks,
     regs: Regs,
     pub mmu: M,
     ops: Ops

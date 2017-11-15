@@ -64,10 +64,7 @@ impl GPU {
         let pixel_row = self.line % 8;
         let tilemap0_offset = 0x9800 - 0x8000;
 
-        let scroll_x = 0u8;
-        let scroll_y = 0u8;
-
-        for tile in 0..20 {  // todo: right now only draws the first 20 tiles from the left
+        for tile in 0..20 {  // todo: right now only draws the first 20 tiles from the left, use scroll X
             let pos = self.vram[tilemap0_offset + (tilemap_row * 32 + tile) as usize];
 
             let tile_vram_start: usize = (2*8* (pos as usize) + (pixel_row as usize) *2) as usize;
