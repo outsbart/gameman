@@ -39,7 +39,7 @@ fn main() {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
 
-    let window = video_subsystem.window("gameman", 512, 512)
+    let window = video_subsystem.window("gameman", 600, 512)
         .position_centered()
         .opengl()
         .build()
@@ -52,13 +52,22 @@ fn main() {
     let mut texture = texture_creator.create_texture_streaming(
         PixelFormatEnum::RGB24, 256, 256).unwrap();
 
-    // exec the bios till the part that zeros vram
-    while cpu.step() != 0x1c {}
+    let mut texture2 = texture_creator.create_texture_streaming(
+        PixelFormatEnum::RGB24, 256, 256).unwrap();
 
-    // stop after executing 0x64
-    while cpu.step() != 0x64 {}
+    // exec the bios till the part that zeros vram
+    loop {
+        let (line, t) = cpu.step();
+        cpu.mmu.gpu.step(t);
+        if line == 0x64 { break; }
+    }
 
     println!("Graphics loaded into vram!");
+
+    for i in 1..10000 {
+        let (line, t) = cpu.step();
+        cpu.mmu.gpu.step(t);
+    }
 
     let mut event_pump = sdl_context.event_pump().unwrap();
 
@@ -69,9 +78,9 @@ fn main() {
                 | Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
                     break 'running
                 },
-                Event::KeyDown { keycode: Some(Keycode::N), .. } => { cpu.step(); }
                 Event::KeyDown { keycode: Some(Keycode::Space), .. } => {
                     canvas.clear();
+
                     texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
                         let mut j = 0;
                         for tile in 0..384 {
@@ -81,7 +90,7 @@ fn main() {
                             for row_of_pixel in 0..8u8 {
                                 let byte_1 = cpu.mmu.read_byte(0x8000 + j);
                                 let byte_2 = cpu.mmu.read_byte(0x8000 + j+1);
-                                j+=2;
+                                j += 2;
 
                                 for pixel in 0..8u8 {
                                     let ix = 7 - pixel;
@@ -108,7 +117,7 @@ fn main() {
                             }
                         }
                     }).unwrap();
-                    canvas.copy(&texture, None, Some(Rect::new(0, 0, 256, 256))).unwrap();
+                    canvas.copy(&texture, None, Some(Rect::new(0, 0, 160, 144))).unwrap();
 
                     for tile in 0..1024u16 {
                         let x_out: i32 = ((tile % 32) * 8) as i32;
@@ -124,9 +133,39 @@ fn main() {
                         canvas.copy(
                             &texture,
                             Some(Rect::new(x_in, y_in, 8, 8)),
-                            Some(Rect::new(x_out, 128+y_out, 8, 8))
+                            Some(Rect::new(x_out, 100+y_out, 8, 8))
                         ).unwrap();
                     }
+
+                    texture2.with_lock(None, |buffer: &mut [u8], pitch: usize| {
+                        let gpu_buffer = cpu.mmu.gpu.get_buffer();
+                        let i = 0;
+
+                        for y in 0..144 {
+                            for x in 0..160 {
+                                let pixel = gpu_buffer[x + y*160];
+                                print!("{}", pixel);
+
+                                let paletted_color = match pixel {
+                                    0x00 => { 255 }
+                                    0x01 => { 192 }
+                                    0x10 => { 96 }
+                                    0x11 => { 0 }
+                                    _ => { 128 }
+                                };
+
+                                let x_out = x * 3;
+                                let y_out = y * pitch;
+
+                                buffer[x_out + y_out] = paletted_color;
+                                buffer[x_out + y_out + 1] = paletted_color;
+                                buffer[x_out + y_out + 2] = paletted_color;
+                            }
+                            println!();
+                        }
+                    }).unwrap();
+                    canvas.copy(&texture2, None, Some(Rect::new(260, 100, 160, 144))).unwrap();
+
 
                     canvas.present();
                 }

@@ -123,7 +123,7 @@ impl<M: Memory> CPU<M> {
 
     // fetch the operation, decodes it, fetch parameters if required and executes it.
     // returns the address of the executed instruction
-    pub fn step(&mut self) -> u16 {
+    pub fn step(&mut self) -> (u16, u8) {
         let line_number = self.get_registry_value("PC");
 
         let mut prefixed = false;
@@ -144,7 +144,7 @@ impl<M: Memory> CPU<M> {
         self.clks.t += u32::from(self.regs.read_byte(REG_T));
         self.clks.m += u32::from(self.regs.read_byte(REG_M));
 
-        line_number
+        (line_number, self.regs.read_byte(REG_T))
     }
 
     fn registry_name_to_index(&mut self, registry: &str) -> u16 {
@@ -315,6 +315,7 @@ impl<M: Memory> CPU<M> {
 
         // perform postactions if necessary
         match op.mnemonic.as_ref() {
+            // care: maybe this should be a PREaction
             "LDD" => {
                 let reg: &str = op.into[1..op.into.len() - 1].as_ref();
                 let value = self.get_registry_value(reg);

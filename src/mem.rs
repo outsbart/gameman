@@ -6,7 +6,7 @@ pub struct MMU<M: GPUMemoriesAccess> {
     rom: [u8; 0x8000], wram: [u8; 0x2000],   // second half of rom is swappable (aka rom banking)
     eram: [u8; 0x2000], zram: [u8; 0x0080],
 
-    gpu: M
+    pub gpu: M  // todo: remove pub
 }
 
 impl<M: GPUMemoriesAccess> MMU<M> {
