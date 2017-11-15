@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 #![allow(unused_mut)]
+#![allow(unused_must_use)]
 
 extern crate gameman;
 extern crate sdl2;
@@ -8,6 +9,7 @@ use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
+use sdl2::pixels::Color;
 
 use gameman::cpu::is_bit_set;
 
@@ -68,6 +70,8 @@ fn main() {
         let (_line, t) = cpu.step();
         cpu.mmu.gpu.step(t);
     }
+
+    println!("Scroll_y = {}", cpu.mmu.read_byte(0xFF42));
 
     let mut event_pump = sdl_context.event_pump().unwrap();
 
@@ -135,6 +139,10 @@ fn main() {
                         ).unwrap();
                     }
 
+                    // draw screen!
+                    canvas.set_draw_color(Color::RGB(255, 0, 0));
+                    canvas.draw_rect(Rect::new(cpu.mmu.read_byte(0xFF43) as i32, 100+cpu.mmu.read_byte(0xFF42) as i32, 160, 144));
+
                     texture2.with_lock(None, |buffer: &mut [u8], pitch: usize| {
                         let gpu_buffer = cpu.mmu.gpu.get_buffer();
 
@@ -160,7 +168,6 @@ fn main() {
                         }
                     }).unwrap();
                     canvas.copy(&texture2, None, Some(Rect::new(260, 100, 160, 144))).unwrap();
-
 
                     canvas.present();
                 }

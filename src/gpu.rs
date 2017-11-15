@@ -13,7 +13,7 @@ pub trait GPUMemoriesAccess {
 pub struct GPU {
     vram: [u8; 8192],
     oam: [u8; 256],
-    buffer: [u8; 160 * 144],  // every pixel can have 4 values
+    buffer: [u8; 160 * 144],  // every pixel can have 4 values (4 shades of grey)
 
     modeclock: u16,
     mode: u8,
@@ -60,7 +60,7 @@ impl GPU {
     }
 
     pub fn render_scan_to_buffer(&mut self) {
-        let tilemap_row: usize = self.line as usize / 8;
+        let tilemap_row: usize = (self.line + self.scroll_y) as usize / 8;  //todo: go back on top if line > 256
         let pixel_row = self.line % 8;
         let tilemap0_offset = 0x9800 - 0x8000;
 
