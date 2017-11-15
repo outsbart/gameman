@@ -6,6 +6,8 @@ pub trait GPUMemoriesAccess {
     fn write_oam(&mut self, addr: u16, byte: u8);
     fn read_vram(&mut self, addr: u16) -> u8;
     fn write_vram(&mut self, addr: u16, byte: u8);
+    fn read_byte(&mut self, addr: u16) -> u8;
+    fn write_byte(&mut self, addr: u16, byte: u8);
 }
 
 pub struct GPU {
@@ -27,6 +29,12 @@ impl GPUMemoriesAccess for GPU {
     fn write_oam(&mut self, addr: u16, byte: u8) { self.oam[addr as usize] = byte }
     fn read_vram(&mut self, addr: u16) -> u8 { self.vram[addr as usize] }
     fn write_vram(&mut self, addr: u16, byte: u8) { self.vram[addr as usize] = byte }
+    fn read_byte(&mut self, addr: u16) -> u8 {
+        unimplemented!()
+    }
+    fn write_byte(&mut self, addr: u16, byte: u8) {
+        unimplemented!()
+    }
 }
 
 impl GPU {
@@ -39,8 +47,6 @@ impl GPU {
     }
 
     pub fn render_scan_to_buffer(&mut self) {
-        println!("Line is {}", self.line);
-
         let tilemap_row: usize = self.line as usize / 8;
         let pixel_row = self.line % 8;
         let tilemap0_offset = 0x9800 - 0x8000;
@@ -48,18 +54,13 @@ impl GPU {
         let scroll_x = 0u8;
         let scroll_y = 0u8;
 
-        for tile in 0..20 {
+        for tile in 0..20 {  // todo: right now only draws the first 20 tiles from the left
             let pos = self.vram[tilemap0_offset + (tilemap_row * 32 + tile) as usize];
 
             let tile_vram_start: usize = (2*8* (pos as usize) + (pixel_row as usize) *2) as usize;
 
             let byte_1 = self.vram[tile_vram_start];
             let byte_2 = self.vram[tile_vram_start+1];
-
-//            if pos != 0 {
-//                println!("0x{:x}; pos {}; vram_start {}", 0x9800 + (tilemap_row * 32 + tile) as usize, pos, tile_vram_start);
-//                println!("0x{:x}; 0x{:x}", byte_1, byte_2);
-//            }
 
             for pixel in 0..8u8 {
                 let ix = 7 - pixel;
@@ -69,7 +70,6 @@ impl GPU {
                 let color: u8 = (high_bit << 1) + low_bit;
                 let index: usize = (self.line as usize * 160) + (tile as usize) *8 + pixel as usize;
 
-                print!("{} <-- {} ", index, color);
                 self.buffer[index] = color;
             }
         }

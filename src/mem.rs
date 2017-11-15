@@ -79,7 +79,12 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                     // Zero page
                     0x0F00 => {
                         if addr >= 0xFF80 { self.zram[(addr & 0x007F) as usize] }
-                        else { 0 }  // TODO: change when IO implemented
+                        else {
+                            match addr & 0x00F0 {
+                                0x40|0x50|0x60|0x70 => { self.gpu.read_byte(addr) }
+                                _ => { 0 } // TODO: change when IO implemented
+                            }
+                        }
                     }
 
                     _ => {
@@ -115,7 +120,12 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                     // Zero page
                     0x0F00 => {
                         if addr >= 0xFF80 { self.zram[(addr & 0x007F) as usize] = byte; return }
-                        else { return }  // TODO: change when IO implemented
+                        else {
+                            match addr & 0x00F0 {
+                                0x40|0x50|0x60|0x70 => { self.gpu.write_byte(addr, byte); return }
+                                _ => { return }
+                            }
+                        }
                     }
 
                     _ => {
@@ -139,12 +149,13 @@ mod tests {
 
     struct DummyGPU {
         vram: [u8; 65536],
-        oam:  [u8; 65536]
+        oam:  [u8; 65536],
+        registers: [u8; 65536]
     }
 
     impl DummyGPU {
-        fn new() -> DummyGPU { DummyGPU { vram: [0; 65536], oam: [0; 65536] } }
-        fn with(vram: [u8; 65536], oam: [u8; 65536]) -> DummyGPU { DummyGPU { vram, oam } }
+        fn new() -> DummyGPU { DummyGPU { vram: [0; 65536], oam: [0; 65536], registers: [0; 65536] } }
+        fn with(vram: [u8; 65536], oam: [u8; 65536]) -> DummyGPU { DummyGPU { vram, oam, registers: [0; 65536] } }
     }
 
     impl GPUMemoriesAccess for DummyGPU {
@@ -160,6 +171,8 @@ mod tests {
         fn write_oam(&mut self, addr: u16, byte: u8) {
             self.oam[addr as usize] = byte;
         }
+        fn read_byte(&mut self, addr: u16) -> u8 { self.registers[addr as usize] }
+        fn write_byte(&mut self, addr: u16, byte: u8) { self.registers[addr as usize] = byte; }
     }
 
     #[test]
@@ -358,6 +371,24 @@ mod tests {
         assert_eq!(mmu.gpu.oam[0xFE00 & 0x00FF], 1);
         assert_eq!(mmu.gpu.oam[0xFE70 & 0x00FF], 1);
         assert_eq!(mmu.gpu.oam[0xFE9F & 0x00FF], 1);
+    }
+
+    /// test succesful mapping for gpu register write
+    /// from 0xFF40 to 0xFF7F should write to gpu registers
+    #[test]
+    fn gpu_registers_write() {
+        let mut mmu = MMU::new(DummyGPU::new());
+
+        for i in 0u16..64u16 {
+            mmu.write_byte(0xFF40 + i, 1);
+        }
+
+        assert_eq!(mmu.gpu.registers[0xFF3F], 0);
+        assert_eq!(mmu.gpu.registers[0xFF80], 0);
+
+        for i in 0u16..64u16 {
+            assert_eq!(mmu.gpu.registers[(0xFF40 + i) as usize], 1);
+        }
     }
 
 }

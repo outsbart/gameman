@@ -53,7 +53,7 @@ fn main() {
         PixelFormatEnum::RGB24, 256, 256).unwrap();
 
     let mut texture2 = texture_creator.create_texture_streaming(
-        PixelFormatEnum::RGB24, 256, 256).unwrap();
+        PixelFormatEnum::RGB24, 160, 144).unwrap();
 
     // exec the bios till the part that zeros vram
     loop {
@@ -64,8 +64,8 @@ fn main() {
 
     println!("Graphics loaded into vram!");
 
-    for i in 1..10000 {
-        let (line, t) = cpu.step();
+    for _i in 1..10000 {
+        let (_line, t) = cpu.step();
         cpu.mmu.gpu.step(t);
     }
 
@@ -125,8 +125,6 @@ fn main() {
 
                         let pos = cpu.mmu.read_byte(0x9800 + tile);
 
-//                        if pos != 0 { println!("0x{:x} ", pos); }
-
                         let x_in = ((pos % 32) * 8) as i32;
                         let y_in = ((pos / 32) * 8) as i32;
 
@@ -139,12 +137,10 @@ fn main() {
 
                     texture2.with_lock(None, |buffer: &mut [u8], pitch: usize| {
                         let gpu_buffer = cpu.mmu.gpu.get_buffer();
-                        let i = 0;
 
                         for y in 0..144 {
                             for x in 0..160 {
                                 let pixel = gpu_buffer[x + y*160];
-                                print!("{}", pixel);
 
                                 let paletted_color = match pixel {
                                     0x00 => { 255 }
@@ -161,7 +157,6 @@ fn main() {
                                 buffer[x_out + y_out + 1] = paletted_color;
                                 buffer[x_out + y_out + 2] = paletted_color;
                             }
-                            println!();
                         }
                     }).unwrap();
                     canvas.copy(&texture2, None, Some(Rect::new(260, 100, 160, 144))).unwrap();
