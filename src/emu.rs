@@ -38,8 +38,11 @@ impl Emulator {
         Emulator{cpu, sdl, stop_clock:0}
     }
 
-    pub fn load_rom(&mut self, path: &str) {
+    pub fn load_bios(&mut self) {
         self.cpu.mmu.set_bios(load_boot_rom());
+    }
+
+    pub fn load_rom(&mut self, path: &str) {
         self.cpu.mmu.set_rom(load_rom(path));
     }
 
@@ -87,6 +90,7 @@ impl Emulator {
                         break 'running
                     },
                     Event::KeyDown { keycode: Some(Keycode::Space), .. } => { pause ^= true; },
+                    Event::KeyDown { keycode: Some(Keycode::N), .. } => { self.step(); },
                     _ => {}
                 }
             }

@@ -263,7 +263,7 @@ impl<M: Memory> CPU<M> {
 
         match op.mnemonic.as_ref() {
             "NOP" => {},
-            "LD"|"LDD"|"LDH"|"LDI" => { result = op1 },
+            "LD"|"LDD"|"LDH"|"LDI"|"JP" => { result = op1 },
             "XOR" => { result = op1 ^ op2; },
             "BIT" => { result = !is_bit_set(op1 as u8, op2) as u16; }
             "INC" => { result = op1 + 1; }
@@ -320,14 +320,14 @@ impl<M: Memory> CPU<M> {
         match op.mnemonic.as_ref() {
             // care: maybe this should be a PREaction
             "LDD" => {
-                let reg: &str = op.into[1..op.into.len() - 1].as_ref();
+                let reg: &str = "HL";
                 let value = self.get_registry_value(reg);
-                self.store_result(reg, value - 1, result_is_byte);
+                self.store_result(reg, value - 1, false);
             }
             "LDI" => {
-                let reg: &str = op.into[1..op.into.len() - 1].as_ref();
+                let reg: &str = "HL";
                 let value = self.get_registry_value(reg);
-                self.store_result(reg, value + 1, result_is_byte);
+                self.store_result(reg, value + 1, false);
             }
             _ => {}
         }
