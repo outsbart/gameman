@@ -136,7 +136,7 @@ impl<M: Memory> CPU<M> {
 
         let op: Operation = self.ops.fetch_operation(byte, prefixed);
 
-//        println!("0x{:x}\t0x{:x}\t{}\t{:?}\t{:?}", line_number, op.code_as_u8(), op.mnemonic, op.operand1, op.operand2);
+        warn!("0x{:x}\t0x{:x}\t{}\t{:?}\t{:?}", line_number, op.code_as_u8(), op.mnemonic, op.operand1, op.operand2);
 
         self.execute(&op);
 
@@ -174,7 +174,7 @@ impl<M: Memory> CPU<M> {
 
     pub fn store_result(&mut self, into: &str, value: u16, is_byte: bool) {
 
-//        println!("Storing into {} value 0x{:x}", into, value);
+        warn!("Storing into {} value 0x{:x}", into, value);
         let addr:u16 = match into.as_ref() {
             "BC"|"DE"|"HL"|"PC"|"SP"|
             "A"|"B"|"C"|"D"|"E"|"H"|"L" => { return self.set_registry_value(into, value); }
@@ -259,7 +259,7 @@ impl<M: Memory> CPU<M> {
         let mut result: u16 = 1;
         let (mut z, mut n, mut h, mut c) = self.regs.get_flags();
 
-//        println!("\t0x{:x}\t{}\t{:x}\t{:x}", op.code_as_u8(), op.mnemonic, op1, op2);
+        warn!("\t0x{:x}\t{}\t{:x}\t{:x}", op.code_as_u8(), op.mnemonic, op1, op2);
 
         match op.mnemonic.as_ref() {
             "NOP" => {},
