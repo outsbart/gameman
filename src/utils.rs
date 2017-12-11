@@ -3,10 +3,24 @@ use std::fs::File;
 use std::mem;
 
 
-pub fn load_rom(path: &str) -> [u8; 0x0100] {
-    let mut boot_rom: [u8; 0x0100] = [0; 0x0100];
+pub fn load_rom(path: &str) -> [u8; 0x8000] {
+    let mut boot_rom: [u8; 0x8000] = [0; 0x8000];
 
     match File::open(path) {
+        Ok(mut file) => {
+            match file.read_exact(&mut boot_rom[..]) {
+                Ok(_) => { return boot_rom }
+                Err(_) => { panic!("couldnt read the rom into the buffer!") }
+            };
+        }
+        Err(_) => { panic!("couldnt open the rom file") }
+    }
+}
+
+pub fn load_boot_rom() -> [u8; 0x0100] { // TODO: make a generic function for loading roms
+    let mut boot_rom: [u8; 0x0100] = [0; 0x0100];
+
+    match File::open("roms/DMG_ROM.bin") {
         Ok(mut file) => {
             match file.read_exact(&mut boot_rom[..]) {
                 Ok(_) => { return boot_rom }
@@ -15,10 +29,6 @@ pub fn load_rom(path: &str) -> [u8; 0x0100] {
         }
         Err(_) => { panic!("couldnt open the boot rom file") }
     }
-}
-
-pub fn load_boot_rom() -> [u8; 0x0100] {
-    load_rom("roms/DMG_ROM.bin")
 }
 
 pub fn u16_to_i16(unsigned: u16) -> i16 {
