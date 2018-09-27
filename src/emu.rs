@@ -20,22 +20,25 @@ const FPS: u32 = 60;
 use utils::{load_rom, load_boot_rom};
 use cpu::CPU;
 use gpu::GPU;
+use ops::Ops;
 use mem::{MMU, Memory};
 
 
 pub struct Emulator {
     cpu: CPU<MMU<GPU>>,
     sdl: Sdl,
-    stop_clock: u32
+    stop_clock: u32,
+    ops: Ops
 }
 
 impl Emulator {
     pub fn new() -> Emulator {
         let mmu = MMU::new(GPU::new());
         let cpu = CPU::new(mmu);
+        let ops = Ops::new();
         let sdl = sdl2::init().unwrap();
 
-        Emulator{cpu, sdl, stop_clock:0}
+        Emulator{cpu, sdl, stop_clock:0, ops}
     }
 
     pub fn load_bios(&mut self) {
@@ -49,7 +52,7 @@ impl Emulator {
     fn step(&mut self) {
         // step a frame forward!
         loop {
-            let (_line, t) = self.cpu.step();
+            let (_line, t) = self.cpu.step(&self.ops);
             self.cpu.mmu.gpu.step(t);
             if self.cpu.clks.t >= self.stop_clock {
                 break

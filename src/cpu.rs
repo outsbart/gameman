@@ -40,6 +40,7 @@ impl Clocks {
 
 struct Regs { regs: [u8; 14] }
 
+
 impl Regs {
     fn new() -> Regs { Regs { regs: [0; 14] } }
 
@@ -79,8 +80,7 @@ impl Memory for Regs {
 pub struct CPU<M: Memory> {
     pub clks: Clocks,
     regs: Regs,
-    pub mmu: M,
-    ops: Ops
+    pub mmu: M
 }
 
 impl<M: Memory> ByteStream for CPU<M> {
@@ -94,7 +94,7 @@ impl<M: Memory> ByteStream for CPU<M> {
 
 impl<M: Memory> CPU<M> {
     pub fn new(mmu: M) -> CPU<M> {
-        let mut cpu = CPU { clks: Clocks::new(), regs: Regs::new(), mmu, ops: Ops::new() };
+        let mut cpu = CPU { clks: Clocks::new(), regs: Regs::new(), mmu };
         cpu.reset();
         cpu
     }
@@ -123,7 +123,7 @@ impl<M: Memory> CPU<M> {
 
     // fetch the operation, decodes it, fetch parameters if required and executes it.
     // returns the address of the executed instruction
-    pub fn step(&mut self) -> (u16, u8) {
+    pub fn step(&mut self, ops: &Ops) -> (u16, u8) {
         let line_number = self.get_registry_value("PC");
 
         let mut prefixed = false;
@@ -134,11 +134,11 @@ impl<M: Memory> CPU<M> {
             prefixed = true;
         }
 
-        let op: Operation = self.ops.fetch_operation(byte, prefixed);
+        let op: &Operation = ops.fetch_operation(byte, prefixed);
 
         info!("0x{:x}\t0x{:x}\t{}\t{:?}\t{:?}", line_number, op.code_as_u8(), op.mnemonic, op.operand1, op.operand2);
 
-        self.execute(&op);
+        self.execute(op);
 
         // add to the clocks
         self.clks.t += u32::from(self.regs.read_byte(REG_T));

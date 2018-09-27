@@ -53,10 +53,10 @@ impl Ops {
         }
     }
 
-    pub fn fetch_operation(&self, byte: u8, prefixed: bool) -> Operation {
+    pub fn fetch_operation(&self, byte: u8, prefixed: bool) -> &Operation {
         let map = if prefixed { &self.cb_ops } else { &self.ops };
         let op = map.get(&byte).expect(&format!("Missing {}prefixed operation {:x}! WTF?", if prefixed { "" } else { "un" }, byte));
-        (*op).clone()  //todo: HOW DO I NOT CLONE THAT?
+        op
     }
 }
 
