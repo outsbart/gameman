@@ -47,6 +47,10 @@ pub fn rotate_left(unsigned: u8) -> u16 {
     u16::from(unsigned << 1)
 }
 
+pub fn rotate_right(unsigned: u8) -> u16 {
+    u16::from(unsigned >> 1)
+}
+
 
 #[allow(overflowing_literals)]
 #[cfg(test)]

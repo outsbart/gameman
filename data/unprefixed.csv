@@ -212,7 +212,7 @@ code,mnemonic,result_is_byte,into,operand1,operand2,condition,bytes,flag_z,flag_
 0xd2,JP,,PC,a16,,NC,3,,,,,16,12
 0xd4,CALL,,PC,a16,,NC,3,,,,,24,12
 0xd5,PUSH,,,DE,,,1,,,,,16,
-0xd6,SUB,1,A,d8,,,2,Z,1,H,C,8,
+0xd6,SUB,1,A,A,d8,,2,Z,1,H,C,8,
 0xd7,RST,,,10H,,,1,,,,,16,
 0xd8,RET,,PC,,,C,1,,,,,20,8
 0xd9,RETI,,PC,,,1,1,,,,,16,

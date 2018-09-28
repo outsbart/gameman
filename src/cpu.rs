@@ -1,6 +1,7 @@
 use mem::Memory;
 use ops::{fetch_operation, Operation};
 use utils::{u8_to_i8, u16_to_i16, rotate_left};
+use utils::rotate_right;
 
 // Flags bit poisition in the F register
 const ZERO_FLAG: u8 = 7;
@@ -207,10 +208,14 @@ impl<M: Memory> CPU<M> {
                 let addr = 0xFF00 + u16::from(self.fetch_next_byte());
                 u16::from(self.mmu.read_byte(addr))
             }
+            "(a16)" => {
+                let addr = u16::from(self.fetch_next_word());
+                self.mmu.read_byte(addr) as u16 }
             "d16"|"a16" => { self.fetch_next_word() }
             "d8"|"r8" => { self.fetch_next_byte() as u16 }
             "NZ" => { !self.regs.get_flags().0 as u16 }
             "Z" => { self.regs.get_flags().0 as u16 }
+            "NC" => { !self.regs.get_flags().3 as u16 }
             _ => {
                 operand.parse::<u16>().expect(format!("cant read {} yet!!!", operand).as_ref())
             }
@@ -262,13 +267,17 @@ impl<M: Memory> CPU<M> {
         info!("istruzione\t0x{:x}\t{}\top1={:x}\top2={:x}\tinto={}", op.code_as_u8(), op.mnemonic, op1, op2, op.into);
 
         match op.mnemonic.as_ref() {
-            "NOP" => {},
-            "DI" => {},  // TODO: IMPLEMENT INTERRUPTS
-            "LD"|"LDD"|"LDH"|"LDI"|"JP" => { result = op1 },
+            "NOP" => {}
+            "DI" => {}  // TODO: IMPLEMENT INTERRUPTS
+            "LD"|"LDD"|"LDH"|"LDI"|"JP" => { result = op1 }
+            "AND" => { result = op1 & op2 }
             "OR" => { result = op1 | op2 }
-            "XOR" => { result = op1 ^ op2; },
+            "XOR" => { result = op1 ^ op2; }
             "BIT" => { result = !is_bit_set(op1 as u8, op2) as u16; }
-            "INC" => { result = op1 + 1; }
+            "INC" => {
+                result = op1 + 1;
+                c = (result & 0xF0) != 0;
+            }
             "DEC" => { result = op1 - 1; }
             "PUSH" => { self.push(op1) }
             "POP"|"RET" => { result = self.pop() }
@@ -283,6 +292,15 @@ impl<M: Memory> CPU<M> {
             }
             "SUB" => {
                 result = op1 - op2; //TODO: handle possible underflow
+                c = op2 > op1;
+            }
+            "ADD" => {
+                result = op1 + op2; //TODO: handle possible overflow
+                c = (result & 0xF0) != 0;
+            }
+            "ADC" => {
+                result = op1 + op2 + 1;
+                c = (result & 0xF0) != 0;
             }
             "CP" => {
                 result = if op1 == op2 { 0 } else { 1 }; //note: this is for the Z flag
@@ -291,6 +309,14 @@ impl<M: Memory> CPU<M> {
             "RL"|"RLA" => {
                 result = rotate_left(op1 as u8) + c as u16;
                 c = op1 & 0x80 != 0;
+            }
+            "SRL" => {
+                result = op1 >> 1;
+            }
+            "RR"|"RRA" => {
+                result = if c { 0x80 } else { 0 };
+                result += rotate_right(op1 as u8);
+                c = op1 & 1 != 0;
             }
 //            "RES" => {
 //                result = !(1u16<<op1) ^ op2;
@@ -313,7 +339,7 @@ impl<M: Memory> CPU<M> {
         };
         h = match op.flag_h.unwrap_or(' ') {
             '0' => { false }, '1' => { true },
-            'H' => { result & 0xF0 != op1 & 0xF0 }, _ => { h }
+            'H' => { result & 0xF0 != op1 & 0xF0 }, _ => { h }  // todo maybe calculation changes wheter result is byte or word?
         };
         c = match op.flag_c.unwrap_or(' ') {
             '0' => { false }, '1' => { true }, _ => { c }
@@ -380,7 +406,7 @@ mod tests {
         assert_eq!(regs.read_byte(REG_H), 0);
         assert_eq!(regs.read_byte(REG_L), 0);
         assert_eq!(regs.read_byte(REG_F), 0);
-        assert_eq!(regs.read_word(REG_PC), 0);
+        assert_eq!(regs.read_word(REG_PC), 0x100);
         assert_eq!(regs.read_word(REG_SP), 0xFFFE);
         assert_eq!(regs.read_byte(REG_M), 0);
         assert_eq!(regs.read_byte(REG_T), 0);
