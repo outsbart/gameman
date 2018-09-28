@@ -12,7 +12,7 @@ pub struct MMU<M: GPUMemoriesAccess> {
 impl<M: GPUMemoriesAccess> MMU<M> {
     pub fn new(gpu: M) -> MMU<M> {
         MMU {
-            still_bios: true, bios: [0; 0x0100],
+            still_bios: false, bios: [0; 0x0100],
 
             rom: [0; 0x8000], wram: [0; 0x2000],
             eram: [0; 0x2000], zram: [0; 0x0080],
@@ -198,6 +198,8 @@ mod tests {
     #[test]
     fn bios_gets_replaced_by_rom() {
         let mut mmu = MMU::new(DummyGPU::new());
+
+        mmu.still_bios = true;
 
         mmu.rom[0x00FF] = 5;
         mmu.rom[0x0100] = 6;

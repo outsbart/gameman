@@ -40,6 +40,7 @@ impl Emulator {
 
     pub fn load_bios(&mut self) {
         self.cpu.mmu.set_bios(load_boot_rom());
+        self.cpu.set_registry_value("PC", 0);
     }
 
     pub fn load_rom(&mut self, path: &str) {

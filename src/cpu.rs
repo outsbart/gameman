@@ -102,6 +102,7 @@ impl<M: Memory> CPU<M> {
     // initalize
     fn reset(&mut self) {
         self.set_registry_value("SP", 0xFFFE);
+        self.set_registry_value("PC", 0x100);
         //TODO: set all registry to zero. RAM as well
     }
 
@@ -137,7 +138,6 @@ impl<M: Memory> CPU<M> {
         let op: &Operation = fetch_operation(byte, prefixed);
 
         info!("0x{:x}\t0x{:x}\t{}\t{:?}\t{:?}", line_number, op.code_as_u8(), op.mnemonic, op.operand1, op.operand2);
-
         self.execute(op);
 
         // add to the clocks
@@ -149,7 +149,7 @@ impl<M: Memory> CPU<M> {
 
     fn registry_name_to_index(&mut self, registry: &str) -> u16 {
         match registry {
-            "A" => { 0 }, "F" => { 1 }, "B"|"BC" => { 2 }, "C" => { 3 }, "D"|"DE" => { 4 }
+            "A"|"AF" => { 0 }, "F" => { 1 }, "B"|"BC" => { 2 }, "C" => { 3 }, "D"|"DE" => { 4 }
             "E" => { 5 }, "H" => { 6 }, "HL" => { 6 }, "L" => { 7 }, "SP" => { 8 }, "S" => { 8 }
             "PSP" => { 9 }, "PC" => { 10 }, "CPC" => { 11 }, "M" => { 12 }, "T" => { 13 }
             _ => { panic!("What kind of register is {}??", registry) }
@@ -176,7 +176,7 @@ impl<M: Memory> CPU<M> {
 
         info!("Storing into {} value 0x{:x}", into, value);
         let addr:u16 = match into.as_ref() {
-            "BC"|"DE"|"HL"|"PC"|"SP"|
+            "BC"|"DE"|"HL"|"PC"|"SP"|"AF"|
             "A"|"B"|"C"|"D"|"E"|"H"|"L" => { return self.set_registry_value(into, value); }
             "(BC)"|"(DE)"|"(HL)"|"(PC)"|"(SP)" => {
                 let reg = into[1..into.len()-1].as_ref();
@@ -201,7 +201,7 @@ impl<M: Memory> CPU<M> {
                 let addr = self.get_registry_value(reg);
                 self.mmu.read_word(addr)
             }
-            "BC"|"DE"|"HL"|"PC"|"SP"|
+            "BC"|"DE"|"HL"|"PC"|"SP"|"AF"|
             "A"|"B"|"C"|"D"|"E"|"H"|"L" => { self.get_registry_value(operand) }
             "(a8)" => {
                 let addr = 0xFF00 + u16::from(self.fetch_next_byte());
@@ -259,11 +259,13 @@ impl<M: Memory> CPU<M> {
         let mut result: u16 = 1;
         let (mut z, mut n, mut h, mut c) = self.regs.get_flags();
 
-        info!("\t0x{:x}\t{}\t{:x}\t{:x}", op.code_as_u8(), op.mnemonic, op1, op2);
+        info!("istruzione\t0x{:x}\t{}\top1={:x}\top2={:x}\tinto={}", op.code_as_u8(), op.mnemonic, op1, op2, op.into);
 
         match op.mnemonic.as_ref() {
             "NOP" => {},
+            "DI" => {},  // TODO: IMPLEMENT INTERRUPTS
             "LD"|"LDD"|"LDH"|"LDI"|"JP" => { result = op1 },
+            "OR" => { result = op1 | op2 }
             "XOR" => { result = op1 ^ op2; },
             "BIT" => { result = !is_bit_set(op1 as u8, op2) as u16; }
             "INC" => { result = op1 + 1; }
@@ -296,6 +298,10 @@ impl<M: Memory> CPU<M> {
             _ => {
                 panic!("0x{:x}\t{} not implemented yet!", op.code_as_u8(), op.mnemonic);
             }
+        }
+
+        if result_is_byte {
+            result = (result as u8) as u16;
         }
 
         // set the flags!
