@@ -1,6 +1,7 @@
 use csv;
 use std::collections::HashMap;
 use std::fs::File;
+use serde_derive::Deserialize;
 
 #[derive(Debug,Deserialize,Clone)]
 pub struct Operation {
@@ -20,6 +21,10 @@ pub struct Operation {
     pub cycles_no: Option<u8>
 }
 
+lazy_static! {
+    static ref cpu_ops: Ops = Ops::new();
+}
+
 impl Operation {
     pub fn code_as_u8(&self) -> u8 {
         u8::from_str_radix(&self.code[2..], 16)
@@ -27,7 +32,7 @@ impl Operation {
     }
 }
 
-pub struct Ops {
+struct Ops {
     ops: HashMap<u8, Operation>,
     cb_ops: HashMap<u8, Operation>
 }
@@ -52,13 +57,14 @@ impl Ops {
             map.insert(op.code_as_u8(), op);
         }
     }
-
-    pub fn fetch_operation(&self, byte: u8, prefixed: bool) -> &Operation {
-        let map = if prefixed { &self.cb_ops } else { &self.ops };
-        let op = map.get(&byte).expect(&format!("Missing {}prefixed operation {:x}! WTF?", if prefixed { "" } else { "un" }, byte));
-        op
-    }
 }
+
+pub fn fetch_operation(byte: u8, prefixed: bool) -> &'static Operation {
+    let map = if prefixed { &cpu_ops.cb_ops } else { &cpu_ops.ops };
+    let op = map.get(&byte).expect(&format!("Missing {}prefixed operation {:x}! WTF?", if prefixed { "" } else { "un" }, byte));
+    op
+}
+
 
 #[cfg(test)]
 mod tests {

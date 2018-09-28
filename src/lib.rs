@@ -1,7 +1,11 @@
 #![allow(dead_code)]
-#[macro_use] extern crate log;
 
 #[macro_use]
+extern crate log;
+
+#[macro_use]
+extern crate lazy_static;
+
 extern crate serde_derive;
 extern crate csv;
 

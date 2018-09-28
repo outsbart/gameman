@@ -1,5 +1,5 @@
 use mem::Memory;
-use ops::{Ops, Operation};
+use ops::{fetch_operation, Operation};
 use utils::{u8_to_i8, u16_to_i16, rotate_left};
 
 // Flags bit poisition in the F register
@@ -123,7 +123,7 @@ impl<M: Memory> CPU<M> {
 
     // fetch the operation, decodes it, fetch parameters if required and executes it.
     // returns the address of the executed instruction
-    pub fn step(&mut self, ops: &Ops) -> (u16, u8) {
+    pub fn step(&mut self) -> (u16, u8) {
         let line_number = self.get_registry_value("PC");
 
         let mut prefixed = false;
@@ -134,7 +134,7 @@ impl<M: Memory> CPU<M> {
             prefixed = true;
         }
 
-        let op: &Operation = ops.fetch_operation(byte, prefixed);
+        let op: &Operation = fetch_operation(byte, prefixed);
 
         info!("0x{:x}\t0x{:x}\t{}\t{:?}\t{:?}", line_number, op.code_as_u8(), op.mnemonic, op.operand1, op.operand2);
 
