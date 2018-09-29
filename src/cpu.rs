@@ -2,6 +2,8 @@ use mem::Memory;
 use ops::{fetch_operation, Operation};
 use utils::{u8_to_i8, u16_to_i16, rotate_left};
 use utils::rotate_right;
+use utils::swap_nibbles;
+use utils::parse_hex;
 
 // Flags bit poisition in the F register
 const ZERO_FLAG: u8 = 7;
@@ -217,7 +219,7 @@ impl<M: Memory> CPU<M> {
             "Z" => { self.regs.get_flags().0 as u16 }
             "NC" => { !self.regs.get_flags().3 as u16 }
             _ => {
-                operand.parse::<u16>().expect(format!("cant read {} yet!!!", operand).as_ref())
+                parse_hex(operand)
             }
         }
     }
@@ -269,11 +271,11 @@ impl<M: Memory> CPU<M> {
 
         match op.mnemonic.as_ref() {
             "NOP" => {}
-            "DI" => {}  // TODO: IMPLEMENT INTERRUPTS
+            "DI"|"EI" => {}  // TODO: IMPLEMENT INTERRUPTS
             "LD"|"LDD"|"LDH"|"LDI"|"JP" => { result = op1 }
             "AND" => { result = op1 & op2 }
             "OR" => { result = op1 | op2 }
-            "XOR" => { result = op1 ^ op2; }
+            "XOR"|"CPL" => { result = op1 ^ op2; }
             "BIT" => { result = !is_bit_set(op1 as u8, op2) as u16; }
             "INC" => {
                 result = op1 + 1;
@@ -289,7 +291,7 @@ impl<M: Memory> CPU<M> {
                 //TODO: handle possible overflow
                 result = (u16_to_i16(op1)+1 + u8_to_i8(op2 as u8) as i16) as u16;
             }
-            "CALL" => {
+            "CALL"|"RST" => {
                 let value = self.get_registry_value("PC");
                 self.push(value);
                 result = op1;
@@ -323,6 +325,7 @@ impl<M: Memory> CPU<M> {
                 result += rotate_right(op1 as u8);
                 c = (op1 & 1) != 0;
             }
+            "SWAP" => { result = swap_nibbles(op1 as u8) }
 //            "RES" => {
 //                result = !(1u16<<op1) ^ op2;
 //            }
