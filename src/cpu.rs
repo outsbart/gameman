@@ -200,7 +200,7 @@ impl<M: Memory> CPU<M> {
             "(BC)"|"(DE)"|"(HL)"|"(PC)"|"(SP)" => {
                 let reg = operand[1..operand.len()-1].as_ref();
                 let addr = self.get_registry_value(reg);
-                self.mmu.read_word(addr)
+                self.mmu.read_byte(addr) as u16
             }
             "BC"|"DE"|"HL"|"PC"|"SP"|"AF"|
             "A"|"B"|"C"|"D"|"E"|"H"|"L" => { self.get_registry_value(operand) }
@@ -252,6 +252,7 @@ impl<M: Memory> CPU<M> {
 
         // early stop
         if condition == 0 {
+            info!("operation 0x{:x} {} skipped cause condition {}", op.code_as_u8(), op.mnemonic, condition);
             let cycles = op.cycles_no.expect("Operation skipped but cycles_no not set.");
             self.regs.write_byte(REG_T, cycles);
             return;
@@ -276,9 +277,12 @@ impl<M: Memory> CPU<M> {
             "BIT" => { result = !is_bit_set(op1 as u8, op2) as u16; }
             "INC" => {
                 result = op1 + 1;
-                c = (result & 0xF0) != 0;
+                c = result > 0xFF;
             }
-            "DEC" => { result = op1 - 1; }
+            "DEC" => {
+                result = op1 - 1;
+                c = op1 == 0;
+            }
             "PUSH" => { self.push(op1) }
             "POP"|"RET" => { result = self.pop() }
             "JR" => {
@@ -296,27 +300,28 @@ impl<M: Memory> CPU<M> {
             }
             "ADD" => {
                 result = op1 + op2; //TODO: handle possible overflow
-                c = (result & 0xF0) != 0;
+                c = result > 0xFF;
             }
             "ADC" => {
                 result = op1 + op2 + 1;
-                c = (result & 0xF0) != 0;
+                c = result > 0xFF;
             }
             "CP" => {
                 result = if op1 == op2 { 0 } else { 1 }; //note: this is for the Z flag
-                c = op1 < op2;
+                c = op2 > op1;
             }
             "RL"|"RLA" => {
                 result = rotate_left(op1 as u8) + c as u16;
-                c = op1 & 0x80 != 0;
+                c = (op1 & 0x80) != 0;
             }
             "SRL" => {
                 result = op1 >> 1;
+                c = (op1 & 1) != 0;
             }
             "RR"|"RRA" => {
                 result = if c { 0x80 } else { 0 };
                 result += rotate_right(op1 as u8);
-                c = op1 & 1 != 0;
+                c = (op1 & 1) != 0;
             }
 //            "RES" => {
 //                result = !(1u16<<op1) ^ op2;
@@ -339,7 +344,7 @@ impl<M: Memory> CPU<M> {
         };
         h = match op.flag_h.unwrap_or(' ') {
             '0' => { false }, '1' => { true },
-            'H' => { result & 0xF0 != op1 & 0xF0 }, _ => { h }  // todo maybe calculation changes wheter result is byte or word?
+            'H' => { (result & 0xF0) != (op1 & 0xF0) }, _ => { h }
         };
         c = match op.flag_c.unwrap_or(' ') {
             '0' => { false }, '1' => { true }, _ => { c }
