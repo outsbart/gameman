@@ -6,6 +6,8 @@ pub struct MMU<M: GPUMemoriesAccess> {
     rom: [u8; 0x8000], wram: [u8; 0x2000],   // second half of rom is swappable (aka rom banking)
     eram: [u8; 0x2000], zram: [u8; 0x0080],
 
+    pub interrupt_enable: u8, pub interrupt_flags: u8,
+
     pub gpu: M  // todo: remove pub
 }
 
@@ -16,6 +18,8 @@ impl<M: GPUMemoriesAccess> MMU<M> {
 
             rom: [0; 0x8000], wram: [0; 0x2000],
             eram: [0; 0x2000], zram: [0; 0x0080],
+
+            interrupt_enable: 1, interrupt_flags: 0,
 
             gpu
         }
@@ -80,11 +84,16 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
 
                     // Zero page
                     0x0F00 => {
-                        if addr >= 0xFF80 { self.zram[(addr & 0x007F) as usize] }
+                        if addr == 0xFFFF { self.interrupt_enable }
+                        else if addr >= 0xFF80 { self.zram[(addr & 0x007F) as usize] }
                         else {
+                            // IO
                             match addr & 0x00F0 {
                                 0x40|0x50|0x60|0x70 => { self.gpu.read_byte(addr) }
-                                _ => { 0 } // TODO: change when IO implemented
+                                _ => {
+                                    if addr == 0xFF0F { self.interrupt_flags }
+                                    else { 0 }
+                                } // TODO: change when IO implemented
                             }
                         }
                     }
@@ -121,11 +130,14 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
 
                     // Zero page
                     0x0F00 => {
+                        if addr == 0xFFFF { self.interrupt_enable = byte; return }
                         if addr >= 0xFF80 { self.zram[(addr & 0x007F) as usize] = byte; return }
                         else {
                             match addr & 0x00F0 {
                                 0x40|0x50|0x60|0x70 => { self.gpu.write_byte(addr, byte); return }
-                                _ => { return }
+                                _ => {
+                                    if addr == 0xFF0F { self.interrupt_flags = byte; return }
+                                }
                             }
                         }
                     }

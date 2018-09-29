@@ -84,7 +84,8 @@ impl Memory for Regs {
 pub struct CPU<M: Memory> {
     pub clks: Clocks,
     regs: Regs,
-    pub mmu: M
+    pub mmu: M,
+    interrupt_master_enable: bool
 }
 
 impl<M: Memory> ByteStream for CPU<M> {
@@ -98,7 +99,7 @@ impl<M: Memory> ByteStream for CPU<M> {
 
 impl<M: Memory> CPU<M> {
     pub fn new(mmu: M) -> CPU<M> {
-        let mut cpu = CPU { clks: Clocks::new(), regs: Regs::new(), mmu };
+        let mut cpu = CPU { clks: Clocks::new(), regs: Regs::new(), mmu, interrupt_master_enable: false };
         cpu.reset();
         cpu
     }
@@ -107,6 +108,7 @@ impl<M: Memory> CPU<M> {
     fn reset(&mut self) {
         self.set_registry_value("SP", 0xFFFE);
         self.set_registry_value("PC", 0x100);
+        self.interrupt_master_enable = true;
         //TODO: set all registry to zero. RAM as well
     }
 
@@ -272,7 +274,8 @@ impl<M: Memory> CPU<M> {
 
         match op.mnemonic.as_ref() {
             "NOP" => {}
-            "DI"|"EI" => {}  // TODO: IMPLEMENT INTERRUPTS
+            "DI" => { self.interrupt_master_enable = false }
+            "EI" => { self.interrupt_master_enable = true }
             "STOP" => {}
             "LD"|"LDD"|"LDH"|"LDI"|"JP" => { result = op1 }
             "AND" => { result = op1 & op2 }
@@ -379,7 +382,31 @@ impl<M: Memory> CPU<M> {
         }
 
         self.regs.set_flags(z, n, h, c);
-        self.regs.write_byte(REG_T, op.cycles_ok);
+
+        // handle interrupts
+        let mut interrupt_cycles_t: u8 = 0;
+        let interrupt_enable = self.mmu.read_byte(0xFFFF);
+        let interrupt_flags = self.mmu.read_byte(0xFF0F);
+
+        if self.interrupt_master_enable && (interrupt_enable != 0) && (interrupt_flags != 0) {
+            let fired = interrupt_enable & interrupt_flags;
+
+            // vblank
+            if (fired & 0x1) != 0 {
+                // turn interrupt flag off cause we are handling it now
+                self.mmu.write_byte(0xFF0F, reset_bit(0, interrupt_flags) as u8);
+
+                // only one interrupt handling at a time
+                self.interrupt_master_enable = false;
+
+                let value = self.get_registry_value("PC");
+                self.push(value);
+
+                interrupt_cycles_t = 12;
+            }
+        }
+
+        self.regs.write_byte(REG_T, op.cycles_ok + interrupt_cycles_t);
     }
 }
 
