@@ -4,6 +4,7 @@ use utils::{u8_to_i8, u16_to_i16, rotate_left};
 use utils::rotate_right;
 use utils::swap_nibbles;
 use utils::parse_hex;
+use utils::reset_bit;
 
 // Flags bit poisition in the F register
 const ZERO_FLAG: u8 = 7;
@@ -272,6 +273,7 @@ impl<M: Memory> CPU<M> {
         match op.mnemonic.as_ref() {
             "NOP" => {}
             "DI"|"EI" => {}  // TODO: IMPLEMENT INTERRUPTS
+            "STOP" => {}
             "LD"|"LDD"|"LDH"|"LDI"|"JP" => { result = op1 }
             "AND" => { result = op1 & op2 }
             "OR" => { result = op1 | op2 }
@@ -316,6 +318,10 @@ impl<M: Memory> CPU<M> {
                 result = rotate_left(op1 as u8) + c as u16;
                 c = (op1 & 0x80) != 0;
             }
+            "RLCA" => {
+                result = rotate_left(op1 as u8);
+                c = (op1 & 0x80) != 0;
+            }
             "SRL" => {
                 result = op1 >> 1;
                 c = (op1 & 1) != 0;
@@ -326,9 +332,9 @@ impl<M: Memory> CPU<M> {
                 c = (op1 & 1) != 0;
             }
             "SWAP" => { result = swap_nibbles(op1 as u8) }
-//            "RES" => {
-//                result = !(1u16<<op1) ^ op2;
-//            }
+            "RES" => {
+                result = reset_bit(op1 as u8, op2 as u8);
+            }
             _ => {
                 panic!("0x{:x}\t{} not implemented yet!", op.code_as_u8(), op.mnemonic);
             }

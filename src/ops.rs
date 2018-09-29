@@ -61,14 +61,13 @@ impl Ops {
 
 pub fn fetch_operation(byte: u8, prefixed: bool) -> &'static Operation {
     let map = if prefixed { &cpu_ops.cb_ops } else { &cpu_ops.ops };
-    let op = match map.get(&byte) {
+    match map.get(&byte) {
         Some(v) => { v }
         None => {
             warn!("Missing {}prefixed operation {:x}! Returning NOP", if prefixed { "" } else { "un" }, byte);
             map.get(&0x0).unwrap()
         }
-    };
-    op
+    }
 }
 
 

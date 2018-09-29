@@ -62,6 +62,10 @@ pub fn parse_hex(number: &str) -> u16 {
     u16::from_str_radix(number, 16).expect(format!("cant read {} yet!!!", number).as_ref())
 }
 
+pub fn reset_bit(position: u8, number: u8) -> u16 {
+    (!(1u16<<position) & number as u16) as u16
+}
+
 
 #[allow(overflowing_literals)]
 #[cfg(test)]
@@ -101,5 +105,19 @@ mod tests {
     #[test]
     fn test_parse_hex() {
         assert_eq!(parse_hex("20"), 0x0020u16);
+    }
+
+    #[test]
+    fn test_reset_bit() {
+        assert_eq!(reset_bit(0, 0b1111_1110), 0b0000_0000_1111_1110);
+        assert_eq!(reset_bit(0, 0b1111_1111), 0b0000_0000_1111_1110);
+        assert_eq!(reset_bit(1, 0b1111_1111), 0b0000_0000_1111_1101);
+        assert_eq!(reset_bit(2, 0b1111_1111), 0b0000_0000_1111_1011);
+        assert_eq!(reset_bit(3, 0b1111_1111), 0b0000_0000_1111_0111);
+        assert_eq!(reset_bit(4, 0b1111_1111), 0b0000_0000_1110_1111);
+        assert_eq!(reset_bit(5, 0b1111_1111), 0b0000_0000_1101_1111);
+        assert_eq!(reset_bit(6, 0b1111_1111), 0b0000_0000_1011_1111);
+        assert_eq!(reset_bit(7, 0b1111_1111), 0b0000_0000_0111_1111);
+
     }
 }
