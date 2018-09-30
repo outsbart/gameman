@@ -306,7 +306,7 @@ impl<M: Memory> CPU<M> {
             }
             "INC"|"ADD"|"ADC" => {
                 result = add_bytes(op1, op2);
-                if op.mnemonic == "ADC" { result = add_bytes(result, 1); }
+                if op.mnemonic == "ADC" { result = add_bytes(result, u16::from(c)); }
                 c = result > 0xFF;
             }
             "RL"|"RLA" => {
