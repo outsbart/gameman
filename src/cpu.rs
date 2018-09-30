@@ -318,6 +318,10 @@ impl<M: Memory> CPU<M> {
                 result = ((op1 as u8) << 1 | u8::from(c)) as u16;
                 c = (op1 & 0x80) != 0;
             }
+            "SLA" => {
+                result = ((op1 as u8) << 1) as u16;
+                c = (op1 & 0x80) != 0;
+            }
             "RLCA" => {
                 c = (op1 & 0x80) != 0;
                 result = ((op1 as u8) << 1 | u8::from(c)) as u16;
