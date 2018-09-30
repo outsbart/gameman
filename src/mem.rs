@@ -87,11 +87,12 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                         if addr == 0xFFFF { self.interrupt_enable }
                         else if addr == 0xFF0F { self.interrupt_flags }
                         else if addr >= 0xFF80 { self.zram[(addr & 0x007F) as usize] }
-                        else if addr == 0xFF00 { 0xF }  // IO
+                        else if addr >= 0xFF40 { self.gpu.read_byte(addr) }
                         else {
-                            match addr & 0x00F0 {
-                                0x40|0x50|0x60|0x70 => { self.gpu.read_byte(addr) }
-                                _ => { 0 }
+                            // io
+                            match addr & 0x3F {
+                                0x0 => { 0xFF }
+                                _ => 0
                             }
                         }
                     }
@@ -131,12 +132,7 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                         if addr == 0xFFFF { self.interrupt_enable = byte }
                         if addr == 0xFF0F { self.interrupt_flags = byte }
                         if addr >= 0xFF80 { self.zram[(addr & 0x007F) as usize] = byte; return }
-                        else {
-                            match addr & 0x00F0 {
-                                0x40|0x50|0x60|0x70 => { self.gpu.write_byte(addr, byte); return }
-                                _ => { return }
-                            }
-                        }
+                        if addr >= 0xFF40 { self.gpu.write_byte(addr, byte); return }
                     }
 
                     _ => {

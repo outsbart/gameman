@@ -1,12 +1,10 @@
 use mem::Memory;
 use ops::{fetch_operation, Operation};
-use utils::{u8_to_i8, u16_to_i16, rotate_left};
-use utils::rotate_right;
-use utils::swap_nibbles;
+use utils::add_bytes;
 use utils::parse_hex;
 use utils::reset_bit;
 use utils::sub_bytes;
-use utils::add_bytes;
+use utils::swap_nibbles;
 
 // Flags bit poisition in the F register
 const ZERO_FLAG: u8 = 7;
@@ -87,7 +85,8 @@ pub struct CPU<M: Memory> {
     pub clks: Clocks,
     regs: Regs,
     pub mmu: M,
-    interrupt_master_enable: bool
+    interrupt_master_enable: bool,
+    stopped: bool
 }
 
 impl<M: Memory> ByteStream for CPU<M> {
@@ -101,7 +100,7 @@ impl<M: Memory> ByteStream for CPU<M> {
 
 impl<M: Memory> CPU<M> {
     pub fn new(mmu: M) -> CPU<M> {
-        let mut cpu = CPU { clks: Clocks::new(), regs: Regs::new(), mmu, interrupt_master_enable: false };
+        let mut cpu = CPU { clks: Clocks::new(), regs: Regs::new(), mmu, interrupt_master_enable: false, stopped: false };
         cpu.reset();
         cpu
     }
@@ -282,7 +281,7 @@ impl<M: Memory> CPU<M> {
             "NOP" => {}
             "DI" => { self.interrupt_master_enable = false }
             "EI" => { self.interrupt_master_enable = true }
-            "STOP" => {}
+            "STOP" => { self.stopped = true }
             "LD"|"LDD"|"LDH"|"LDI"|"JP" => { result = op1 }
             "AND" => { result = op1 & op2 }
             "OR" => { result = op1 | op2 }
@@ -317,6 +316,10 @@ impl<M: Memory> CPU<M> {
             "RLCA" => {
                 c = (op1 & 0x80) != 0;
                 result = ((op1 as u8) << 1 | u8::from(c)) as u16;
+            }
+            "RRCA" => {
+                c = (op1 & 1) != 0;
+                result = ((op1 as u8) >> 1 | (u8::from(c) << 7)) as u16;
             }
             "SRL" => {
                 result = op1 >> 1;
@@ -396,6 +399,9 @@ impl<M: Memory> CPU<M> {
 
                 interrupt_cycles_t = 12;
             }
+
+            // on button press
+            // resume stop
         }
 
         self.regs.write_byte(REG_T, op.cycles_ok + interrupt_cycles_t);
