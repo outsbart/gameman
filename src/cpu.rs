@@ -212,8 +212,9 @@ impl<M: Memory> CPU<M> {
             "A"|"B"|"C"|"D"|"E"|"H"|"L" => { self.get_registry_value(operand) }
             "(a8)" => {
                 let addr = 0xFF00 + u16::from(self.fetch_next_byte());
-                info!("Reading input from 0x{:x}", addr);
-                u16::from(self.mmu.read_byte(addr))
+                let res = u16::from(self.mmu.read_byte(addr));
+                info!("Reading input from 0x{:x} --> 0b{:b}", addr, res);
+                res
             }
             "(a16)" => {
                 let addr = u16::from(self.fetch_next_word());
