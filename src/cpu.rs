@@ -487,7 +487,19 @@ mod tests {
 
         cpu.step();
 
-        //TODO: MAKE SURE IT SHOULD GO BACK BY 2 CONSIDERING THE OPERAND READING
         assert_eq!(cpu.get_registry_value("PC"), 500);
+    }
+
+    #[test]
+    fn test_push() {
+        let mut cpu = CPU::new(DummyMMU::new());
+
+        cpu.push(0xF0);
+        cpu.push(0x0F);
+        cpu.push(0x11);
+
+        assert_eq!(cpu.pop(), 0x11);
+        assert_eq!(cpu.pop(), 0x0F);
+        assert_eq!(cpu.pop(), 0xF0);
     }
 }
