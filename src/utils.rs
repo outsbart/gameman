@@ -66,6 +66,20 @@ pub fn reset_bit(position: u8, number: u8) -> u16 {
     (!(1u16<<position) & number as u16) as u16
 }
 
+pub fn add_bytes(a: u16, b: u16) -> u16 {
+    let a = a as u32;
+    let b = b as u32;
+
+    a.wrapping_add(b) as u16
+}
+
+pub fn sub_bytes(a: u16, b: u16) -> u16 {
+    let a = a as u32;
+    let b = b as u32;
+
+    a.wrapping_sub(b) as u16
+}
+
 
 #[allow(overflowing_literals)]
 #[cfg(test)]
@@ -119,5 +133,11 @@ mod tests {
         assert_eq!(reset_bit(6, 0b1111_1111), 0b0000_0000_1011_1111);
         assert_eq!(reset_bit(7, 0b1111_1111), 0b0000_0000_0111_1111);
 
+    }
+
+    #[test]
+    fn test_rust_shift() {
+        assert_eq!(u8::from(true), 0x1);
+        assert_eq!(u8::from(true) << 1, 0x2);
     }
 }

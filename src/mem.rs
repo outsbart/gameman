@@ -19,7 +19,7 @@ impl<M: GPUMemoriesAccess> MMU<M> {
             rom: [0; 0x8000], wram: [0; 0x2000],
             eram: [0; 0x2000], zram: [0; 0x0080],
 
-            interrupt_enable: 1, interrupt_flags: 0,
+            interrupt_enable: 0, interrupt_flags: 0,
 
             gpu
         }
@@ -85,15 +85,13 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                     // Zero page
                     0x0F00 => {
                         if addr == 0xFFFF { self.interrupt_enable }
+                        else if addr == 0xFF0F { self.interrupt_flags }
                         else if addr >= 0xFF80 { self.zram[(addr & 0x007F) as usize] }
+                        else if addr == 0xFF00 { 0xF }  // IO
                         else {
-                            // IO
                             match addr & 0x00F0 {
                                 0x40|0x50|0x60|0x70 => { self.gpu.read_byte(addr) }
-                                _ => {
-                                    if addr == 0xFF0F { self.interrupt_flags }
-                                    else { 0 }
-                                } // TODO: change when IO implemented
+                                _ => { 0 }
                             }
                         }
                     }
@@ -130,14 +128,13 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
 
                     // Zero page
                     0x0F00 => {
-                        if addr == 0xFFFF { self.interrupt_enable = byte; return }
+                        if addr == 0xFFFF { self.interrupt_enable = byte }
+                        if addr == 0xFF0F { self.interrupt_flags = byte }
                         if addr >= 0xFF80 { self.zram[(addr & 0x007F) as usize] = byte; return }
                         else {
                             match addr & 0x00F0 {
                                 0x40|0x50|0x60|0x70 => { self.gpu.write_byte(addr, byte); return }
-                                _ => {
-                                    if addr == 0xFF0F { self.interrupt_flags = byte; return }
-                                }
+                                _ => { return }
                             }
                         }
                     }
@@ -306,6 +303,7 @@ mod tests {
 
     /// test succesful mapping for zero ram access
     /// from 0xFF80 to 0xFFFF should access zero ram
+    /// careful, cause the areas overlaps with IO
     #[test]
     fn zram_access() {
         let mut mmu = MMU::new(DummyGPU::new());
@@ -315,7 +313,6 @@ mod tests {
 
         assert_eq!(mmu.read_byte(0xFF7F), 0);
         assert_eq!(mmu.read_byte(0xFF80), 2);
-        assert_eq!(mmu.read_byte(0xFFFF), 1);
     }
 
     /// test succesful mapping for zram write

@@ -5,6 +5,8 @@ use utils::rotate_right;
 use utils::swap_nibbles;
 use utils::parse_hex;
 use utils::reset_bit;
+use utils::sub_bytes;
+use utils::add_bytes;
 
 // Flags bit poisition in the F register
 const ZERO_FLAG: u8 = 7;
@@ -116,7 +118,7 @@ impl<M: Memory> CPU<M> {
     fn fetch_next_byte(&mut self) -> u8 {
         let byte = self.mmu.read_byte(self.regs.read_word(REG_PC));
         let pc_value = self.regs.read_word(REG_PC);
-        self.regs.write_word(REG_PC, pc_value + 1);
+        self.regs.write_word(REG_PC, pc_value.wrapping_add(1));
         byte
     }
 
@@ -124,7 +126,7 @@ impl<M: Memory> CPU<M> {
     fn fetch_next_word(&mut self) -> u16 {
         let word = self.mmu.read_word(self.regs.read_word(REG_PC));
         let pc_value = self.regs.read_word(REG_PC);
-        self.regs.write_word(REG_PC, pc_value + 2);
+        self.regs.write_word(REG_PC, pc_value.wrapping_add(2));
         word
     }
 
@@ -211,16 +213,20 @@ impl<M: Memory> CPU<M> {
             "A"|"B"|"C"|"D"|"E"|"H"|"L" => { self.get_registry_value(operand) }
             "(a8)" => {
                 let addr = 0xFF00 + u16::from(self.fetch_next_byte());
+                info!("Reading input from 0x{:x}", addr);
                 u16::from(self.mmu.read_byte(addr))
             }
             "(a16)" => {
                 let addr = u16::from(self.fetch_next_word());
-                self.mmu.read_byte(addr) as u16 }
+                self.mmu.read_byte(addr) as u16
+            }
             "d16"|"a16" => { self.fetch_next_word() }
-            "d8"|"r8" => { self.fetch_next_byte() as u16 }
+            "r8" => { panic!("r8 not implemented yet") }
+            "d8" => { self.fetch_next_byte() as u16 }
             "NZ" => { !self.regs.get_flags().0 as u16 }
             "Z" => { self.regs.get_flags().0 as u16 }
             "NC" => { !self.regs.get_flags().3 as u16 }
+            "CA" => { self.regs.get_flags().3 as u16 }
             _ => {
                 parse_hex(operand)
             }
@@ -260,7 +266,7 @@ impl<M: Memory> CPU<M> {
             info!("operation 0x{:x} {} skipped cause condition {}", op.code_as_u8(), op.mnemonic, condition);
             let cycles = op.cycles_no.expect("Operation skipped but cycles_no not set.");
             self.regs.write_byte(REG_T, cycles);
-            return;
+            return;  // todo: go down to the handle the interrupts
         }
 
         let result_is_byte: bool = match op.result_is_byte {
@@ -280,64 +286,48 @@ impl<M: Memory> CPU<M> {
             "LD"|"LDD"|"LDH"|"LDI"|"JP" => { result = op1 }
             "AND" => { result = op1 & op2 }
             "OR" => { result = op1 | op2 }
-            "XOR"|"CPL" => { result = op1 ^ op2; }
+            "XOR" => { result = op1 ^ op2; }
+            "CPL" => { result = !op1; }
             "BIT" => { result = !is_bit_set(op1 as u8, op2) as u16; }
-            "INC" => {
-                result = op1 + 1;
-                c = result > 0xFF;
-            }
-            "DEC" => {
-                result = op1 - 1;
-                c = op1 == 0;
-            }
             "PUSH" => { self.push(op1) }
             "POP"|"RET" => { result = self.pop() }
-            "JR" => {
-                //TODO: handle possible overflow
-                result = (u16_to_i16(op1)+1 + u8_to_i8(op2 as u8) as i16) as u16;
+            "RETI" => {
+                result = self.pop();
+                self.interrupt_master_enable = true;
             }
+            "JR" => { result = (op1 as i16).wrapping_add(op2 as i8 as i16).wrapping_add(1) as u16; }
             "CALL"|"RST" => {
                 let value = self.get_registry_value("PC");
                 self.push(value);
                 result = op1;
             }
-            "SUB" => {
-                result = op1 - op2; //TODO: handle possible underflow
+            "DEC"|"SUB"|"CP" => {
+                result = sub_bytes(op1, op2);
                 c = op2 > op1;
             }
-            "ADD" => {
-                result = op1 + op2; //TODO: handle possible overflow
+            "INC"|"ADD"|"ADC" => {
+                result = add_bytes(op1, op2);
+                if op.mnemonic == "ADC" { result = add_bytes(result, 1); }
                 c = result > 0xFF;
-            }
-            "ADC" => {
-                result = op1 + op2 + 1;
-                c = result > 0xFF;
-            }
-            "CP" => {
-                result = if op1 == op2 { 0 } else { 1 }; //note: this is for the Z flag
-                c = op2 > op1;
             }
             "RL"|"RLA" => {
-                result = rotate_left(op1 as u8) + c as u16;
+                result = ((op1 as u8) << 1 | u8::from(c)) as u16;
                 c = (op1 & 0x80) != 0;
             }
             "RLCA" => {
-                result = rotate_left(op1 as u8);
                 c = (op1 & 0x80) != 0;
+                result = ((op1 as u8) << 1 | u8::from(c)) as u16;
             }
             "SRL" => {
                 result = op1 >> 1;
                 c = (op1 & 1) != 0;
             }
             "RR"|"RRA" => {
-                result = if c { 0x80 } else { 0 };
-                result += rotate_right(op1 as u8);
+                result = ((op1 as u8) >> 1 | (u8::from(c) << 7)) as u16;
                 c = (op1 & 1) != 0;
             }
             "SWAP" => { result = swap_nibbles(op1 as u8) }
-            "RES" => {
-                result = reset_bit(op1 as u8, op2 as u8);
-            }
+            "RES" => { result = reset_bit(op1 as u8, op2 as u8); }
             _ => {
                 panic!("0x{:x}\t{} not implemented yet!", op.code_as_u8(), op.mnemonic);
             }
@@ -371,12 +361,12 @@ impl<M: Memory> CPU<M> {
             "LDD" => {
                 let reg: &str = "HL";
                 let value = self.get_registry_value(reg);
-                self.store_result(reg, value - 1, false);
+                self.store_result(reg, value.wrapping_sub(1), false);
             }
             "LDI" => {
                 let reg: &str = "HL";
                 let value = self.get_registry_value(reg);
-                self.store_result(reg, value + 1, false);
+                self.store_result(reg, value.wrapping_add(1), false);
             }
             _ => {}
         }
@@ -401,6 +391,8 @@ impl<M: Memory> CPU<M> {
 
                 let value = self.get_registry_value("PC");
                 self.push(value);
+
+                self.set_registry_value("PC", 0x40);
 
                 interrupt_cycles_t = 12;
             }

@@ -51,7 +51,10 @@ impl Emulator {
         // step a frame forward!
         loop {
             let (_line, t) = self.cpu.step();
-            self.cpu.mmu.gpu.step(t);
+            let vblank_interrupt = self.cpu.mmu.gpu.step(t);
+            if vblank_interrupt {
+                self.cpu.mmu.write_byte(0xFF0F, 0x0001);  //todo dont set to 0x0001, OR
+            }
             if self.cpu.clks.t >= self.stop_clock {
                 break
             }

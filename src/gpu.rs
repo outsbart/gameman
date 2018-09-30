@@ -92,8 +92,10 @@ impl GPU {
     }
 
     // go forward based on the cpu's last operation clocks
-    pub fn step(&mut self, t: u8) {
+    pub fn step(&mut self, t: u8) -> bool {
         self.modeclock += t as u16;
+
+        let mut vblank_interrupt: bool = false;
 
         // todo: implement it as a state machine?
         match self.mode {
@@ -137,6 +139,8 @@ impl GPU {
 
                     // restart
                     if self.line > 153 {
+                        vblank_interrupt = true;
+
                         self.mode = 2;
                         self.line = 0;
                     }
@@ -145,6 +149,7 @@ impl GPU {
             _ => { panic!("Sorry what?") }
         }
 
+        vblank_interrupt
     }
 }
 
