@@ -220,8 +220,12 @@ impl<M: Memory> CPU<M> {
                 let addr = u16::from(self.fetch_next_word());
                 self.mmu.read_byte(addr) as u16
             }
+            "SP+r8" => {
+                let sp = self.get_registry_value("SP") as i32;
+                let signed = self.fetch_next_byte() as i8 as i32;
+                sp.wrapping_add(signed) as u16
+            }
             "d16"|"a16" => { self.fetch_next_word() }
-            "r8" => { panic!("r8 not implemented yet") }
             "d8" => { self.fetch_next_byte() as u16 }
             "NZ" => { !self.regs.get_flags().0 as u16 }
             "Z" => { self.regs.get_flags().0 as u16 }

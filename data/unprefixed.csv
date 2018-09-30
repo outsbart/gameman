@@ -226,7 +226,7 @@ code,mnemonic,result_is_byte,into,operand1,operand2,condition,bytes,flag_z,flag_
 0xe5,PUSH,,,HL,,,1,,,,,16,
 0xe6,AND,1,A,d8,,,2,Z,0,1,0,8,
 0xe7,RST,,PC,20,,,1,,,,,16,
-0xe8,ADD,,SP,SP,r8,,2,0,0,H,C,16,
+0xe8,ADD,,SP,SP+r8,0,,2,0,0,H,C,16,
 0xe9,JP,,PC,HL,,,1,,,,,4,
 0xea,LD,1,(a16),A,,,3,,,,,16,
 0xee,XOR,1,A,d8,,,2,Z,0,0,0,8,
