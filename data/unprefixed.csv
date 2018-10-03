@@ -232,7 +232,7 @@ code,mnemonic,result_is_byte,into,operand1,operand2,condition,bytes,flag_z,flag_
 0xee,XOR,1,A,A,d8,,2,Z,0,0,0,8,
 0xef,RST,,PC,28,,,1,,,,,16,
 0xf0,LDH,1,A,(a8),,,2,,,,,12,
-0xf1,POP,,AF,,,,1,Z,N,H,C,12,
+0xf1,POP,,AF,,,,1,,,,,12,
 0xf2,LD,1,A,(C),,,1,,,,,8,
 0xf3,DI,,,,,,1,,,,,4,
 0xf5,PUSH,,,AF,,,1,,,,,16,
