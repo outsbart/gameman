@@ -14,8 +14,8 @@ pub struct Operation {
     pub condition: Option<String>,
     pub bytes: u8,
     pub flag_z: Option<char>,
-    pub flag_h: Option<char>,
     pub flag_n: Option<char>,
+    pub flag_h: Option<char>,
     pub flag_c: Option<char>,
     pub cycles_ok: u8,
     pub cycles_no: Option<u8>
