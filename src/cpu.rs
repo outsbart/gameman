@@ -5,6 +5,7 @@ use utils::parse_hex;
 use utils::reset_bit;
 use utils::sub_bytes;
 use utils::swap_nibbles;
+use utils::add_words;
 
 // Flags bit poisition in the F register
 const ZERO_FLAG: u8 = 7;
@@ -283,6 +284,7 @@ impl<M: Memory> CPU<M> {
         let mut result: u16 = 1;
         let (prev_z, prev_n, prev_h, prev_c) = self.regs.get_flags();
         let mut new_carry = prev_c;
+        let mut new_halfcarry = prev_h;
 
 //        info!("istruzione\t0x{:x}\t{}\top1={:x}\top2={:x}\tinto={}", op.code_as_u8(), op.mnemonic, op1, op2, op.into);
 
@@ -318,9 +320,10 @@ impl<M: Memory> CPU<M> {
                 new_carry = op2 > op1;
             }
             "INC"|"ADD"|"ADC" => {
-                result = add_bytes(op1, op2);
-                if op.mnemonic == "ADC" { result = add_bytes(result, u16::from(prev_c)); }
-                new_carry = result > 0xFF;
+                let sum_func = if result_is_byte { add_bytes } else { add_words };
+                let third_param: u16 = if op.mnemonic == "ADC" { u16::from(prev_c) } else { 0 };
+                let (x, y, z) = sum_func(op1, op2, third_param);
+                result = x; new_carry = y; new_halfcarry = z;
             }
             "RL"|"RLA" => {
                 result = ((op1 as u8) << 1 | u8::from(prev_c)) as u16;
@@ -373,7 +376,7 @@ impl<M: Memory> CPU<M> {
             match op.flag_h.unwrap_or(' ') {
                 '0' => { false },
                 '1' => { true },
-                'H' => { (result & 0xF0) != (op1 & 0xF0) },
+                'H' => { new_halfcarry },
                 _ => { prev_h }
             },
             match op.flag_c.unwrap_or(' ') {
@@ -546,21 +549,5 @@ mod tests {
 
         // lower nibble of F must be untouched
         assert_eq!(cpu.get_registry_value("F"), 0xF0)
-    }
-
-    #[test]
-    fn test_ld_c_a() {
-        let mut cpu = CPU::new(DummyMMU::new());
-
-        // set next instrucion to POP AF
-        cpu.set_registry_value("A", 0xEE);
-        cpu.set_registry_value("PC", 500);
-        cpu.mmu.values[500] = 0x4f;
-
-        // execute it
-        cpu.step();
-
-        // lower nibble of F must be untouched
-        assert_eq!(cpu.get_registry_value("C"), 0xEE)
     }
 }
