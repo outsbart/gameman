@@ -281,7 +281,8 @@ impl<M: Memory> CPU<M> {
         };
 
         let mut result: u16 = 1;
-        let (mut z, mut n, mut h, mut c) = self.regs.get_flags();
+        let (prev_z, prev_n, prev_h, prev_c) = self.regs.get_flags();
+        let mut new_carry = prev_c;
 
 //        info!("istruzione\t0x{:x}\t{}\top1={:x}\top2={:x}\tinto={}", op.code_as_u8(), op.mnemonic, op1, op2, op.into);
 
@@ -293,7 +294,7 @@ impl<M: Memory> CPU<M> {
             "LD"|"LDD"|"LDH"|"LDI"|"JP" => {
                 result = op1;
                 // only for 0xf8 LD, H and C must be set
-                c = result > 0xFF;
+                new_carry = result > 0xFF;
             }
             "AND" => { result = op1 & op2 }
             "OR" => { result = op1 | op2 }
@@ -314,36 +315,36 @@ impl<M: Memory> CPU<M> {
             }
             "DEC"|"SUB"|"CP" => {
                 result = sub_bytes(op1, op2);
-                c = op2 > op1;
+                new_carry = op2 > op1;
             }
             "INC"|"ADD"|"ADC" => {
                 result = add_bytes(op1, op2);
-                if op.mnemonic == "ADC" { result = add_bytes(result, u16::from(c)); }
-                c = result > 0xFF;
+                if op.mnemonic == "ADC" { result = add_bytes(result, u16::from(prev_c)); }
+                new_carry = result > 0xFF;
             }
             "RL"|"RLA" => {
-                result = ((op1 as u8) << 1 | u8::from(c)) as u16;
-                c = (op1 & 0x80) != 0;
+                result = ((op1 as u8) << 1 | u8::from(prev_c)) as u16;
+                new_carry = (op1 & 0x80) != 0;
             }
             "SLA" => {
                 result = ((op1 as u8) << 1) as u16;
-                c = (op1 & 0x80) != 0;
+                new_carry = (op1 & 0x80) != 0;
             }
             "RLCA" => {
-                c = (op1 & 0x80) != 0;
-                result = ((op1 as u8) << 1 | u8::from(c)) as u16;
+                new_carry = (op1 & 0x80) != 0;
+                result = ((op1 as u8) << 1 | u8::from(new_carry)) as u16;
             }
             "RRCA" => {
-                c = (op1 & 1) != 0;
-                result = ((op1 as u8) >> 1 | (u8::from(c) << 7)) as u16;
+                new_carry = (op1 & 1) != 0;
+                result = ((op1 as u8) >> 1 | (u8::from(new_carry) << 7)) as u16;
             }
             "SRL" => {
                 result = op1 >> 1;
-                c = (op1 & 1) != 0;
+                new_carry = (op1 & 1) != 0;
             }
             "RR"|"RRA" => {
-                result = ((op1 as u8) >> 1 | (u8::from(c) << 7)) as u16;
-                c = (op1 & 1) != 0;
+                result = ((op1 as u8) >> 1 | (u8::from(prev_c) << 7)) as u16;
+                new_carry = (op1 & 1) != 0;
             }
             "SWAP" => { result = swap_nibbles(op1 as u8) }
             "RES" => { result = reset_bit(op1 as u8, op2 as u8); }
@@ -357,30 +358,31 @@ impl<M: Memory> CPU<M> {
         }
 
         // set the flags
-        z = match op.flag_z.unwrap_or(' ') {
-            '0' => { false },
-            '1' => { true },
-            'Z' => { result == 0 },
-            _ => { z }
-        };
-        n = match op.flag_n.unwrap_or(' ') {
-            '0' => { false },
-            '1' => { true },
-            _ => { n }
-        };
-        h = match op.flag_h.unwrap_or(' ') {
-            '0' => { false },
-            '1' => { true },
-            'H' => { (result & 0xF0) != (op1 & 0xF0) },
-            _ => { h }
-        };
-        c = match op.flag_c.unwrap_or(' ') {
-            '0' => { false },
-            '1' => { true },
-            _ => { c }
-        };
-
-        self.regs.set_flags(z, n, h, c);
+        self.regs.set_flags(
+            match op.flag_z.unwrap_or(' ') {
+                '0' => { false },
+                '1' => { true },
+                'Z' => { result == 0 },
+                _ => { prev_z }
+            },
+            match op.flag_n.unwrap_or(' ') {
+                '0' => { false },
+                '1' => { true },
+                _ => { prev_n }
+            },
+            match op.flag_h.unwrap_or(' ') {
+                '0' => { false },
+                '1' => { true },
+                'H' => { (result & 0xF0) != (op1 & 0xF0) },
+                _ => { prev_h }
+            },
+            match op.flag_c.unwrap_or(' ') {
+                '0' => { false },
+                '1' => { true },
+                'C' => { new_carry },
+                _ => { prev_c }
+            }
+        );
 
         // store the operation result
         if op.into != "" { self.store_result(op.into.as_ref(), result, result_is_byte); }
@@ -533,7 +535,7 @@ mod tests {
         let mut cpu = CPU::new(DummyMMU::new());
 
         // push to SP
-        cpu.push(0xFFFF);
+        cpu.push(0xEEFF);
 
         // set next instrucion to POP AF
         cpu.set_registry_value("PC", 500);
@@ -544,5 +546,21 @@ mod tests {
 
         // lower nibble of F must be untouched
         assert_eq!(cpu.get_registry_value("F"), 0xF0)
+    }
+
+    #[test]
+    fn test_ld_c_a() {
+        let mut cpu = CPU::new(DummyMMU::new());
+
+        // set next instrucion to POP AF
+        cpu.set_registry_value("A", 0xEE);
+        cpu.set_registry_value("PC", 500);
+        cpu.mmu.values[500] = 0x4f;
+
+        // execute it
+        cpu.step();
+
+        // lower nibble of F must be untouched
+        assert_eq!(cpu.get_registry_value("C"), 0xEE)
     }
 }
