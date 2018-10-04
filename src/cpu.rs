@@ -281,8 +281,7 @@ impl<M: Memory> CPU<M> {
         };
 
         let mut result: u16 = 1;
-        let c = self.regs.get_flags().3;
-        let mut new_c = c;
+        let (mut z, mut n, mut h, mut c) = self.regs.get_flags();
 
 //        info!("istruzione\t0x{:x}\t{}\top1={:x}\top2={:x}\tinto={}", op.code_as_u8(), op.mnemonic, op1, op2, op.into);
 
@@ -294,7 +293,7 @@ impl<M: Memory> CPU<M> {
             "LD"|"LDD"|"LDH"|"LDI"|"JP" => {
                 result = op1;
                 // only for 0xf8 LD, H and C must be set
-                new_c = result > 0xFF;
+                c = result > 0xFF;
             }
             "AND" => { result = op1 & op2 }
             "OR" => { result = op1 | op2 }
@@ -315,36 +314,36 @@ impl<M: Memory> CPU<M> {
             }
             "DEC"|"SUB"|"CP" => {
                 result = sub_bytes(op1, op2);
-                new_c = op2 > op1;
+                c = op2 > op1;
             }
             "INC"|"ADD"|"ADC" => {
                 result = add_bytes(op1, op2);
                 if op.mnemonic == "ADC" { result = add_bytes(result, u16::from(c)); }
-                new_c = result > 0xFF;
+                c = result > 0xFF;
             }
             "RL"|"RLA" => {
                 result = ((op1 as u8) << 1 | u8::from(c)) as u16;
-                new_c = (op1 & 0x80) != 0;
+                c = (op1 & 0x80) != 0;
             }
             "SLA" => {
                 result = ((op1 as u8) << 1) as u16;
-                new_c = (op1 & 0x80) != 0;
+                c = (op1 & 0x80) != 0;
             }
             "RLCA" => {
-                new_c = (op1 & 0x80) != 0;
-                result = ((op1 as u8) << 1 | u8::from(new_c)) as u16;
+                c = (op1 & 0x80) != 0;
+                result = ((op1 as u8) << 1 | u8::from(c)) as u16;
             }
             "RRCA" => {
-                new_c = (op1 & 1) != 0;
-                result = ((op1 as u8) >> 1 | (u8::from(new_c) << 7)) as u16;
+                c = (op1 & 1) != 0;
+                result = ((op1 as u8) >> 1 | (u8::from(c) << 7)) as u16;
             }
             "SRL" => {
                 result = op1 >> 1;
-                new_c = (op1 & 1) != 0;
+                c = (op1 & 1) != 0;
             }
             "RR"|"RRA" => {
                 result = ((op1 as u8) >> 1 | (u8::from(c) << 7)) as u16;
-                new_c = (op1 & 1) != 0;
+                c = (op1 & 1) != 0;
             }
             "SWAP" => { result = swap_nibbles(op1 as u8) }
             "RES" => { result = reset_bit(op1 as u8, op2 as u8); }
@@ -358,20 +357,30 @@ impl<M: Memory> CPU<M> {
         }
 
         // set the flags
-        // read the flags again from F because POP AF might have changed them!
-        let z = match op.flag_z.unwrap_or(' ') {
-            '0' => { false }, '1' => { true }, 'Z' => { result == 0 }, _ => { self.regs.get_flags().0 }
+        z = match op.flag_z.unwrap_or(' ') {
+            '0' => { false },
+            '1' => { true },
+            'Z' => { result == 0 },
+            _ => { z }
         };
-        let n = match op.flag_n.unwrap_or(' ') {
-            '0' => { false }, '1' => { true }, _ => { self.regs.get_flags().1 }
+        n = match op.flag_n.unwrap_or(' ') {
+            '0' => { false },
+            '1' => { true },
+            _ => { n }
         };
-        let h = match op.flag_h.unwrap_or(' ') {
-            '0' => { false }, '1' => { true },
-            'H' => { (result & 0xF0) != (op1 & 0xF0) }, _ => { self.regs.get_flags().2 }
+        h = match op.flag_h.unwrap_or(' ') {
+            '0' => { false },
+            '1' => { true },
+            'H' => { (result & 0xF0) != (op1 & 0xF0) },
+            _ => { h }
         };
-        let c = match op.flag_c.unwrap_or(' ') {
-            '0' => { false }, '1' => { true }, 'C' => { new_c }, _ => { self.regs.get_flags().3 }
+        c = match op.flag_c.unwrap_or(' ') {
+            '0' => { false },
+            '1' => { true },
+            _ => { c }
         };
+
+        self.regs.set_flags(z, n, h, c);
 
         // store the operation result
         if op.into != "" { self.store_result(op.into.as_ref(), result, result_is_byte); }
@@ -391,8 +400,6 @@ impl<M: Memory> CPU<M> {
             }
             _ => {}
         }
-
-        self.regs.set_flags(z, n, h, c);
 
         // handle interrupts
         let mut interrupt_cycles_t: u8 = 0;
@@ -512,12 +519,30 @@ mod tests {
     fn test_push() {
         let mut cpu = CPU::new(DummyMMU::new());
 
-        cpu.push(0xF0);
-        cpu.push(0x0F);
-        cpu.push(0x11);
+        cpu.push(0xF000);
+        cpu.push(0x0F01);
+        cpu.push(0x1110);
 
-        assert_eq!(cpu.pop(), 0x11);
-        assert_eq!(cpu.pop(), 0x0F);
-        assert_eq!(cpu.pop(), 0xF0);
+        assert_eq!(cpu.pop(), 0x1110);
+        assert_eq!(cpu.pop(), 0x0F01);
+        assert_eq!(cpu.pop(), 0xF000);
+    }
+
+    #[test]
+    fn test_pop_af() {
+        let mut cpu = CPU::new(DummyMMU::new());
+
+        // push to SP
+        cpu.push(0xFFFF);
+
+        // set next instrucion to POP AF
+        cpu.set_registry_value("PC", 500);
+        cpu.mmu.values[500] = 0xF1;
+
+        // execute it
+        cpu.step();
+
+        // lower nibble of F must be untouched
+        assert_eq!(cpu.get_registry_value("F"), 0xF0)
     }
 }
