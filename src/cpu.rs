@@ -7,6 +7,7 @@ use utils::sub_bytes;
 use utils::swap_nibbles;
 use utils::add_words;
 use utils::add_word_with_signed;
+use utils::set_bit;
 
 // Flags bit poisition in the F register
 const ZERO_FLAG: u8 = 7;
@@ -318,9 +319,10 @@ impl<M: Memory> CPU<M> {
                 self.push(value);
                 result = op1;
             }
-            "DEC"|"SUB"|"CP" => {
-                result = sub_bytes(op1, op2);
-                new_carry = op2 > op1;
+            "DEC"|"SUB"|"SBC"|"CP" => {
+                let third_param: u16 = if op.mnemonic == "SBC" { u16::from(prev_c) } else { 0 };
+                let (x, y, z) = sub_bytes(op1, op2, third_param);
+                result = x; new_carry = y; new_halfcarry = z;
             }
             "INC"|"ADD"|"ADC" => {
                 let sum_func = if op2_is_signed {
@@ -336,9 +338,21 @@ impl<M: Memory> CPU<M> {
                 result = ((op1 as u8) << 1 | u8::from(prev_c)) as u16;
                 new_carry = (op1 & 0x80) != 0;
             }
+            "RLC" => {
+                result = (op1 << 1) | (op1 >> 7);
+                new_carry = (op1 & 0x80) != 0
+            }
+            "RRC" => {
+                result = (op1 >> 1) | (op1 << 7);
+                new_carry = (op1 & 1) != 0
+            }
             "SLA" => {
                 result = ((op1 as u8) << 1) as u16;
                 new_carry = (op1 & 0x80) != 0;
+            }
+            "SRA" => {
+                result = ((op1 as u8) >> 1) as u16;
+                new_carry = (op1 & 1) != 0;
             }
             "RLCA" => {
                 new_carry = (op1 & 0x80) != 0;
@@ -356,8 +370,34 @@ impl<M: Memory> CPU<M> {
                 result = ((op1 as u8) >> 1 | (u8::from(prev_c) << 7)) as u16;
                 new_carry = (op1 & 1) != 0;
             }
+            "DAA" => {
+                let mut adjust = 0;
+
+                if prev_h { adjust |= 0x06; }
+
+                if prev_c {
+                    adjust |= 0x60;
+                    new_carry = true;
+                }
+
+                result =
+                    if prev_n {
+                        op1.wrapping_sub(adjust)
+                    } else {
+                        if op1 & 0x0F > 0x09 {
+                            adjust |= 0x06;
+                        }
+
+                        if op1 > 0x99 {
+                            adjust |= 0x60;
+                        }
+
+                        op1.wrapping_add(adjust)
+                    };
+            }
             "SWAP" => { result = swap_nibbles(op1 as u8) }
             "RES" => { result = reset_bit(op1 as u8, op2 as u8); }
+            "SET" => { result = set_bit(op1 as u8, op2 as u8); }
             _ => {
                 panic!("0x{:x}\t{} not implemented yet!", op.code_as_u8(), op.mnemonic);
             }

@@ -66,6 +66,10 @@ pub fn reset_bit(position: u8, number: u8) -> u16 {
     (!(1u16<<position) & number as u16) as u16
 }
 
+pub fn set_bit(position: u8, number: u8) -> u16 {
+    ((1u16<<position) | number as u16) as u16
+}
+
 pub fn add_words(a: u16, b: u16, c: u16) -> (u16, bool, bool) {
     let a = a as u32;
     let b = b as u32;
@@ -96,11 +100,15 @@ pub fn add_bytes(a: u16, b: u16, c: u16) -> (u16, bool, bool) {
     (res, carry, halfcarry)
 }
 
-pub fn sub_bytes(a: u16, b: u16) -> u16 {
+pub fn sub_bytes(a: u16, b: u16, c: u16) -> (u16, bool, bool) {
     let a = a as u32;
     let b = b as u32;
 
-    a.wrapping_sub(b) as u16
+    let res = a.wrapping_sub(b).wrapping_sub(c as u32);
+    let carry = res & 0x100 != 0;
+    let halfcarry = (a ^ b ^ res) & 0x10 != 0;
+
+    (res as u16, carry, halfcarry)
 }
 
 
