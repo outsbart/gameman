@@ -390,6 +390,7 @@ impl<M: Memory> CPU<M> {
 
                         if op1 > 0x99 {
                             adjust |= 0x60;
+                            new_carry = true;
                         }
 
                         op1.wrapping_add(adjust)
