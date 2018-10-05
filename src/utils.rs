@@ -73,6 +73,7 @@ pub fn add_words(a: u16, b: u16, c: u16) -> (u16, bool, bool) {
     let res = a.wrapping_add(b).wrapping_add(c as u32);
     let carry = res & 0x10000 != 0;
     let halfcarry = (a ^ b ^ res) & 0x1000 != 0;
+
     (res as u16, carry, halfcarry)
 }
 
@@ -83,8 +84,6 @@ pub fn add_word_with_signed(a: u16, b: u16, _:u16) -> (u16, bool, bool) {
 
     let carry = (a ^ b ^ res) & 0x100 != 0;
     let halfcarry = (a ^ b ^ res) & 0x10 != 0;
-
-    println!("{} + {} = {}| carry={} hc={}", a, b, res as u32 as u16, carry, halfcarry);
 
     (res as u32 as u16, carry, halfcarry)
 }

@@ -296,8 +296,10 @@ impl<M: Memory> CPU<M> {
             "STOP" => { self.stopped = true }
             "LD"|"LDD"|"LDH"|"LDI"|"JP" => {
                 result = op1;
-                // only for 0xf8 LD, H and C must be set
-                new_carry = result > 0xFF;
+                if op2_is_signed {
+                    let (x, y, z) = add_word_with_signed(op1, op2, 0);
+                    result = x; new_carry = y; new_halfcarry = z;
+                }
             }
             "AND" => { result = op1 & op2 }
             "OR" => { result = op1 | op2 }
