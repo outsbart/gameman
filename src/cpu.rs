@@ -6,6 +6,7 @@ use utils::reset_bit;
 use utils::sub_bytes;
 use utils::swap_nibbles;
 use utils::add_words;
+use utils::add_word_with_signed;
 
 // Flags bit poisition in the F register
 const ZERO_FLAG: u8 = 7;
@@ -224,13 +225,8 @@ impl<M: Memory> CPU<M> {
                 let addr = u16::from(self.fetch_next_word());
                 self.mmu.read_byte(addr) as u16
             }
-            "SP+r8" => {
-                let sp = self.get_registry_value("SP") as i32;
-                let signed = self.fetch_next_byte() as i8 as i32;
-                sp.wrapping_add(signed) as u16
-            }
             "d16"|"a16" => { self.fetch_next_word() }
-            "d8" => { self.fetch_next_byte() as u16 }
+            "d8"|"r8" => { self.fetch_next_byte() as u16 }
             "NZ" => { !self.regs.get_flags().0 as u16 }
             "Z" => { self.regs.get_flags().0 as u16 }
             "NC" => { !self.regs.get_flags().3 as u16 }
@@ -255,13 +251,18 @@ impl<M: Memory> CPU<M> {
     }
 
     pub fn execute(&mut self, op: &Operation) {
+        let mut op2_is_signed: bool = false;
+
         // care, some of this might send PC forward
         let op1 = match op.operand1 {
             Some (ref x) => { self.get_operand_value(x) }
             None => { 0 }
         };
         let op2 = match op.operand2 {
-            Some (ref x) => { self.get_operand_value(x) }
+            Some (ref x) => {
+                op2_is_signed = x == "r8";
+                self.get_operand_value(x)
+            }
             None => { 0 }
         };
         let condition = match op.condition {
@@ -320,7 +321,11 @@ impl<M: Memory> CPU<M> {
                 new_carry = op2 > op1;
             }
             "INC"|"ADD"|"ADC" => {
-                let sum_func = if result_is_byte { add_bytes } else { add_words };
+                let sum_func = if op2_is_signed {
+                    add_word_with_signed
+                } else {
+                    if result_is_byte { add_bytes } else { add_words }
+                };
                 let third_param: u16 = if op.mnemonic == "ADC" { u16::from(prev_c) } else { 0 };
                 let (x, y, z) = sum_func(op1, op2, third_param);
                 result = x; new_carry = y; new_halfcarry = z;
