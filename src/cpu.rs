@@ -351,9 +351,11 @@ impl<M: Memory> CPU<M> {
                 new_carry = (op1 & 0x80) != 0;
             }
             "SRA" => {
-                result = ((op1 as u8) >> 1) as u16;
+                result = (op1 >> 1) | (op1 & 0x80);
                 new_carry = (op1 & 1) != 0;
             }
+            "SCF" => { new_carry = true; }
+            "CCF" => { new_carry = !prev_c; }
             "RLCA" => {
                 new_carry = (op1 & 0x80) != 0;
                 result = ((op1 as u8) << 1 | u8::from(new_carry)) as u16;
