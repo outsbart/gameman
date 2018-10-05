@@ -149,7 +149,7 @@ code,mnemonic,result_is_byte,into,operand1,operand2,condition,bytes,flag_z,flag_
 0x93,SUB,1,A,A,E,,1,Z,1,H,C,4,
 0x94,SUB,1,A,A,H,,1,Z,1,H,C,4,
 0x95,SUB,1,A,A,L,,1,Z,1,H,C,4,
-0x96,SUB,1,A,(HL),(HL),,1,Z,1,H,C,8,
+0x96,SUB,1,A,A,(HL),,1,Z,1,H,C,8,
 0x97,SUB,1,A,A,A,,1,Z,1,H,C,4,
 0x98,SBC,1,A,A,B,,1,Z,1,H,C,4,
 0x99,SBC,1,A,A,C,,1,Z,1,H,C,4,
