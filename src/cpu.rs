@@ -306,7 +306,7 @@ impl<M: Memory> CPU<M> {
             "OR" => { result = op1 | op2 }
             "XOR" => { result = op1 ^ op2; }
             "CPL" => { result = !op1; }
-            "BIT" => { result = !is_bit_set(op1 as u8, op2) as u16; }
+            "BIT" => { result = is_bit_set(op1 as u8, op2) as u16; }
             "PUSH" => { self.push(op1) }
             "POP"|"RET" => { result = self.pop() }
             "RETI" => {
