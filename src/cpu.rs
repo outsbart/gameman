@@ -150,7 +150,7 @@ impl<M: Memory> CPU<M> {
 
         let op: &Operation = fetch_operation(byte, prefixed);
 
-//        info!("0x{:x}\t0x{:x}\t{}\t{:?}\t{:?}", line_number, op.code_as_u8(), op.mnemonic, op.operand1, op.operand2);
+        info!("0x{:x}\t0x{:x}\t{}\t{:?}\t{:?}", line_number, op.code_as_u8(), op.mnemonic, op.operand1, op.operand2);
         self.execute(op);
 
         // add to the clocks
@@ -187,7 +187,7 @@ impl<M: Memory> CPU<M> {
 
     pub fn store_result(&mut self, into: &str, value: u16, is_byte: bool) {
 
-//        info!("Storing into {} value 0x{:x}", into, value);
+        info!("Storing into {} value 0x{:x}", into, value);
         let addr:u16 = match into.as_ref() {
             "BC"|"DE"|"HL"|"PC"|"SP"|"AF"|
             "A"|"B"|"C"|"D"|"E"|"H"|"L" => { return self.set_registry_value(into, value); }
@@ -221,6 +221,10 @@ impl<M: Memory> CPU<M> {
                 let res = u16::from(self.mmu.read_byte(addr));
 //                info!("Reading input from 0x{:x} --> 0b{:b}", addr, res);
                 res
+            }
+            "(C)" => {
+                let addr = 0xFF00 + u16::from(self.get_registry_value("C"));
+                u16::from(self.mmu.read_byte(addr))
             }
             "(a16)" => {
                 let addr = u16::from(self.fetch_next_word());
@@ -273,7 +277,7 @@ impl<M: Memory> CPU<M> {
 
         // early stop
         if condition == 0 {
-//            info!("operation 0x{:x} {} skipped cause condition {}", op.code_as_u8(), op.mnemonic, condition);
+            info!("operation 0x{:x} {} skipped cause condition {}", op.code_as_u8(), op.mnemonic, condition);
             let cycles = op.cycles_no.expect("Operation skipped but cycles_no not set.");
             self.regs.write_byte(REG_T, cycles);
             return;  // todo: go down to the handle the interrupts
@@ -288,7 +292,7 @@ impl<M: Memory> CPU<M> {
         let mut new_carry = prev_c;
         let mut new_halfcarry = prev_h;
 
-//        info!("istruzione\t0x{:x}\t{}\top1={:x}\top2={:x}\tinto={}", op.code_as_u8(), op.mnemonic, op1, op2, op.into);
+        info!("istruzione\t0x{:x}\t{}\top1={:x}\top2={:x}\tinto={}", op.code_as_u8(), op.mnemonic, op1, op2, op.into);
 
         match op.mnemonic.as_ref() {
             "NOP" => {}
