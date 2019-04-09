@@ -1,4 +1,5 @@
 use gpu::GPUMemoriesAccess;
+use link::Link;
 
 pub struct MMU<M: GPUMemoriesAccess> {
     still_bios: bool, bios: [u8; 0x0100],
@@ -8,7 +9,8 @@ pub struct MMU<M: GPUMemoriesAccess> {
 
     pub interrupt_enable: u8, pub interrupt_flags: u8,
 
-    pub gpu: M  // todo: remove pub
+    pub gpu: M,  // todo: remove pub
+    pub link: Link
 }
 
 impl<M: GPUMemoriesAccess> MMU<M> {
@@ -21,7 +23,7 @@ impl<M: GPUMemoriesAccess> MMU<M> {
 
             interrupt_enable: 0, interrupt_flags: 0,
 
-            gpu
+            gpu, link: Link::new()
         }
     }
 
@@ -131,6 +133,12 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                     0x0F00 => {
                         if addr == 0xFFFF { self.interrupt_enable = byte }
                         if addr == 0xFF0F { self.interrupt_flags = byte }
+                        if addr == 0xFF01 { self.zram[(addr & 0x007F) as usize] = byte; return  }  // handle link bus properly
+                        if addr == 0xFF02 {
+                            if byte == 0x81 {
+                                self.link.send(self.zram[(0xFF01 & 0x007F)] as char);
+                            }
+                        }
                         if addr >= 0xFF80 { self.zram[(addr & 0x007F) as usize] = byte; return }
                         if addr >= 0xFF40 { self.gpu.write_byte(addr, byte); return }
                     }
