@@ -1,5 +1,5 @@
-use gpu::GPUMemoriesAccess;
-use link::Link;
+use crate::gpu::GPUMemoriesAccess;
+use crate::link::Link;
 
 pub struct MMU<M: GPUMemoriesAccess> {
     still_bios: bool, bios: [u8; 0x0100],

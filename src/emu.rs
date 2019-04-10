@@ -10,17 +10,17 @@ use self::sdl2::event::Event;
 use self::sdl2::keyboard::Keycode;
 use self::sdl2::pixels::Color;
 
-use cpu::is_bit_set;
+use crate::cpu::is_bit_set;
 
 const SCREEN_WIDTH: u32 = 800;
 const SCREEN_HEIGHT: u32 = 600;
 const CLOCKS_IN_A_FRAME: u32 = 70224;
 const FPS: u32 = 60;
 
-use utils::{load_rom, load_boot_rom};
-use cpu::CPU;
-use gpu::GPU;
-use mem::{MMU, Memory};
+use crate::utils::{load_rom, load_boot_rom};
+use crate::cpu::CPU;
+use crate::gpu::GPU;
+use crate::mem::{MMU, Memory};
 
 
 pub struct Emulator {

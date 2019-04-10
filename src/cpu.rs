@@ -1,13 +1,13 @@
-use mem::Memory;
-use ops::{fetch_operation, Operation};
-use utils::add_bytes;
-use utils::parse_hex;
-use utils::reset_bit;
-use utils::sub_bytes;
-use utils::swap_nibbles;
-use utils::add_words;
-use utils::add_word_with_signed;
-use utils::set_bit;
+use crate::mem::Memory;
+use crate::ops::{fetch_operation, Operation};
+use crate::utils::add_bytes;
+use crate::utils::parse_hex;
+use crate::utils::reset_bit;
+use crate::utils::sub_bytes;
+use crate::utils::swap_nibbles;
+use crate::utils::add_words;
+use crate::utils::add_word_with_signed;
+use crate::utils::set_bit;
 
 // Flags bit poisition in the F register
 const ZERO_FLAG: u8 = 7;

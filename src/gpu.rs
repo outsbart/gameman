@@ -1,4 +1,4 @@
-use cpu::is_bit_set;
+use crate::cpu::is_bit_set;
 
 /// Expose the memories of the GPU
 pub trait GPUMemoriesAccess {
