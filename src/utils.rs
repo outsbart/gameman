@@ -1,7 +1,6 @@
-use std::io::Read;
 use std::fs::File;
+use std::io::Read;
 use std::mem;
-
 
 pub fn load_rom(path: &str) -> [u8; 0x8000] {
     let mut boot_rom: [u8; 0x8000] = [0; 0x8000];
@@ -9,38 +8,35 @@ pub fn load_rom(path: &str) -> [u8; 0x8000] {
     match File::open(path) {
         Ok(mut file) => {
             match file.read_exact(&mut boot_rom[..]) {
-                Ok(_) => { return boot_rom }
-                Err(_) => { panic!("couldnt read the rom into the buffer!") }
+                Ok(_) => return boot_rom,
+                Err(_) => panic!("couldnt read the rom into the buffer!"),
             };
         }
-        Err(_) => { panic!("couldnt open the rom file") }
+        Err(_) => panic!("couldnt open the rom file"),
     }
 }
 
-pub fn load_boot_rom() -> [u8; 0x0100] { // TODO: make a generic function for loading roms
+pub fn load_boot_rom() -> [u8; 0x0100] {
+    // TODO: make a generic function for loading roms
     let mut boot_rom: [u8; 0x0100] = [0; 0x0100];
 
     match File::open("roms/DMG_ROM.bin") {
         Ok(mut file) => {
             match file.read_exact(&mut boot_rom[..]) {
-                Ok(_) => { return boot_rom }
-                Err(_) => { panic!("couldnt read the boot rom into the buffer!") }
+                Ok(_) => return boot_rom,
+                Err(_) => panic!("couldnt read the boot rom into the buffer!"),
             };
         }
-        Err(_) => { panic!("couldnt open the boot rom file") }
+        Err(_) => panic!("couldnt open the boot rom file"),
     }
 }
 
 pub fn u16_to_i16(unsigned: u16) -> i16 {
-    unsafe {
-        mem::transmute::<u16, i16>(unsigned)
-    }
+    unsafe { mem::transmute::<u16, i16>(unsigned) }
 }
 
 pub fn u8_to_i8(unsigned: u8) -> i8 {
-    unsafe {
-        mem::transmute::<u8, i8>(unsigned)
-    }
+    unsafe { mem::transmute::<u8, i8>(unsigned) }
 }
 
 pub fn rotate_left(unsigned: u8) -> u16 {
@@ -63,11 +59,11 @@ pub fn parse_hex(number: &str) -> u16 {
 }
 
 pub fn reset_bit(position: u8, number: u8) -> u16 {
-    (!(1u16<<position) & number as u16) as u16
+    (!(1u16 << position) & number as u16) as u16
 }
 
 pub fn set_bit(position: u8, number: u8) -> u16 {
-    ((1u16<<position) | number as u16) as u16
+    ((1u16 << position) | number as u16) as u16
 }
 
 pub fn add_words(a: u16, b: u16, c: u16) -> (u16, bool, bool) {
@@ -81,7 +77,7 @@ pub fn add_words(a: u16, b: u16, c: u16) -> (u16, bool, bool) {
     (res as u16, carry, halfcarry)
 }
 
-pub fn add_word_with_signed(a: u16, b: u16, _:u16) -> (u16, bool, bool) {
+pub fn add_word_with_signed(a: u16, b: u16, _: u16) -> (u16, bool, bool) {
     let a = a as i32;
     let b = b as u8 as i8 as i32;
     let res = a.wrapping_add(b);
@@ -110,7 +106,6 @@ pub fn sub_bytes(a: u16, b: u16, c: u16) -> (u16, bool, bool) {
 
     (res as u16, carry, halfcarry)
 }
-
 
 #[allow(overflowing_literals)]
 #[cfg(test)]
@@ -163,7 +158,6 @@ mod tests {
         assert_eq!(reset_bit(5, 0b1111_1111), 0b0000_0000_1101_1111);
         assert_eq!(reset_bit(6, 0b1111_1111), 0b0000_0000_1011_1111);
         assert_eq!(reset_bit(7, 0b1111_1111), 0b0000_0000_0111_1111);
-
     }
 
     #[test]

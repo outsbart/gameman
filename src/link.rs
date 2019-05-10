@@ -1,19 +1,22 @@
 /// Link cable
 
 pub struct Link {
-    buffer_out: [char; 256], buffer_index: usize,
+    buffer_out: [char; 256],
+    buffer_index: usize,
 }
 
 impl Link {
     pub fn new() -> Self {
-        Link { buffer_out: [char::from(32); 256], buffer_index: 0}
+        Link {
+            buffer_out: [char::from(32); 256],
+            buffer_index: 0,
+        }
     }
 
     pub fn send(&mut self, value: char) {
         warn!("New char on the serial port: {}", value);
         self.buffer_out[self.buffer_index] = value;
         self.buffer_index = (self.buffer_index + 1) % 256;
-
     }
 
     pub fn get_buffer(&self) -> [char; 256] {
@@ -45,6 +48,5 @@ mod tests {
         assert_eq!(link.get_buffer()[0], 'w');
         assert_eq!(link.get_buffer()[1], 'o');
         assert_eq!(link.get_buffer()[2], 'w');
-
     }
 }

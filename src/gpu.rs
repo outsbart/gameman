@@ -13,7 +13,7 @@ pub trait GPUMemoriesAccess {
 pub struct GPU {
     vram: [u8; 8192],
     oam: [u8; 256],
-    buffer: [u8; 160 * 144],  // every pixel can have 4 values (4 shades of grey)
+    buffer: [u8; 160 * 144], // every pixel can have 4 values (4 shades of grey)
 
     modeclock: u16,
     mode: u8,
@@ -22,29 +22,45 @@ pub struct GPU {
     control: u8,
     scroll_x: u8,
     scroll_y: u8,
-    palette: u8
+    palette: u8,
 }
 
 impl GPUMemoriesAccess for GPU {
-    fn read_oam(&mut self, addr: u16) -> u8 { self.oam[addr as usize] }
-    fn write_oam(&mut self, addr: u16, byte: u8) { self.oam[addr as usize] = byte }
-    fn read_vram(&mut self, addr: u16) -> u8 { self.vram[addr as usize] }
-    fn write_vram(&mut self, addr: u16, byte: u8) { self.vram[addr as usize] = byte }
+    fn read_oam(&mut self, addr: u16) -> u8 {
+        self.oam[addr as usize]
+    }
+    fn write_oam(&mut self, addr: u16, byte: u8) {
+        self.oam[addr as usize] = byte
+    }
+    fn read_vram(&mut self, addr: u16) -> u8 {
+        self.vram[addr as usize]
+    }
+    fn write_vram(&mut self, addr: u16, byte: u8) {
+        self.vram[addr as usize] = byte
+    }
     fn read_byte(&mut self, addr: u16) -> u8 {
         match addr {
-            0xFF40 => { self.control }
-            0xFF42 => { self.scroll_y }
-            0xFF43 => { self.scroll_x }
-            0xFF44 => { self.line }
-            _ => { 0 }
+            0xFF40 => self.control,
+            0xFF42 => self.scroll_y,
+            0xFF43 => self.scroll_x,
+            0xFF44 => self.line,
+            _ => 0,
         }
     }
     fn write_byte(&mut self, addr: u16, byte: u8) {
         match addr {
-            0xFF40 => { self.control = byte; }
-            0xFF42 => { self.scroll_y = byte; }
-            0xFF43 => { self.scroll_x = byte; }
-            0xFF47 => { self.palette = byte; }
+            0xFF40 => {
+                self.control = byte;
+            }
+            0xFF42 => {
+                self.scroll_y = byte;
+            }
+            0xFF43 => {
+                self.scroll_x = byte;
+            }
+            0xFF47 => {
+                self.palette = byte;
+            }
             _ => {}
         }
     }
@@ -52,31 +68,46 @@ impl GPUMemoriesAccess for GPU {
 
 impl GPU {
     pub fn new() -> Self {
-        GPU { vram: [0; 8192], oam: [0; 256], buffer: [0; 160 * 144], modeclock: 0, mode: 2, line: 0, scroll_x: 0, scroll_y: 0, palette: 0, control: 0 }
+        GPU {
+            vram: [0; 8192],
+            oam: [0; 256],
+            buffer: [0; 160 * 144],
+            modeclock: 0,
+            mode: 2,
+            line: 0,
+            scroll_x: 0,
+            scroll_y: 0,
+            palette: 0,
+            control: 0,
+        }
     }
 
-    pub fn get_buffer(&self) -> &[u8; 160*144] {
+    pub fn get_buffer(&self) -> &[u8; 160 * 144] {
         return &self.buffer;
     }
 
     // draws a line on the buffer
-    pub fn render_scan_to_buffer(&mut self) {  // todo: reuse some calculations
+    pub fn render_scan_to_buffer(&mut self) {
+        // todo: reuse some calculations
         let (tiles_in_a_tilemap_row, tiles_in_a_screen_row, tile_size) = (32, 20, 8);
         let line_to_draw: usize = (self.line + self.scroll_y) as usize;
-        let tilemap_row: usize = line_to_draw / tile_size;  //todo: go back on top if line > 256
+        let tilemap_row: usize = line_to_draw / tile_size; //todo: go back on top if line > 256
         let pixel_row: usize = line_to_draw % tile_size;
-        
+
         let tilemap0_offset = 0x9800 - 0x8000;
 
-        for tile in 0..20 {  // todo: right now only draws the first 20 tiles from the left, use scroll X
-            let tilemap_index = tilemap0_offset + (tilemap_row * tiles_in_a_tilemap_row + tile) as usize;
+        for tile in 0..20 {
+            // todo: right now only draws the first 20 tiles from the left, use scroll X
+            let tilemap_index =
+                tilemap0_offset + (tilemap_row * tiles_in_a_tilemap_row + tile) as usize;
             let pos = self.vram[tilemap_index];
-            
-            let tile_in_tileset: usize = (2*tile_size* (pos as usize) + (pixel_row as usize) *2) as usize;
+
+            let tile_in_tileset: usize =
+                (2 * tile_size * (pos as usize) + (pixel_row as usize) * 2) as usize;
 
             // a tile pixel line is encoded in two consecutive bytes
             let byte_1 = self.vram[tile_in_tileset];
-            let byte_2 = self.vram[tile_in_tileset+1];
+            let byte_2 = self.vram[tile_in_tileset + 1];
 
             for pixel in 0..8u8 {
                 let ix = 7 - pixel;
@@ -84,7 +115,9 @@ impl GPU {
                 let low_bit: u8 = is_bit_set(ix, byte_1 as u16) as u8;
 
                 let color: u8 = (high_bit << 1) + low_bit;
-                let index: usize = (self.line as usize * tiles_in_a_screen_row * tile_size) + (tile as usize) *tile_size + pixel as usize;
+                let index: usize = (self.line as usize * tiles_in_a_screen_row * tile_size)
+                    + (tile as usize) * tile_size
+                    + pixel as usize;
 
                 self.buffer[index] = color;
             }
@@ -125,8 +158,7 @@ impl GPU {
                     if self.line == 143 {
                         // enter vblank mode
                         self.mode = 1;
-                    }
-                    else {
+                    } else {
                         self.mode = 2;
                     }
                 }
@@ -146,13 +178,12 @@ impl GPU {
                     }
                 }
             }
-            _ => { panic!("Sorry what?") }
+            _ => panic!("Sorry what?"),
         }
 
         vblank_interrupt
     }
 }
-
 
 #[cfg(test)]
 mod tests {

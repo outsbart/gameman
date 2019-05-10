@@ -2,28 +2,37 @@ use crate::gpu::GPUMemoriesAccess;
 use crate::link::Link;
 
 pub struct MMU<M: GPUMemoriesAccess> {
-    still_bios: bool, bios: [u8; 0x0100],
+    still_bios: bool,
+    bios: [u8; 0x0100],
 
-    rom: [u8; 0x8000], wram: [u8; 0x2000],   // second half of rom is swappable (aka rom banking)
-    eram: [u8; 0x2000], zram: [u8; 0x0080],
+    rom: [u8; 0x8000],
+    wram: [u8; 0x2000], // second half of rom is swappable (aka rom banking)
+    eram: [u8; 0x2000],
+    zram: [u8; 0x0080],
 
-    pub interrupt_enable: u8, pub interrupt_flags: u8,
+    pub interrupt_enable: u8,
+    pub interrupt_flags: u8,
 
-    pub gpu: M,  // todo: remove pub
-    pub link: Link
+    pub gpu: M, // todo: remove pub
+    pub link: Link,
 }
 
 impl<M: GPUMemoriesAccess> MMU<M> {
     pub fn new(gpu: M) -> MMU<M> {
         MMU {
-            still_bios: false, bios: [0; 0x0100],
+            still_bios: false,
+            bios: [0; 0x0100],
 
-            rom: [0; 0x8000], wram: [0; 0x2000],
-            eram: [0; 0x2000], zram: [0; 0x0080],
+            rom: [0; 0x8000],
+            wram: [0; 0x2000],
+            eram: [0; 0x2000],
+            zram: [0; 0x0080],
 
-            interrupt_enable: 0, interrupt_flags: 0,
+            interrupt_enable: 0,
+            interrupt_flags: 0,
 
-            gpu, link: Link::new()
+            gpu,
+            link: Link::new(),
         }
     }
 
@@ -32,9 +41,10 @@ impl<M: GPUMemoriesAccess> MMU<M> {
         self.still_bios = true; // TODO: move this into a reset fn
     }
 
-    pub fn set_rom(&mut self, rom: [u8; 0x8000]) { self.rom = rom; }
+    pub fn set_rom(&mut self, rom: [u8; 0x8000]) {
+        self.rom = rom;
+    }
 }
-
 
 pub trait Memory {
     fn read_byte(&mut self, addr: u16) -> u8;
@@ -50,7 +60,6 @@ pub trait Memory {
     }
 }
 
-
 impl<M: GPUMemoriesAccess> Memory for MMU<M> {
     fn read_byte(&mut self, addr: u16) -> u8 {
         // TODO: once everything works and is tested, refactor using actual ranges
@@ -59,104 +68,127 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
             0x0000 => {
                 if self.still_bios {
                     if addr < 0x0100 {
-                        return self.bios[addr as usize]
-                    }
-                    else if addr == 0x0100 {
+                        return self.bios[addr as usize];
+                    } else if addr == 0x0100 {
                         self.still_bios = false;
                     }
                 }
                 self.rom[addr as usize]
             }
 
-            0x1000...0x3000 => { self.rom[addr as usize] }                // ROM 0
-            0x4000...0x7000 => { self.rom[addr as usize] }                // TODO: banking
-            0x8000 | 0x9000 => { self.gpu.read_vram(addr &0x1FFF) } // VRAM
-            0xA000 | 0xB000 => { self.eram[(addr &0x1FFF) as usize] }     // External RAM
-            0xC000...0xE000 => { self.wram[(addr &0x1FFF) as usize] }     // Working RAM
+            0x1000...0x3000 => self.rom[addr as usize], // ROM 0
+            0x4000...0x7000 => self.rom[addr as usize], // TODO: banking
+            0x8000 | 0x9000 => self.gpu.read_vram(addr & 0x1FFF), // VRAM
+            0xA000 | 0xB000 => self.eram[(addr & 0x1FFF) as usize], // External RAM
+            0xC000...0xE000 => self.wram[(addr & 0x1FFF) as usize], // Working RAM
 
             0xF000 => {
                 match addr & 0x0F00 {
-                    0x0000...0x0D00 => { self.wram[(addr & 0x1FFF) as usize] } // Working RAM echo
+                    0x0000...0x0D00 => self.wram[(addr & 0x1FFF) as usize], // Working RAM echo
 
                     // GPU OAM
                     0x0E00 => {
-                        if addr < 0xFEA0 { self.gpu.read_oam(addr & 0x00FF) }
-                        else { 0 }
+                        if addr < 0xFEA0 {
+                            self.gpu.read_oam(addr & 0x00FF)
+                        } else {
+                            0
+                        }
                     }
 
                     // Zero page
                     0x0F00 => {
-                        if addr == 0xFFFF { self.interrupt_enable }
-                        else if addr == 0xFF0F { self.interrupt_flags }
-                        else if addr >= 0xFF80 { self.zram[(addr & 0x007F) as usize] }
-                        else if addr >= 0xFF40 { self.gpu.read_byte(addr) }
-                        else {
+                        if addr == 0xFFFF {
+                            self.interrupt_enable
+                        } else if addr == 0xFF0F {
+                            self.interrupt_flags
+                        } else if addr >= 0xFF80 {
+                            self.zram[(addr & 0x007F) as usize]
+                        } else if addr >= 0xFF40 {
+                            self.gpu.read_byte(addr)
+                        } else {
                             // io
                             match addr & 0x3F {
-                                0x0 => { 0xFF }
-                                _ => 0
+                                0x0 => 0xFF,
+                                _ => 0,
                             }
                         }
                     }
 
-                    _ => {
-                        panic!("Unhandled memory access")
-                    }
+                    _ => panic!("Unhandled memory access"),
                 }
             }
 
-            _ => {
-                panic!("Unhandled memory access")
-            }
-
+            _ => panic!("Unhandled memory access"),
         }
     }
     fn write_byte(&mut self, addr: u16, byte: u8) {
         // TODO: once everything works and is tested, refactor using actual ranges
         match addr & 0xF000 {
-            0x0000...0x3000 => { return }                // BIOS AND ROM 0
-            0x4000...0x7000 => { return }                // ROM 1
-            0x8000 | 0x9000 => { self.gpu.write_vram(addr &0x1FFF, byte); return } // VRAM
-            0xA000 | 0xB000 => { self.eram[(addr &0x1FFF) as usize] = byte; return }     // External RAM
-            0xC000...0xE000 => { self.wram[(addr &0x1FFF) as usize] = byte; return }     // Working RAM
+            0x0000...0x3000 => return, // BIOS AND ROM 0
+            0x4000...0x7000 => return, // ROM 1
+            0x8000 | 0x9000 => {
+                self.gpu.write_vram(addr & 0x1FFF, byte);
+                return;
+            } // VRAM
+            0xA000 | 0xB000 => {
+                self.eram[(addr & 0x1FFF) as usize] = byte;
+                return;
+            } // External RAM
+            0xC000...0xE000 => {
+                self.wram[(addr & 0x1FFF) as usize] = byte;
+                return;
+            } // Working RAM
 
             0xF000 => {
                 match addr & 0x0F00 {
-                    0x0000...0x0D00 => { self.wram[(addr & 0x1FFF) as usize] = byte; return } // Working RAM echo
+                    0x0000...0x0D00 => {
+                        self.wram[(addr & 0x1FFF) as usize] = byte;
+                        return;
+                    } // Working RAM echo
 
                     // GPU OAM
                     0x0E00 => {
-                        if addr < 0xFEA0 { self.gpu.write_oam(addr & 0x00FF, byte); return }
+                        if addr < 0xFEA0 {
+                            self.gpu.write_oam(addr & 0x00FF, byte);
+                            return;
+                        }
                     }
 
                     // Zero page
                     0x0F00 => {
-                        if addr == 0xFFFF { self.interrupt_enable = byte }
-                        if addr == 0xFF0F { self.interrupt_flags = byte }
-                        if addr == 0xFF01 { self.zram[(addr & 0x007F) as usize] = byte; return  }  // handle link bus properly
+                        if addr == 0xFFFF {
+                            self.interrupt_enable = byte
+                        }
+                        if addr == 0xFF0F {
+                            self.interrupt_flags = byte
+                        }
+                        if addr == 0xFF01 {
+                            self.zram[(addr & 0x007F) as usize] = byte;
+                            return;
+                        } // handle link bus properly
                         if addr == 0xFF02 {
                             if byte == 0x81 {
                                 self.link.send(self.zram[(0xFF01 & 0x007F)] as char);
                             }
                         }
-                        if addr >= 0xFF80 { self.zram[(addr & 0x007F) as usize] = byte; return }
-                        if addr >= 0xFF40 { self.gpu.write_byte(addr, byte); return }
+                        if addr >= 0xFF80 {
+                            self.zram[(addr & 0x007F) as usize] = byte;
+                            return;
+                        }
+                        if addr >= 0xFF40 {
+                            self.gpu.write_byte(addr, byte);
+                            return;
+                        }
                     }
 
-                    _ => {
-                        panic!("Unhandled memory write")
-                    }
+                    _ => panic!("Unhandled memory write"),
                 }
             }
 
-            _ => {
-                panic!("Unhandled memory write")
-            }
-
+            _ => panic!("Unhandled memory write"),
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -164,13 +196,25 @@ mod tests {
 
     struct DummyGPU {
         vram: [u8; 65536],
-        oam:  [u8; 65536],
-        registers: [u8; 65536]
+        oam: [u8; 65536],
+        registers: [u8; 65536],
     }
 
     impl DummyGPU {
-        fn new() -> DummyGPU { DummyGPU { vram: [0; 65536], oam: [0; 65536], registers: [0; 65536] } }
-        fn with(vram: [u8; 65536], oam: [u8; 65536]) -> DummyGPU { DummyGPU { vram, oam, registers: [0; 65536] } }
+        fn new() -> DummyGPU {
+            DummyGPU {
+                vram: [0; 65536],
+                oam: [0; 65536],
+                registers: [0; 65536],
+            }
+        }
+        fn with(vram: [u8; 65536], oam: [u8; 65536]) -> DummyGPU {
+            DummyGPU {
+                vram,
+                oam,
+                registers: [0; 65536],
+            }
+        }
     }
 
     impl GPUMemoriesAccess for DummyGPU {
@@ -181,13 +225,17 @@ mod tests {
             self.vram[addr as usize] = byte;
         }
         fn read_oam(&mut self, addr: u16) -> u8 {
-        self.oam[addr as usize]
-    }
+            self.oam[addr as usize]
+        }
         fn write_oam(&mut self, addr: u16, byte: u8) {
             self.oam[addr as usize] = byte;
         }
-        fn read_byte(&mut self, addr: u16) -> u8 { self.registers[addr as usize] }
-        fn write_byte(&mut self, addr: u16, byte: u8) { self.registers[addr as usize] = byte; }
+        fn read_byte(&mut self, addr: u16) -> u8 {
+            self.registers[addr as usize]
+        }
+        fn write_byte(&mut self, addr: u16, byte: u8) {
+            self.registers[addr as usize] = byte;
+        }
     }
 
     #[test]
@@ -266,9 +314,9 @@ mod tests {
         mmu.write_byte(0xB000, 1);
         mmu.write_byte(0xBFFF, 1);
 
-        assert_eq!(mmu.eram[0xA000 &0x1FFF], 1);
-        assert_eq!(mmu.eram[0xB000 &0x1FFF], 1);
-        assert_eq!(mmu.eram[0xBFFF &0x1FFF], 1);
+        assert_eq!(mmu.eram[0xA000 & 0x1FFF], 1);
+        assert_eq!(mmu.eram[0xB000 & 0x1FFF], 1);
+        assert_eq!(mmu.eram[0xBFFF & 0x1FFF], 1);
     }
 
     /// test succesful mapping for wram access
@@ -299,10 +347,10 @@ mod tests {
         mmu.write_byte(0xE000, 1);
         mmu.write_byte(0xFDFF, 1);
 
-        assert_eq!(mmu.wram[0xC000 &0x1FFF], 1);
-        assert_eq!(mmu.wram[0xD000 &0x1FFF], 1);
-        assert_eq!(mmu.wram[0xE000 &0x1FFF], 1);
-        assert_eq!(mmu.wram[0xFDFF &0x1FFF], 1);
+        assert_eq!(mmu.wram[0xC000 & 0x1FFF], 1);
+        assert_eq!(mmu.wram[0xD000 & 0x1FFF], 1);
+        assert_eq!(mmu.wram[0xE000 & 0x1FFF], 1);
+        assert_eq!(mmu.wram[0xFDFF & 0x1FFF], 1);
     }
 
     /// test succesful mapping for zero ram access
@@ -329,9 +377,9 @@ mod tests {
         mmu.write_byte(0xFFB0, 1);
         mmu.write_byte(0xFFFF, 1);
 
-        assert_eq!(mmu.zram[0xFF80 &0x007F], 1);
-        assert_eq!(mmu.zram[0xFFB0 &0x007F], 1);
-        assert_eq!(mmu.zram[0xFFFF &0x007F], 1);
+        assert_eq!(mmu.zram[0xFF80 & 0x007F], 1);
+        assert_eq!(mmu.zram[0xFFB0 & 0x007F], 1);
+        assert_eq!(mmu.zram[0xFFFF & 0x007F], 1);
     }
 
     /// test succesful mapping for gpu vram access

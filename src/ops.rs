@@ -1,9 +1,9 @@
 use csv;
+use serde_derive::Deserialize;
 use std::collections::HashMap;
 use std::fs::File;
-use serde_derive::Deserialize;
 
-#[derive(Debug,Deserialize,Clone)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Operation {
     pub code: String,
     pub mnemonic: String,
@@ -18,11 +18,11 @@ pub struct Operation {
     pub flag_h: Option<char>,
     pub flag_c: Option<char>,
     pub cycles_ok: u8,
-    pub cycles_no: Option<u8>
+    pub cycles_no: Option<u8>,
 }
 
 lazy_static! {
-    static ref cpu_ops: Ops = Ops::new();
+    static ref CPU_OPS: Ops = Ops::new();
 }
 
 impl Operation {
@@ -34,12 +34,15 @@ impl Operation {
 
 struct Ops {
     ops: HashMap<u8, Operation>,
-    cb_ops: HashMap<u8, Operation>
+    cb_ops: HashMap<u8, Operation>,
 }
 
 impl Ops {
     pub fn new() -> Ops {
-        let mut ops = Ops { ops: HashMap::new(), cb_ops: HashMap::new() };
+        let mut ops = Ops {
+            ops: HashMap::new(),
+            cb_ops: HashMap::new(),
+        };
         ops.load_ops();
         ops
     }
@@ -60,16 +63,23 @@ impl Ops {
 }
 
 pub fn fetch_operation(byte: u8, prefixed: bool) -> &'static Operation {
-    let map = if prefixed { &cpu_ops.cb_ops } else { &cpu_ops.ops };
+    let map = if prefixed {
+        &CPU_OPS.cb_ops
+    } else {
+        &CPU_OPS.ops
+    };
     match map.get(&byte) {
-        Some(v) => { v }
+        Some(v) => v,
         None => {
-            warn!("Missing {}prefixed operation {:x}! Returning NOP", if prefixed { "" } else { "un" }, byte);
+            warn!(
+                "Missing {}prefixed operation {:x}! Returning NOP",
+                if prefixed { "" } else { "un" },
+                byte
+            );
             map.get(&0x0).unwrap()
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
