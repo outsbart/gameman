@@ -1,13 +1,13 @@
 use crate::mem::Memory;
 use crate::ops::{fetch_operation, Operation};
 use crate::utils::add_bytes;
+use crate::utils::add_word_with_signed;
+use crate::utils::add_words;
 use crate::utils::parse_hex;
 use crate::utils::reset_bit;
+use crate::utils::set_bit;
 use crate::utils::sub_bytes;
 use crate::utils::swap_nibbles;
-use crate::utils::add_words;
-use crate::utils::add_word_with_signed;
-use crate::utils::set_bit;
 
 // Flags bit poisition in the F register
 const ZERO_FLAG: u8 = 7;
@@ -34,9 +34,10 @@ const REG_CPC: u16 = 11;
 const REG_M: u16 = 12;
 const REG_T: u16 = 13;
 
-
-pub struct Clocks {  // todo: remove pub
-    m: u32, pub t: u32  // TODO: remove pub
+pub struct Clocks {
+    // todo: remove pub
+    m: u32,
+    pub t: u32, // TODO: remove pub
 }
 
 impl Clocks {
@@ -45,23 +46,33 @@ impl Clocks {
     }
 }
 
-struct Regs { regs: [u8; 14] }
-
+struct Regs {
+    regs: [u8; 14],
+}
 
 impl Regs {
-    fn new() -> Regs { Regs { regs: [0; 14] } }
+    fn new() -> Regs {
+        Regs { regs: [0; 14] }
+    }
 
     pub fn get_flags(&mut self) -> (bool, bool, bool, bool) {
         let f = u16::from(self.read_byte(REG_F));
-        (is_bit_set(ZERO_FLAG, f), is_bit_set(OPERATION_FLAG, f), is_bit_set(HALF_CARRY_FLAG, f), is_bit_set(CARRY_FLAG, f))
+        (
+            is_bit_set(ZERO_FLAG, f),
+            is_bit_set(OPERATION_FLAG, f),
+            is_bit_set(HALF_CARRY_FLAG, f),
+            is_bit_set(CARRY_FLAG, f),
+        )
     }
 
     pub fn set_flags(&mut self, z: bool, n: bool, h: bool, c: bool) {
-        let value = ((z as u8) << ZERO_FLAG) | ((n as u8) << OPERATION_FLAG) | ((h as u8) << HALF_CARRY_FLAG) | ((c as u8) << CARRY_FLAG);
+        let value = ((z as u8) << ZERO_FLAG)
+            | ((n as u8) << OPERATION_FLAG)
+            | ((h as u8) << HALF_CARRY_FLAG)
+            | ((c as u8) << CARRY_FLAG);
         self.write_byte(REG_F, value)
     }
 }
-
 
 pub fn is_bit_set(pos: u8, value: u16) -> bool {
     value & (1u16 << pos) != 0
@@ -73,16 +84,18 @@ pub trait ByteStream {
 }
 
 impl Memory for Regs {
-    fn read_byte(&mut self, addr: u16) -> u8 { self.regs[addr as usize] }
+    fn read_byte(&mut self, addr: u16) -> u8 {
+        self.regs[addr as usize]
+    }
     fn read_word(&mut self, addr: u16) -> u16 {
-        (self.read_byte(addr+1) as u16) | ((self.read_byte(addr) as u16) << 8)
+        (self.read_byte(addr + 1) as u16) | ((self.read_byte(addr) as u16) << 8)
     }
     fn write_byte(&mut self, addr: u16, byte: u8) {
         // The F register lower nibble is always 0, you cant overwrite it.
         self.regs[addr as usize] = if addr != REG_F { byte } else { byte & 0xF0 };
     }
     fn write_word(&mut self, addr: u16, word: u16) -> () {
-        self.write_byte(addr+1, (word & 0x00FF) as u8);
+        self.write_byte(addr + 1, (word & 0x00FF) as u8);
         self.write_byte(addr, ((word & 0xFF00) >> 8) as u8);
     }
 }
@@ -92,7 +105,7 @@ pub struct CPU<M: Memory> {
     regs: Regs,
     pub mmu: M,
     interrupt_master_enable: bool,
-    stopped: bool
+    stopped: bool,
 }
 
 impl<M: Memory> ByteStream for CPU<M> {
@@ -106,7 +119,13 @@ impl<M: Memory> ByteStream for CPU<M> {
 
 impl<M: Memory> CPU<M> {
     pub fn new(mmu: M) -> CPU<M> {
-        let mut cpu = CPU { clks: Clocks::new(), regs: Regs::new(), mmu, interrupt_master_enable: false, stopped: false };
+        let mut cpu = CPU {
+            clks: Clocks::new(),
+            regs: Regs::new(),
+            mmu,
+            interrupt_master_enable: false,
+            stopped: false,
+        };
         cpu.reset();
         cpu
     }
@@ -150,7 +169,14 @@ impl<M: Memory> CPU<M> {
 
         let op: &Operation = fetch_operation(byte, prefixed);
 
-        info!("0x{:x}\t0x{:x}\t{}\t{:?}\t{:?}", line_number, op.code_as_u8(), op.mnemonic, op.operand1, op.operand2);
+        info!(
+            "0x{:x}\t0x{:x}\t{}\t{:?}\t{:?}",
+            line_number,
+            op.code_as_u8(),
+            op.mnemonic,
+            op.operand1,
+            op.operand2
+        );
         self.execute(op);
 
         // add to the clocks
@@ -162,64 +188,81 @@ impl<M: Memory> CPU<M> {
 
     fn registry_name_to_index(&mut self, registry: &str) -> u16 {
         match registry {
-            "A"|"AF" => { 0 }, "F" => { 1 }, "B"|"BC" => { 2 }, "C" => { 3 }, "D"|"DE" => { 4 }
-            "E" => { 5 }, "H" => { 6 }, "HL" => { 6 }, "L" => { 7 }, "SP" => { 8 }, "S" => { 8 }
-            "PSP" => { 9 }, "PC" => { 10 }, "CPC" => { 11 }, "M" => { 12 }, "T" => { 13 }
-            _ => { panic!("What kind of register is {}??", registry) }
+            "A" | "AF" => 0,
+            "F" => 1,
+            "B" | "BC" => 2,
+            "C" => 3,
+            "D" | "DE" => 4,
+            "E" => 5,
+            "H" => 6,
+            "HL" => 6,
+            "L" => 7,
+            "SP" => 8,
+            "S" => 8,
+            "PSP" => 9,
+            "PC" => 10,
+            "CPC" => 11,
+            "M" => 12,
+            "T" => 13,
+            _ => panic!("What kind of register is {}??", registry),
         }
     }
 
     pub fn get_registry_value(&mut self, registry: &str) -> u16 {
         let index: u16 = self.registry_name_to_index(registry);
         match registry.len() {
-            1 => { self.regs.read_byte(index) as u16 }
-            _ => { self.regs.read_word(index) }
+            1 => self.regs.read_byte(index) as u16,
+            _ => self.regs.read_word(index),
         }
     }
 
     pub fn set_registry_value(&mut self, registry: &str, value: u16) {
         let index: u16 = self.registry_name_to_index(registry);
         match registry.len() {
-            1 => { self.regs.write_byte(index, value as u8) }
-            _ => { self.regs.write_word(index, value) }
+            1 => self.regs.write_byte(index, value as u8),
+            _ => self.regs.write_word(index, value),
         }
     }
 
     pub fn store_result(&mut self, into: &str, value: u16, is_byte: bool) {
-
         info!("Storing into {} value 0x{:x}", into, value);
-        let addr:u16 = match into.as_ref() {
-            "BC"|"DE"|"HL"|"PC"|"SP"|"AF"|
-            "A"|"B"|"C"|"D"|"E"|"H"|"L" => { return self.set_registry_value(into, value); }
-            "(BC)"|"(DE)"|"(HL)"|"(PC)"|"(SP)" => {
-                let reg = into[1..into.len()-1].as_ref();
+        let addr: u16 = match into.as_ref() {
+            "BC" | "DE" | "HL" | "PC" | "SP" | "AF" | "A" | "B" | "C" | "D" | "E" | "H" | "L" => {
+                return self.set_registry_value(into, value);
+            }
+            "(BC)" | "(DE)" | "(HL)" | "(PC)" | "(SP)" => {
+                let reg = into[1..into.len() - 1].as_ref();
                 self.get_registry_value(reg)
             }
             "(C)" => {
-                let reg = into[1..into.len()-1].as_ref();
+                let reg = into[1..into.len() - 1].as_ref();
                 self.get_registry_value(reg) + 0xFF00
             }
-            "(a8)" => { u16::from(self.fetch_next_byte()) + 0xFF00 }
-            "(a16)" => { self.fetch_next_word() }
-            _ => { panic!("cant write to {} yet!!!", into) }
+            "(a8)" => u16::from(self.fetch_next_byte()) + 0xFF00,
+            "(a16)" => self.fetch_next_word(),
+            _ => panic!("cant write to {} yet!!!", into),
         };
-        if is_byte { self.mmu.write_byte(addr, value as u8) }
-        else       { self.mmu.write_word(addr, value) }
+        if is_byte {
+            self.mmu.write_byte(addr, value as u8)
+        } else {
+            self.mmu.write_word(addr, value)
+        }
     }
 
     pub fn get_operand_value(&mut self, operand: &str) -> u16 {
         match operand.as_ref() {
-            "(BC)"|"(DE)"|"(HL)"|"(PC)"|"(SP)" => {
-                let reg = operand[1..operand.len()-1].as_ref();
+            "(BC)" | "(DE)" | "(HL)" | "(PC)" | "(SP)" => {
+                let reg = operand[1..operand.len() - 1].as_ref();
                 let addr = self.get_registry_value(reg);
                 self.mmu.read_byte(addr) as u16
             }
-            "BC"|"DE"|"HL"|"PC"|"SP"|"AF"|
-            "A"|"B"|"C"|"D"|"E"|"H"|"L" => { self.get_registry_value(operand) }
+            "BC" | "DE" | "HL" | "PC" | "SP" | "AF" | "A" | "B" | "C" | "D" | "E" | "H" | "L" => {
+                self.get_registry_value(operand)
+            }
             "(a8)" => {
                 let addr = 0xFF00 + u16::from(self.fetch_next_byte());
                 let res = u16::from(self.mmu.read_byte(addr));
-//                info!("Reading input from 0x{:x} --> 0b{:b}", addr, res);
+                //                info!("Reading input from 0x{:x} --> 0b{:b}", addr, res);
                 res
             }
             "(C)" => {
@@ -230,28 +273,26 @@ impl<M: Memory> CPU<M> {
                 let addr = u16::from(self.fetch_next_word());
                 self.mmu.read_byte(addr) as u16
             }
-            "d16"|"a16" => { self.fetch_next_word() }
-            "d8"|"r8" => { self.fetch_next_byte() as u16 }
-            "NZ" => { !self.regs.get_flags().0 as u16 }
-            "Z" => { self.regs.get_flags().0 as u16 }
-            "NC" => { !self.regs.get_flags().3 as u16 }
-            "CA" => { self.regs.get_flags().3 as u16 }
-            _ => {
-                parse_hex(operand)
-            }
+            "d16" | "a16" => self.fetch_next_word(),
+            "d8" | "r8" => self.fetch_next_byte() as u16,
+            "NZ" => !self.regs.get_flags().0 as u16,
+            "Z" => self.regs.get_flags().0 as u16,
+            "NC" => !self.regs.get_flags().3 as u16,
+            "CA" => self.regs.get_flags().3 as u16,
+            _ => parse_hex(operand),
         }
     }
 
     pub fn push(&mut self, value: u16) {
         let sp = self.get_registry_value("SP");
-        self.set_registry_value("SP", sp-2);
+        self.set_registry_value("SP", sp - 2);
         self.store_result("(SP)", value, false);
     }
 
     pub fn pop(&mut self) -> u16 {
         let sp = self.get_registry_value("SP");
         let value = self.mmu.read_word(sp);
-        self.set_registry_value("SP",sp+2);
+        self.set_registry_value("SP", sp + 2);
         value
     }
 
@@ -260,31 +301,39 @@ impl<M: Memory> CPU<M> {
 
         // care, some of this might send PC forward
         let op1 = match op.operand1 {
-            Some (ref x) => { self.get_operand_value(x) }
-            None => { 0 }
+            Some(ref x) => self.get_operand_value(x),
+            None => 0,
         };
         let op2 = match op.operand2 {
-            Some (ref x) => {
+            Some(ref x) => {
                 op2_is_signed = x == "r8";
                 self.get_operand_value(x)
             }
-            None => { 0 }
+            None => 0,
         };
         let condition = match op.condition {
-            Some (ref x) => { self.get_operand_value(x) }
-            None => { 1 }
+            Some(ref x) => self.get_operand_value(x),
+            None => 1,
         };
 
         // early stop
         if condition == 0 {
-            info!("operation 0x{:x} {} skipped cause condition {}", op.code_as_u8(), op.mnemonic, condition);
-            let cycles = op.cycles_no.expect("Operation skipped but cycles_no not set.");
+            info!(
+                "operation 0x{:x} {} skipped cause condition {}",
+                op.code_as_u8(),
+                op.mnemonic,
+                condition
+            );
+            let cycles = op
+                .cycles_no
+                .expect("Operation skipped but cycles_no not set.");
             self.regs.write_byte(REG_T, cycles);
-            return;  // todo: go down to the handle the interrupts
+            return; // todo: go down to the handle the interrupts
         }
 
         let result_is_byte: bool = match op.result_is_byte {
-            Some(_x) => { true }, None => { false }
+            Some(_x) => true,
+            None => false,
         };
 
         let mut result: u16 = 1;
@@ -292,53 +341,86 @@ impl<M: Memory> CPU<M> {
         let mut new_carry = prev_c;
         let mut new_halfcarry = prev_h;
 
-        info!("istruzione\t0x{:x}\t{}\top1={:x}\top2={:x}\tinto={}", op.code_as_u8(), op.mnemonic, op1, op2, op.into);
+        info!(
+            "istruzione\t0x{:x}\t{}\top1={:x}\top2={:x}\tinto={}",
+            op.code_as_u8(),
+            op.mnemonic,
+            op1,
+            op2,
+            op.into
+        );
 
         match op.mnemonic.as_ref() {
             "NOP" => {}
-            "DI" => { self.interrupt_master_enable = false }
-            "EI" => { self.interrupt_master_enable = true }
-            "STOP" => { self.stopped = true }
-            "LD"|"LDD"|"LDH"|"LDI"|"JP" => {
+            "DI" => self.interrupt_master_enable = false,
+            "EI" => self.interrupt_master_enable = true,
+            "STOP" => self.stopped = true,
+            "LD" | "LDD" | "LDH" | "LDI" | "JP" => {
                 result = op1;
                 if op2_is_signed {
                     let (x, y, z) = add_word_with_signed(op1, op2, 0);
-                    result = x; new_carry = y; new_halfcarry = z;
+                    result = x;
+                    new_carry = y;
+                    new_halfcarry = z;
                 }
             }
-            "AND" => { result = op1 & op2 }
-            "OR" => { result = op1 | op2 }
-            "XOR" => { result = op1 ^ op2; }
-            "CPL" => { result = !op1; }
-            "BIT" => { result = is_bit_set(op1 as u8, op2) as u16; }
-            "PUSH" => { self.push(op1) }
-            "POP"|"RET" => { result = self.pop() }
+            "AND" => result = op1 & op2,
+            "OR" => result = op1 | op2,
+            "XOR" => {
+                result = op1 ^ op2;
+            }
+            "CPL" => {
+                result = !op1;
+            }
+            "BIT" => {
+                result = is_bit_set(op1 as u8, op2) as u16;
+            }
+            "PUSH" => self.push(op1),
+            "POP" | "RET" => result = self.pop(),
             "RETI" => {
                 result = self.pop();
                 self.interrupt_master_enable = true;
             }
-            "JR" => { result = (op1 as i16).wrapping_add(op2 as i8 as i16).wrapping_add(1) as u16; }
-            "CALL"|"RST" => {
+            "JR" => {
+                result = (op1 as i16).wrapping_add(op2 as i8 as i16).wrapping_add(1) as u16;
+            }
+            "CALL" | "RST" => {
                 let value = self.get_registry_value("PC");
                 self.push(value);
                 result = op1;
             }
-            "DEC"|"SUB"|"SBC"|"CP" => {
-                let third_param: u16 = if op.mnemonic == "SBC" { u16::from(prev_c) } else { 0 };
+            "DEC" | "SUB" | "SBC" | "CP" => {
+                let third_param: u16 = if op.mnemonic == "SBC" {
+                    u16::from(prev_c)
+                } else {
+                    0
+                };
                 let (x, y, z) = sub_bytes(op1, op2, third_param);
-                result = x; new_carry = y; new_halfcarry = z;
+                result = x;
+                new_carry = y;
+                new_halfcarry = z;
             }
-            "INC"|"ADD"|"ADC" => {
+            "INC" | "ADD" | "ADC" => {
                 let sum_func = if op2_is_signed {
                     add_word_with_signed
                 } else {
-                    if result_is_byte { add_bytes } else { add_words }
+                    if result_is_byte {
+                        add_bytes
+                    } else {
+                        add_words
+                    }
                 };
-                let third_param: u16 = if op.mnemonic == "ADC" { u16::from(prev_c) } else { 0 };
+                let third_param: u16 = if op.mnemonic == "ADC" {
+                    u16::from(prev_c)
+                } else {
+                    0
+                };
                 let (x, y, z) = sum_func(op1, op2, third_param);
-                result = x; new_carry = y; new_halfcarry = z;
+                result = x;
+                new_carry = y;
+                new_halfcarry = z;
             }
-            "RL"|"RLA" => {
+            "RL" | "RLA" => {
                 result = ((op1 as u8) << 1 | u8::from(prev_c)) as u16;
                 new_carry = (op1 & 0x80) != 0;
             }
@@ -358,8 +440,12 @@ impl<M: Memory> CPU<M> {
                 result = (op1 >> 1) | (op1 & 0x80);
                 new_carry = (op1 & 1) != 0;
             }
-            "SCF" => { new_carry = true; }
-            "CCF" => { new_carry = !prev_c; }
+            "SCF" => {
+                new_carry = true;
+            }
+            "CCF" => {
+                new_carry = !prev_c;
+            }
             "RLCA" => {
                 new_carry = (op1 & 0x80) != 0;
                 result = ((op1 as u8) << 1 | u8::from(new_carry)) as u16;
@@ -372,41 +458,50 @@ impl<M: Memory> CPU<M> {
                 result = op1 >> 1;
                 new_carry = (op1 & 1) != 0;
             }
-            "RR"|"RRA" => {
+            "RR" | "RRA" => {
                 result = ((op1 as u8) >> 1 | (u8::from(prev_c) << 7)) as u16;
                 new_carry = (op1 & 1) != 0;
             }
             "DAA" => {
                 let mut adjust = 0;
 
-                if prev_h { adjust |= 0x06; }
+                if prev_h {
+                    adjust |= 0x06;
+                }
 
                 if prev_c {
                     adjust |= 0x60;
                     new_carry = true;
                 }
 
-                result =
-                    if prev_n {
-                        op1.wrapping_sub(adjust)
-                    } else {
-                        if op1 & 0x0F > 0x09 {
-                            adjust |= 0x06;
-                        }
+                result = if prev_n {
+                    op1.wrapping_sub(adjust)
+                } else {
+                    if op1 & 0x0F > 0x09 {
+                        adjust |= 0x06;
+                    }
 
-                        if op1 > 0x99 {
-                            adjust |= 0x60;
-                            new_carry = true;
-                        }
+                    if op1 > 0x99 {
+                        adjust |= 0x60;
+                        new_carry = true;
+                    }
 
-                        op1.wrapping_add(adjust)
-                    };
+                    op1.wrapping_add(adjust)
+                };
             }
-            "SWAP" => { result = swap_nibbles(op1 as u8) }
-            "RES" => { result = reset_bit(op1 as u8, op2 as u8); }
-            "SET" => { result = set_bit(op1 as u8, op2 as u8); }
+            "SWAP" => result = swap_nibbles(op1 as u8),
+            "RES" => {
+                result = reset_bit(op1 as u8, op2 as u8);
+            }
+            "SET" => {
+                result = set_bit(op1 as u8, op2 as u8);
+            }
             _ => {
-                panic!("0x{:x}\t{} not implemented yet!", op.code_as_u8(), op.mnemonic);
+                panic!(
+                    "0x{:x}\t{} not implemented yet!",
+                    op.code_as_u8(),
+                    op.mnemonic
+                );
             }
         }
 
@@ -417,32 +512,34 @@ impl<M: Memory> CPU<M> {
         // set the flags
         self.regs.set_flags(
             match op.flag_z.unwrap_or(' ') {
-                '0' => { false },
-                '1' => { true },
-                'Z' => { result == 0 },
-                _ => { prev_z }
+                '0' => false,
+                '1' => true,
+                'Z' => result == 0,
+                _ => prev_z,
             },
             match op.flag_n.unwrap_or(' ') {
-                '0' => { false },
-                '1' => { true },
-                _ => { prev_n }
+                '0' => false,
+                '1' => true,
+                _ => prev_n,
             },
             match op.flag_h.unwrap_or(' ') {
-                '0' => { false },
-                '1' => { true },
-                'H' => { new_halfcarry },
-                _ => { prev_h }
+                '0' => false,
+                '1' => true,
+                'H' => new_halfcarry,
+                _ => prev_h,
             },
             match op.flag_c.unwrap_or(' ') {
-                '0' => { false },
-                '1' => { true },
-                'C' => { new_carry },
-                _ => { prev_c }
-            }
+                '0' => false,
+                '1' => true,
+                'C' => new_carry,
+                _ => prev_c,
+            },
         );
 
         // store the operation result
-        if op.into != "" { self.store_result(op.into.as_ref(), result, result_is_byte); }
+        if op.into != "" {
+            self.store_result(op.into.as_ref(), result, result_is_byte);
+        }
 
         // perform postactions if necessary
         match op.mnemonic.as_ref() {
@@ -471,7 +568,8 @@ impl<M: Memory> CPU<M> {
             // vblank
             if (fired & 0x1) != 0 {
                 // turn interrupt flag off cause we are handling it now
-                self.mmu.write_byte(0xFF0F, reset_bit(0, interrupt_flags) as u8);
+                self.mmu
+                    .write_byte(0xFF0F, reset_bit(0, interrupt_flags) as u8);
 
                 // only one interrupt handling at a time
                 self.interrupt_master_enable = false;
@@ -488,7 +586,8 @@ impl<M: Memory> CPU<M> {
             // resume stop
         }
 
-        self.regs.write_byte(REG_T, op.cycles_ok + interrupt_cycles_t);
+        self.regs
+            .write_byte(REG_T, op.cycles_ok + interrupt_cycles_t);
     }
 }
 
@@ -497,12 +596,16 @@ mod tests {
     use super::*;
 
     struct DummyMMU {
-        values: [u8; 65536]
+        values: [u8; 65536],
     }
 
     impl DummyMMU {
-        fn new() -> DummyMMU { DummyMMU { values: [0; 65536] } }
-        fn with(values: [u8; 65536]) -> DummyMMU { DummyMMU { values } }
+        fn new() -> DummyMMU {
+            DummyMMU { values: [0; 65536] }
+        }
+        fn with(values: [u8; 65536]) -> DummyMMU {
+            DummyMMU { values }
+        }
     }
 
     impl Memory for DummyMMU {

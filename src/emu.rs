@@ -1,14 +1,13 @@
 #![allow(unused_must_use)]
 
-
 extern crate sdl2;
 
-use self::sdl2::Sdl;
-use self::sdl2::pixels::PixelFormatEnum;
-use self::sdl2::rect::Rect;
 use self::sdl2::event::Event;
 use self::sdl2::keyboard::Keycode;
 use self::sdl2::pixels::Color;
+use self::sdl2::pixels::PixelFormatEnum;
+use self::sdl2::rect::Rect;
+use self::sdl2::Sdl;
 
 use crate::cpu::is_bit_set;
 
@@ -17,16 +16,15 @@ const SCREEN_HEIGHT: u32 = 600;
 const CLOCKS_IN_A_FRAME: u32 = 70224;
 const FPS: u32 = 60;
 
-use crate::utils::{load_rom, load_boot_rom};
 use crate::cpu::CPU;
 use crate::gpu::GPU;
-use crate::mem::{MMU, Memory};
-
+use crate::mem::{Memory, MMU};
+use crate::utils::{load_boot_rom, load_rom};
 
 pub struct Emulator {
     cpu: CPU<MMU<GPU>>,
     sdl: Sdl,
-    stop_clock: u32
+    stop_clock: u32,
 }
 
 impl Emulator {
@@ -35,7 +33,11 @@ impl Emulator {
         let cpu = CPU::new(mmu);
         let sdl = sdl2::init().unwrap();
 
-        Emulator{cpu, sdl, stop_clock:0}
+        Emulator {
+            cpu,
+            sdl,
+            stop_clock: 0,
+        }
     }
 
     pub fn load_bios(&mut self) {
@@ -53,10 +55,10 @@ impl Emulator {
             let (_line, t) = self.cpu.step();
             let vblank_interrupt = self.cpu.mmu.gpu.step(t);
             if vblank_interrupt {
-                self.cpu.mmu.write_byte(0xFF0F, 0x0001);  //todo dont set to 0x0001, OR
+                self.cpu.mmu.write_byte(0xFF0F, 0x0001); //todo dont set to 0x0001, OR
             }
             if self.cpu.clks.t >= self.stop_clock {
-                break
+                break;
             }
         }
     }
@@ -65,7 +67,8 @@ impl Emulator {
         let video_subsystem = self.sdl.video().unwrap();
         let mut timer_subsystem = self.sdl.timer().unwrap();
 
-        let window = video_subsystem.window("gameman", 600, 512)
+        let window = video_subsystem
+            .window("gameman", 600, 512)
             .position_centered()
             .opengl()
             .build()
@@ -75,11 +78,13 @@ impl Emulator {
         // canvas.set_scale(2f32, 2f32);
         let texture_creator = canvas.texture_creator();
 
-        let mut texture = texture_creator.create_texture_streaming(
-            PixelFormatEnum::RGB24, 256, 256).unwrap();
+        let mut texture = texture_creator
+            .create_texture_streaming(PixelFormatEnum::RGB24, 256, 256)
+            .unwrap();
 
-        let mut texture2 = texture_creator.create_texture_streaming(
-            PixelFormatEnum::RGB24, 160, 144).unwrap();
+        let mut texture2 = texture_creator
+            .create_texture_streaming(PixelFormatEnum::RGB24, 160, 144)
+            .unwrap();
 
         let mut last_ticks = timer_subsystem.ticks();
         let mut pause = false;
@@ -89,17 +94,34 @@ impl Emulator {
         'running: loop {
             for event in event_pump.poll_iter() {
                 match event {
-                    Event::Quit {..} | Event::KeyDown { keycode: Some(Keycode::Q), .. }
-                    | Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
-                        break 'running
-                    },
-                    Event::KeyDown { keycode: Some(Keycode::Space), .. } => { pause ^= true; },
-                    Event::KeyDown { keycode: Some(Keycode::N), .. } => { self.step(); },
+                    Event::Quit { .. }
+                    | Event::KeyDown {
+                        keycode: Some(Keycode::Q),
+                        ..
+                    }
+                    | Event::KeyDown {
+                        keycode: Some(Keycode::Escape),
+                        ..
+                    } => break 'running,
+                    Event::KeyDown {
+                        keycode: Some(Keycode::Space),
+                        ..
+                    } => {
+                        pause ^= true;
+                    }
+                    Event::KeyDown {
+                        keycode: Some(Keycode::N),
+                        ..
+                    } => {
+                        self.step();
+                    }
                     _ => {}
                 }
             }
 
-            if pause { continue }
+            if pause {
+                continue;
+            }
 
             self.stop_clock = self.cpu.clks.t + CLOCKS_IN_A_FRAME;
 
@@ -107,44 +129,48 @@ impl Emulator {
 
             canvas.clear();
 
-            texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
-                let mut j = 0;
-                for tile in 0..384 {
-                    let x_offset = (tile % 32)*8;
-                    let y_offset = (tile / 32)*8;
+            texture
+                .with_lock(None, |buffer: &mut [u8], pitch: usize| {
+                    let mut j = 0;
+                    for tile in 0..384 {
+                        let x_offset = (tile % 32) * 8;
+                        let y_offset = (tile / 32) * 8;
 
-                    for row_of_pixel in 0..8u8 {
-                        let byte_1 = self.cpu.mmu.read_byte(0x8000 + j);
-                        let byte_2 = self.cpu.mmu.read_byte(0x8000 + j+1);
-                        j += 2;
+                        for row_of_pixel in 0..8u8 {
+                            let byte_1 = self.cpu.mmu.read_byte(0x8000 + j);
+                            let byte_2 = self.cpu.mmu.read_byte(0x8000 + j + 1);
+                            j += 2;
 
-                        for pixel in 0..8u8 {
-                            let ix = 7 - pixel;
-                            let high_bit: u8 = is_bit_set(ix, byte_2 as u16) as u8;
-                            let low_bit: u8 = is_bit_set(ix, byte_1 as u16) as u8;
+                            for pixel in 0..8u8 {
+                                let ix = 7 - pixel;
+                                let high_bit: u8 = is_bit_set(ix, byte_2 as u16) as u8;
+                                let low_bit: u8 = is_bit_set(ix, byte_1 as u16) as u8;
 
-                            let color: u8 = (high_bit << 1) + low_bit;
+                                let color: u8 = (high_bit << 1) + low_bit;
 
-                            let paletted_color = match color {
-                                0x00 => { 255 }
-                                0x01 => { 192 }
-                                0x10 => { 96 }
-                                0x11 => { 0 }
-                                _ => { 128 }
-                            };
+                                let paletted_color = match color {
+                                    0x00 => 255,
+                                    0x01 => 192,
+                                    0x10 => 96,
+                                    0x11 => 0,
+                                    _ => 128,
+                                };
 
-                            let y = (y_offset + row_of_pixel as usize) * pitch;
-                            let x = (x_offset + pixel as usize) * 3;
+                                let y = (y_offset + row_of_pixel as usize) * pitch;
+                                let x = (x_offset + pixel as usize) * 3;
 
-                            buffer[y + x] = paletted_color;
-                            buffer[y + x + 1] = paletted_color;
-                            buffer[y + x + 2] = paletted_color;
+                                buffer[y + x] = paletted_color;
+                                buffer[y + x + 1] = paletted_color;
+                                buffer[y + x + 2] = paletted_color;
+                            }
                         }
                     }
-                }
-            }).unwrap();
+                })
+                .unwrap();
 
-            canvas.copy(&texture, None, Some(Rect::new(0, 0, 160, 144))).unwrap();
+            canvas
+                .copy(&texture, None, Some(Rect::new(0, 0, 160, 144)))
+                .unwrap();
 
             for tile in 0..1024u16 {
                 let x_out: i32 = ((tile % 32) * 8) as i32;
@@ -155,45 +181,61 @@ impl Emulator {
                 let x_in = ((pos % 32) * 8) as i32;
                 let y_in = ((pos / 32) * 8) as i32;
 
-                canvas.copy(
-                    &texture,
-                    Some(Rect::new(x_in, y_in, 8, 8)),
-                    Some(Rect::new(x_out, 100+y_out, 8, 8))
-                ).unwrap();
+                canvas
+                    .copy(
+                        &texture,
+                        Some(Rect::new(x_in, y_in, 8, 8)),
+                        Some(Rect::new(x_out, 100 + y_out, 8, 8)),
+                    )
+                    .unwrap();
             }
 
             // draw screen!
             canvas.set_draw_color(Color::RGB(255, 0, 0));
             let scroll_y = self.cpu.mmu.read_byte(0xFF42);
-            canvas.draw_rect(Rect::new(self.cpu.mmu.read_byte(0xFF43) as i32, 100+scroll_y as i32, 160, 144));
+            canvas.draw_rect(Rect::new(
+                self.cpu.mmu.read_byte(0xFF43) as i32,
+                100 + scroll_y as i32,
+                160,
+                144,
+            ));
             canvas.set_draw_color(Color::RGB(0, 0, 255));
-            canvas.draw_rect(Rect::new(0, 100+self.cpu.mmu.read_byte(0xFF44) as i32 +scroll_y as i32, 160, 1));
+            canvas.draw_rect(Rect::new(
+                0,
+                100 + self.cpu.mmu.read_byte(0xFF44) as i32 + scroll_y as i32,
+                160,
+                1,
+            ));
             canvas.set_draw_color(Color::RGB(0, 0, 0));
 
-            texture2.with_lock(None, |buffer: &mut [u8], pitch: usize| {
-                let gpu_buffer = self.cpu.mmu.gpu.get_buffer();
+            texture2
+                .with_lock(None, |buffer: &mut [u8], pitch: usize| {
+                    let gpu_buffer = self.cpu.mmu.gpu.get_buffer();
 
-                for y in 0..144 {
-                    for x in 0..160 {
-                        let pixel = gpu_buffer[x + y*160];
-                        let paletted_color = match pixel {
-                            0x00 => { 255 }
-                            0x01 => { 192 }
-                            0x10 => { 96 }
-                            0x11 => { 0 }
-                            _ => { 128 }
-                        };
+                    for y in 0..144 {
+                        for x in 0..160 {
+                            let pixel = gpu_buffer[x + y * 160];
+                            let paletted_color = match pixel {
+                                0x00 => 255,
+                                0x01 => 192,
+                                0x10 => 96,
+                                0x11 => 0,
+                                _ => 128,
+                            };
 
-                        let x_out = x * 3;
-                        let y_out = y * pitch;
+                            let x_out = x * 3;
+                            let y_out = y * pitch;
 
-                        buffer[x_out + y_out] = paletted_color;
-                        buffer[x_out + y_out + 1] = paletted_color;
-                        buffer[x_out + y_out + 2] = paletted_color;
+                            buffer[x_out + y_out] = paletted_color;
+                            buffer[x_out + y_out + 1] = paletted_color;
+                            buffer[x_out + y_out + 2] = paletted_color;
+                        }
                     }
-                }
-            }).unwrap();
-            canvas.copy(&texture2, None, Some(Rect::new(260, 100, 160, 144))).unwrap();
+                })
+                .unwrap();
+            canvas
+                .copy(&texture2, None, Some(Rect::new(260, 100, 160, 144)))
+                .unwrap();
 
             canvas.present();
 
@@ -205,6 +247,5 @@ impl Emulator {
             }
             last_ticks = ticks;
         }
-
     }
 }
