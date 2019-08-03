@@ -7,7 +7,6 @@ use self::sdl2::keyboard::Keycode;
 use self::sdl2::pixels::Color;
 use self::sdl2::pixels::PixelFormatEnum;
 use self::sdl2::rect::Rect;
-use self::sdl2::Sdl;
 
 use crate::cpu::is_bit_set;
 
@@ -23,7 +22,6 @@ use crate::utils::{load_boot_rom, load_rom};
 
 pub struct Emulator {
     cpu: CPU<MMU<GPU>>,
-    sdl: Sdl,
     stop_clock: u32,
 }
 
@@ -31,11 +29,9 @@ impl Emulator {
     pub fn new() -> Emulator {
         let mmu = MMU::new(GPU::new());
         let cpu = CPU::new(mmu);
-        let sdl = sdl2::init().unwrap();
 
         Emulator {
             cpu,
-            sdl,
             stop_clock: 0,
         }
     }
@@ -63,9 +59,32 @@ impl Emulator {
         }
     }
 
+    pub fn passes_test_rom(&mut self) -> bool {
+        loop {
+            self.stop_clock = self.cpu.clks.t + CLOCKS_IN_A_FRAME;
+
+            self.step();
+
+            let outbuffer = self.cpu.mmu.link.get_buffer();
+            if outbuffer[0] != ' ' {
+                let result: String = outbuffer.iter().collect();
+                let passed: bool = result.contains("Passed");
+                let failed: bool = result.contains("Failed");
+                if passed {
+                    return passed;
+                }
+                if failed {
+                    return false;
+                }
+            }
+        }
+    }
+
     pub fn run(&mut self) {
-        let video_subsystem = self.sdl.video().unwrap();
-        let mut timer_subsystem = self.sdl.timer().unwrap();
+
+        let sdl = sdl2::init().unwrap();
+        let video_subsystem = sdl.video().unwrap();
+        let mut timer_subsystem = sdl.timer().unwrap();
 
         let window = video_subsystem
             .window("gameman", 600, 512)
@@ -89,7 +108,7 @@ impl Emulator {
         let mut last_ticks = timer_subsystem.ticks();
         let mut pause = false;
 
-        let mut event_pump = self.sdl.event_pump().unwrap();
+        let mut event_pump = sdl.event_pump().unwrap();
 
         'running: loop {
             for event in event_pump.poll_iter() {
