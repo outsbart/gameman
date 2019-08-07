@@ -562,28 +562,80 @@ impl<M: Memory> CPU<M> {
         let interrupt_enable = self.mmu.read_byte(0xFFFF);
         let interrupt_flags = self.mmu.read_byte(0xFF0F);
 
+
         if self.interrupt_master_enable && (interrupt_enable != 0) && (interrupt_flags != 0) {
             let fired = interrupt_enable & interrupt_flags;
 
-            // vblank
-            if (fired & 0x1) != 0 {
-                // turn interrupt flag off cause we are handling it now
-                self.mmu
-                    .write_byte(0xFF0F, reset_bit(0, interrupt_flags) as u8);
+            // if we have to handle an interrupt
+            if fired != 0 {
 
                 // only one interrupt handling at a time
                 self.interrupt_master_enable = false;
 
+                // put current instruction on the stack, handle interrupt immediately
                 let value = self.get_registry_value("PC");
                 self.push(value);
 
-                self.set_registry_value("PC", 0x40);
+                println!("interrupt_enable={:b};interrupt_flags={:b};fired={:b}", interrupt_enable, interrupt_flags, fired);
+
+                // timer
+                if (fired & 0x4) != 0 {
+                    println!("Handling timer");
+
+                    self.mmu
+                        .write_byte(0xFF0F, reset_bit(2, interrupt_flags) as u8);
+
+                    self.set_registry_value("PC", 0x0050);
+                }
+
+                // lcd status triggers
+                else if (fired & 0x2) != 0 {
+                    println!("Handling lcd stat");
+
+                    self.mmu
+                        .write_byte(0xFF0F, reset_bit(1, interrupt_flags) as u8);
+
+                    self.set_registry_value("PC", 0x0048);
+                }
+
+                // joypad
+                else if (fired & 0b10000) != 0 {
+                    println!("Handling joypad");
+
+                    self.mmu
+                        .write_byte(0xFF0F, reset_bit(4, interrupt_flags) as u8);
+
+                    self.set_registry_value("PC", 0x0060);
+                }
+
+                // serial
+                else if (fired & 0b1000) != 0 {
+                    println!("Handling serial");
+
+                    self.mmu
+                        .write_byte(0xFF0F, reset_bit(3, interrupt_flags) as u8);
+
+                    self.set_registry_value("PC", 0x0058);
+                }
+
+
+                // vblank
+                else if (fired & 0x1) != 0 {
+
+                    println!("Handling vblank");
+
+                    // turn interrupt flag off cause we are handling it now
+                    self.mmu
+                        .write_byte(0xFF0F, reset_bit(0, interrupt_flags) as u8);
+
+                    self.set_registry_value("PC", 0x0040);
+
+                }
 
                 interrupt_cycles_t = 12;
             }
 
-            // on button press
-            // resume stop
+            // todo: on button press resume from stop
         }
 
         self.regs
