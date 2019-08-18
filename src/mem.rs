@@ -153,8 +153,9 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                     0x0E00 => {
                         if addr < 0xFEA0 {
                             self.gpu.write_oam(addr & 0x00FF, byte);
-                            return;
                         }
+                        self.gpu.update_sprite(addr - 0xFE00, byte);
+                        return;
                     }
 
                     // Zero page
@@ -231,6 +232,7 @@ mod tests {
         fn write_vram(&mut self, addr: u16, byte: u8) {
             self.vram[addr as usize] = byte;
         }
+        fn update_sprite(&mut self, _addr: u16, _byte: u8) { }
         fn read_oam(&mut self, addr: u16) -> u8 {
             self.oam[addr as usize]
         }

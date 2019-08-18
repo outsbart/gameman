@@ -1,18 +1,75 @@
 use crate::cpu::is_bit_set;
+use std::iter;
 
 /// Expose the memories of the GPU
 pub trait GPUMemoriesAccess {
     fn read_oam(&mut self, addr: u16) -> u8;
     fn write_oam(&mut self, addr: u16, byte: u8);
+    fn update_sprite(&mut self, addr: u16, byte: u8);
     fn read_vram(&mut self, addr: u16) -> u8;
     fn write_vram(&mut self, addr: u16, byte: u8);
     fn read_byte(&mut self, addr: u16) -> u8;
     fn write_byte(&mut self, addr: u16, byte: u8);
 }
 
+struct SpriteOptions {
+    z: bool, // 0 = above background, 1 = below background (unless colour is 0)
+    flip_y: bool, // 1 = flipped vertically
+    flip_x: bool, // 1 = flipped horizontally
+    palette: bool, // 0 meanse use object palette 0, 1 means use object palette 1
+}
+
+impl SpriteOptions {
+    pub fn new() -> Self {
+        SpriteOptions {
+            z: false,
+            flip_y: false,
+            flip_x: false,
+            palette: false
+        }
+    }
+
+    pub fn update(&mut self, value: u8) {
+        self.palette = if (value & 0x10) != 0 { true } else { false };
+        self.flip_x = if (value & 0x20) != 0 { true } else { false };
+        self.flip_y = if (value & 0x40) != 0 { true } else { false };
+        self.z = if (value & 0x80) != 0 { true } else { false };
+    }
+}
+
+struct Sprite {
+    y: i16, // y coordinate of top left corner, minus 16
+    x: i16, // x coordinate of top left corner, minus 8
+    tile_number: u8, // which tile to use
+    options: SpriteOptions
+}
+
+impl Sprite {
+    pub fn new() -> Self {
+        Sprite {
+            y: -16,
+            x: -8,
+            tile_number: 0,
+            options: SpriteOptions::new()
+        }
+    }
+
+    pub fn update(&mut self, field: u8, value: u8) {
+        match field {
+            0 => { self.y = i16::from(value - 16) }
+            1 => { self.x = i16::from(value - 8) }
+            2 => { self.tile_number = value }
+            3 => { self.options.update(value) }
+            _ => { panic!("Unhandled sprite field update")}
+        }
+    }
+}
+
+
 pub struct GPU {
     vram: [u8; 8192],
     oam: [u8; 256],
+    sprites: Vec<Sprite>, // todo: make it an array of 40
     buffer: [u8; 160 * 144], // every pixel can have 4 values (4 shades of grey)
 
     modeclock: u16,
@@ -30,8 +87,13 @@ impl GPUMemoriesAccess for GPU {
         self.oam[addr as usize]
     }
     fn write_oam(&mut self, addr: u16, byte: u8) {
-        self.oam[addr as usize] = byte
+        self.oam[addr as usize] = byte;
     }
+
+    fn update_sprite(&mut self, addr: u16, byte: u8) {
+        self.update_sprite(addr, byte);
+    }
+
     fn read_vram(&mut self, addr: u16) -> u8 {
         self.vram[addr as usize]
     }
@@ -71,6 +133,7 @@ impl GPU {
         GPU {
             vram: [0; 8192],
             oam: [0; 256],
+            sprites: iter::repeat_with(|| Sprite::new()).take(40).collect(),
             buffer: [0; 160 * 144],
             modeclock: 0,
             mode: 2,
@@ -79,6 +142,14 @@ impl GPU {
             scroll_y: 0,
             palette: 0,
             control: 0,
+        }
+    }
+
+    pub fn update_sprite(&mut self, address: u16, value: u8) {
+        let sprite_num = address >> 2;
+        let property = (address & 3) as u8;
+        if sprite_num < 40 {
+            self.sprites[sprite_num as usize].update(property, value);
         }
     }
 
@@ -261,5 +332,51 @@ mod tests {
 
         gpu.line = 15;
         assert_eq!(gpu.read_byte(0xFF44), 15);
+    }
+
+    // test sprite write and read in the oam area 0xFE00-0xFE9F
+    #[test]
+    fn test_sprite() {
+        let mut gpu = GPU::new();
+
+        // should update first sprite's first property
+        assert_eq!(gpu.sprites[0].y, -16);
+        gpu.update_sprite(0, 18);
+        assert_eq!(gpu.sprites[0].y, 2);
+
+        // should update first sprite's 2nd property
+        assert_eq!(gpu.sprites[0].x, -8);
+        gpu.update_sprite(1, 14);
+        assert_eq!(gpu.sprites[0].x, 6);
+
+        // should update first sprite's 3rd property
+        assert_eq!(gpu.sprites[0].tile_number, 0);
+        gpu.update_sprite(2, 4);
+        assert_eq!(gpu.sprites[0].tile_number, 4);
+
+        // should update first sprite's options z
+        assert_eq!(gpu.sprites[0].options.z, false);
+        gpu.update_sprite(3, 0b10000000);
+        assert_eq!(gpu.sprites[0].options.z, true);
+
+        // should update first sprite's options flip_y
+        assert_eq!(gpu.sprites[0].options.flip_y, false);
+        gpu.update_sprite(3, 0b01000000);
+        assert_eq!(gpu.sprites[0].options.flip_y, true);
+
+        // should update first sprite's options flip_x
+        assert_eq!(gpu.sprites[0].options.flip_x, false);
+        gpu.update_sprite(3, 0b00100000);
+        assert_eq!(gpu.sprites[0].options.flip_x, true);
+
+        // should update first sprite's options flip_x
+        assert_eq!(gpu.sprites[0].options.palette, false);
+        gpu.update_sprite(3, 0b00010000);
+        assert_eq!(gpu.sprites[0].options.palette, true);
+
+        // should update sprite 40's options flip_x
+        assert_eq!(gpu.sprites[39].options.palette, false);
+        gpu.update_sprite(159, 0b00010000);
+        assert_eq!(gpu.sprites[39].options.palette, true);
     }
 }
