@@ -316,6 +316,9 @@ impl<M: Memory> CPU<M> {
             None => 1,
         };
 
+        let mut cycles = op.cycles_ok;
+        let mut skip = false;  // when this is true, the operation doesnt have to be executed
+
         // early stop
         if condition == 0 {
             info!(
@@ -324,237 +327,244 @@ impl<M: Memory> CPU<M> {
                 op.mnemonic,
                 condition
             );
-            let cycles = op
+            let cycles_no = op
                 .cycles_no
                 .expect("Operation skipped but cycles_no not set.");
-            self.regs.write_byte(REG_T, cycles);
-            return; // todo: go down to the handle the interrupts
+            cycles = cycles_no;
+            skip = true;
         }
 
-        let result_is_byte: bool = match op.result_is_byte {
-            Some(_x) => true,
-            None => false,
-        };
+        // if this value is changed after the instruction is executed, we dont care,
+        // we need to check the value before the execution (in other words, interrupts
+        // are not executed immediately after enabled)
+        let interrupt_master_enable = self.interrupt_master_enable;
 
-        let mut result: u16 = 1;
-        let (prev_z, prev_n, prev_h, prev_c) = self.regs.get_flags();
-        let mut new_carry = prev_c;
-        let mut new_halfcarry = prev_h;
+        if !skip {
+            let result_is_byte: bool = match op.result_is_byte {
+                Some(_x) => true,
+                None => false,
+            };
 
-        info!(
-            "istruzione\t0x{:x}\t{}\top1={:x}\top2={:x}\tinto={}",
-            op.code_as_u8(),
-            op.mnemonic,
-            op1,
-            op2,
-            op.into
-        );
+            let mut result: u16 = 1;
+            let (prev_z, prev_n, prev_h, prev_c) = self.regs.get_flags();
+            let mut new_carry = prev_c;
+            let mut new_halfcarry = prev_h;
 
-        match op.mnemonic.as_ref() {
-            "NOP" => {}
-            "DI" => self.interrupt_master_enable = false,
-            "EI" => self.interrupt_master_enable = true,
-            "STOP" => self.stopped = true,
-            "LD" | "LDD" | "LDH" | "LDI" | "JP" => {
-                result = op1;
-                if op2_is_signed {
-                    let (x, y, z) = add_word_with_signed(op1, op2, 0);
+            info!(
+                "istruzione\t0x{:x}\t{}\top1={:x}\top2={:x}\tinto={}",
+                op.code_as_u8(),
+                op.mnemonic,
+                op1,
+                op2,
+                op.into
+            );
+
+            match op.mnemonic.as_ref() {
+                "NOP" => {}
+                "DI" => self.interrupt_master_enable = false,
+                "EI" => self.interrupt_master_enable = true,
+                "STOP" => self.stopped = true,
+                "LD" | "LDD" | "LDH" | "LDI" | "JP" => {
+                    result = op1;
+                    if op2_is_signed {
+                        let (x, y, z) = add_word_with_signed(op1, op2, 0);
+                        result = x;
+                        new_carry = y;
+                        new_halfcarry = z;
+                    }
+                }
+                "AND" => result = op1 & op2,
+                "OR" => result = op1 | op2,
+                "XOR" => {
+                    result = op1 ^ op2;
+                }
+                "CPL" => {
+                    result = !op1;
+                }
+                "BIT" => {
+                    result = is_bit_set(op1 as u8, op2) as u16;
+                }
+                "PUSH" => self.push(op1),
+                "POP" | "RET" => result = self.pop(),
+                "RETI" => {
+                    result = self.pop();
+                    self.interrupt_master_enable = true;
+                }
+                "JR" => {
+                    result = (op1 as i16).wrapping_add(op2 as i8 as i16).wrapping_add(1) as u16;
+                }
+                "CALL" | "RST" => {
+                    let value = self.get_registry_value("PC");
+                    self.push(value);
+                    result = op1;
+                }
+                "DEC" | "SUB" | "SBC" | "CP" => {
+                    let third_param: u16 = if op.mnemonic == "SBC" {
+                        u16::from(prev_c)
+                    } else {
+                        0
+                    };
+                    let (x, y, z) = sub_bytes(op1, op2, third_param);
                     result = x;
                     new_carry = y;
                     new_halfcarry = z;
                 }
-            }
-            "AND" => result = op1 & op2,
-            "OR" => result = op1 | op2,
-            "XOR" => {
-                result = op1 ^ op2;
-            }
-            "CPL" => {
-                result = !op1;
-            }
-            "BIT" => {
-                result = is_bit_set(op1 as u8, op2) as u16;
-            }
-            "PUSH" => self.push(op1),
-            "POP" | "RET" => result = self.pop(),
-            "RETI" => {
-                result = self.pop();
-                self.interrupt_master_enable = true;
-            }
-            "JR" => {
-                result = (op1 as i16).wrapping_add(op2 as i8 as i16).wrapping_add(1) as u16;
-            }
-            "CALL" | "RST" => {
-                let value = self.get_registry_value("PC");
-                self.push(value);
-                result = op1;
-            }
-            "DEC" | "SUB" | "SBC" | "CP" => {
-                let third_param: u16 = if op.mnemonic == "SBC" {
-                    u16::from(prev_c)
-                } else {
-                    0
-                };
-                let (x, y, z) = sub_bytes(op1, op2, third_param);
-                result = x;
-                new_carry = y;
-                new_halfcarry = z;
-            }
-            "INC" | "ADD" | "ADC" => {
-                let sum_func = if op2_is_signed {
-                    add_word_with_signed
-                } else {
-                    if result_is_byte {
-                        add_bytes
+                "INC" | "ADD" | "ADC" => {
+                    let sum_func = if op2_is_signed {
+                        add_word_with_signed
                     } else {
-                        add_words
-                    }
-                };
-                let third_param: u16 = if op.mnemonic == "ADC" {
-                    u16::from(prev_c)
-                } else {
-                    0
-                };
-                let (x, y, z) = sum_func(op1, op2, third_param);
-                result = x;
-                new_carry = y;
-                new_halfcarry = z;
-            }
-            "RL" | "RLA" => {
-                result = ((op1 as u8) << 1 | u8::from(prev_c)) as u16;
-                new_carry = (op1 & 0x80) != 0;
-            }
-            "RLC" => {
-                result = (op1 << 1) | (op1 >> 7);
-                new_carry = (op1 & 0x80) != 0
-            }
-            "RRC" => {
-                result = (op1 >> 1) | (op1 << 7);
-                new_carry = (op1 & 1) != 0
-            }
-            "SLA" => {
-                result = ((op1 as u8) << 1) as u16;
-                new_carry = (op1 & 0x80) != 0;
-            }
-            "SRA" => {
-                result = (op1 >> 1) | (op1 & 0x80);
-                new_carry = (op1 & 1) != 0;
-            }
-            "SCF" => {
-                new_carry = true;
-            }
-            "CCF" => {
-                new_carry = !prev_c;
-            }
-            "RLCA" => {
-                new_carry = (op1 & 0x80) != 0;
-                result = ((op1 as u8) << 1 | u8::from(new_carry)) as u16;
-            }
-            "RRCA" => {
-                new_carry = (op1 & 1) != 0;
-                result = ((op1 as u8) >> 1 | (u8::from(new_carry) << 7)) as u16;
-            }
-            "SRL" => {
-                result = op1 >> 1;
-                new_carry = (op1 & 1) != 0;
-            }
-            "RR" | "RRA" => {
-                result = ((op1 as u8) >> 1 | (u8::from(prev_c) << 7)) as u16;
-                new_carry = (op1 & 1) != 0;
-            }
-            "DAA" => {
-                let mut adjust = 0;
-
-                if prev_h {
-                    adjust |= 0x06;
+                        if result_is_byte {
+                            add_bytes
+                        } else {
+                            add_words
+                        }
+                    };
+                    let third_param: u16 = if op.mnemonic == "ADC" {
+                        u16::from(prev_c)
+                    } else {
+                        0
+                    };
+                    let (x, y, z) = sum_func(op1, op2, third_param);
+                    result = x;
+                    new_carry = y;
+                    new_halfcarry = z;
                 }
-
-                if prev_c {
-                    adjust |= 0x60;
+                "RL" | "RLA" => {
+                    result = ((op1 as u8) << 1 | u8::from(prev_c)) as u16;
+                    new_carry = (op1 & 0x80) != 0;
+                }
+                "RLC" => {
+                    result = (op1 << 1) | (op1 >> 7);
+                    new_carry = (op1 & 0x80) != 0
+                }
+                "RRC" => {
+                    result = (op1 >> 1) | (op1 << 7);
+                    new_carry = (op1 & 1) != 0
+                }
+                "SLA" => {
+                    result = ((op1 as u8) << 1) as u16;
+                    new_carry = (op1 & 0x80) != 0;
+                }
+                "SRA" => {
+                    result = (op1 >> 1) | (op1 & 0x80);
+                    new_carry = (op1 & 1) != 0;
+                }
+                "SCF" => {
                     new_carry = true;
                 }
+                "CCF" => {
+                    new_carry = !prev_c;
+                }
+                "RLCA" => {
+                    new_carry = (op1 & 0x80) != 0;
+                    result = ((op1 as u8) << 1 | u8::from(new_carry)) as u16;
+                }
+                "RRCA" => {
+                    new_carry = (op1 & 1) != 0;
+                    result = ((op1 as u8) >> 1 | (u8::from(new_carry) << 7)) as u16;
+                }
+                "SRL" => {
+                    result = op1 >> 1;
+                    new_carry = (op1 & 1) != 0;
+                }
+                "RR" | "RRA" => {
+                    result = ((op1 as u8) >> 1 | (u8::from(prev_c) << 7)) as u16;
+                    new_carry = (op1 & 1) != 0;
+                }
+                "DAA" => {
+                    let mut adjust = 0;
 
-                result = if prev_n {
-                    op1.wrapping_sub(adjust)
-                } else {
-                    if op1 & 0x0F > 0x09 {
+                    if prev_h {
                         adjust |= 0x06;
                     }
 
-                    if op1 > 0x99 {
+                    if prev_c {
                         adjust |= 0x60;
                         new_carry = true;
                     }
 
-                    op1.wrapping_add(adjust)
-                };
-            }
-            "SWAP" => result = swap_nibbles(op1 as u8),
-            "RES" => {
-                result = reset_bit(op1 as u8, op2 as u8);
-            }
-            "SET" => {
-                result = set_bit(op1 as u8, op2 as u8);
-            }
-            _ => {
-                panic!(
-                    "0x{:x}\t{} not implemented yet!",
-                    op.code_as_u8(),
-                    op.mnemonic
-                );
-            }
-        }
+                    result = if prev_n {
+                        op1.wrapping_sub(adjust)
+                    } else {
+                        if op1 & 0x0F > 0x09 {
+                            adjust |= 0x06;
+                        }
 
-        if result_is_byte {
-            result = (result as u8) as u16;
-        }
+                        if op1 > 0x99 {
+                            adjust |= 0x60;
+                            new_carry = true;
+                        }
 
-        // set the flags
-        self.regs.set_flags(
-            match op.flag_z.unwrap_or(' ') {
-                '0' => false,
-                '1' => true,
-                'Z' => result == 0,
-                _ => prev_z,
-            },
-            match op.flag_n.unwrap_or(' ') {
-                '0' => false,
-                '1' => true,
-                _ => prev_n,
-            },
-            match op.flag_h.unwrap_or(' ') {
-                '0' => false,
-                '1' => true,
-                'H' => new_halfcarry,
-                _ => prev_h,
-            },
-            match op.flag_c.unwrap_or(' ') {
-                '0' => false,
-                '1' => true,
-                'C' => new_carry,
-                _ => prev_c,
-            },
-        );
-
-        // store the operation result
-        if op.into != "" {
-            self.store_result(op.into.as_ref(), result, result_is_byte);
-        }
-
-        // perform postactions if necessary
-        match op.mnemonic.as_ref() {
-            // care: maybe this should be a PREaction
-            "LDD" => {
-                let reg: &str = "HL";
-                let value = self.get_registry_value(reg);
-                self.store_result(reg, value.wrapping_sub(1), false);
+                        op1.wrapping_add(adjust)
+                    };
+                }
+                "SWAP" => result = swap_nibbles(op1 as u8),
+                "RES" => {
+                    result = reset_bit(op1 as u8, op2 as u8);
+                }
+                "SET" => {
+                    result = set_bit(op1 as u8, op2 as u8);
+                }
+                _ => {
+                    panic!(
+                        "0x{:x}\t{} not implemented yet!",
+                        op.code_as_u8(),
+                        op.mnemonic
+                    );
+                }
             }
-            "LDI" => {
-                let reg: &str = "HL";
-                let value = self.get_registry_value(reg);
-                self.store_result(reg, value.wrapping_add(1), false);
+
+            if result_is_byte {
+                result = (result as u8) as u16;
             }
-            _ => {}
+
+            // set the flags
+            self.regs.set_flags(
+                match op.flag_z.unwrap_or(' ') {
+                    '0' => false,
+                    '1' => true,
+                    'Z' => result == 0,
+                    _ => prev_z,
+                },
+                match op.flag_n.unwrap_or(' ') {
+                    '0' => false,
+                    '1' => true,
+                    _ => prev_n,
+                },
+                match op.flag_h.unwrap_or(' ') {
+                    '0' => false,
+                    '1' => true,
+                    'H' => new_halfcarry,
+                    _ => prev_h,
+                },
+                match op.flag_c.unwrap_or(' ') {
+                    '0' => false,
+                    '1' => true,
+                    'C' => new_carry,
+                    _ => prev_c,
+                },
+            );
+
+            // store the operation result
+            if op.into != "" {
+                self.store_result(op.into.as_ref(), result, result_is_byte);
+            }
+
+            // perform postactions if necessary
+            match op.mnemonic.as_ref() {
+                // care: maybe this should be a PREaction
+                "LDD" => {
+                    let reg: &str = "HL";
+                    let value = self.get_registry_value(reg);
+                    self.store_result(reg, value.wrapping_sub(1), false);
+                }
+                "LDI" => {
+                    let reg: &str = "HL";
+                    let value = self.get_registry_value(reg);
+                    self.store_result(reg, value.wrapping_add(1), false);
+                }
+                _ => {}
+            }
         }
 
         // handle interrupts
@@ -562,12 +572,13 @@ impl<M: Memory> CPU<M> {
         let interrupt_enable = self.mmu.read_byte(0xFFFF);
         let interrupt_flags = self.mmu.read_byte(0xFF0F);
 
-
-        if self.interrupt_master_enable && (interrupt_enable != 0) && (interrupt_flags != 0) {
+        if interrupt_master_enable && (interrupt_enable != 0) && (interrupt_flags != 0) {
             let fired = interrupt_enable & interrupt_flags;
 
             // if we have to handle an interrupt
             if fired != 0 {
+
+                println!("fired?{:b} interrupt enable={:b}; interrupt_flags={:b}", fired, interrupt_enable, interrupt_flags);
 
                 // only one interrupt handling at a time
                 self.interrupt_master_enable = false;
@@ -576,16 +587,15 @@ impl<M: Memory> CPU<M> {
                 let value = self.get_registry_value("PC");
                 self.push(value);
 
-                println!("interrupt_enable={:b};interrupt_flags={:b};fired={:b}", interrupt_enable, interrupt_flags, fired);
+                interrupt_cycles_t = 12;
 
-                // timer
-                if (fired & 0x4) != 0 {
-                    println!("Handling timer");
-
+                // vblank
+                if (fired & 0x1) != 0 {
+                    // turn interrupt flag off cause we are handling it now
                     self.mmu
-                        .write_byte(0xFF0F, reset_bit(2, interrupt_flags) as u8);
+                        .write_byte(0xFF0F, reset_bit(0, interrupt_flags) as u8);
 
-                    self.set_registry_value("PC", 0x0050);
+                    self.set_registry_value("PC", 0x0040);
                 }
 
                 // lcd status triggers
@@ -598,14 +608,14 @@ impl<M: Memory> CPU<M> {
                     self.set_registry_value("PC", 0x0048);
                 }
 
-                // joypad
-                else if (fired & 0b10000) != 0 {
-                    println!("Handling joypad");
+                // timer
+                if (fired & 0x4) != 0 {
+                    println!("Handling timer");
 
                     self.mmu
-                        .write_byte(0xFF0F, reset_bit(4, interrupt_flags) as u8);
+                        .write_byte(0xFF0F, reset_bit(2, interrupt_flags) as u8);
 
-                    self.set_registry_value("PC", 0x0060);
+                    self.set_registry_value("PC", 0x0050);
                 }
 
                 // serial
@@ -618,28 +628,22 @@ impl<M: Memory> CPU<M> {
                     self.set_registry_value("PC", 0x0058);
                 }
 
+                // joypad
+                else if (fired & 0b10000) != 0 {
+                    println!("Handling joypad");
 
-                // vblank
-                else if (fired & 0x1) != 0 {
-
-                    println!("Handling vblank");
-
-                    // turn interrupt flag off cause we are handling it now
                     self.mmu
-                        .write_byte(0xFF0F, reset_bit(0, interrupt_flags) as u8);
+                        .write_byte(0xFF0F, reset_bit(4, interrupt_flags) as u8);
 
-                    self.set_registry_value("PC", 0x0040);
-
+                    self.set_registry_value("PC", 0x0060);
                 }
-
-                interrupt_cycles_t = 12;
             }
 
             // todo: on button press resume from stop
         }
 
         self.regs
-            .write_byte(REG_T, op.cycles_ok + interrupt_cycles_t);
+            .write_byte(REG_T, cycles + interrupt_cycles_t);
     }
 }
 

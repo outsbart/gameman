@@ -19,6 +19,7 @@ use crate::cpu::CPU;
 use crate::gpu::GPU;
 use crate::mem::{Memory, MMU};
 use crate::utils::{load_boot_rom, load_rom};
+use keypad::Button;
 
 pub struct Emulator {
     cpu: CPU<MMU<GPU>>,
@@ -51,7 +52,7 @@ impl Emulator {
             let (_line, t) = self.cpu.step();
             let vblank_interrupt = self.cpu.mmu.gpu.step(t);
             if vblank_interrupt {
-                self.cpu.mmu.write_byte(0xFF0F, 0x0001); //todo dont set to 0x0001, OR
+                self.request_vblank_interrupt();
             }
             if self.cpu.clks.t >= self.stop_clock {
                 break;
@@ -78,6 +79,18 @@ impl Emulator {
                 }
             }
         }
+    }
+
+    // TODO: move it away from here!
+    fn request_keypad_interrupt(&mut self) {
+        let interrupt_flags = self.cpu.mmu.read_byte(0xFF0F) | 0b10000;
+        self.cpu.mmu.write_byte(0xFF0F, interrupt_flags);
+    }
+
+    // TODO: move it away from here!
+    fn request_vblank_interrupt(&mut self) {
+        let interrupt_flags = self.cpu.mmu.read_byte(0xFF0F) | 1;
+        self.cpu.mmu.write_byte(0xFF0F, interrupt_flags);
     }
 
     pub fn run(&mut self) {
@@ -133,6 +146,110 @@ impl Emulator {
                         ..
                     } => {
                         self.step();
+                    }
+                    Event::KeyDown {
+                        keycode: Some(Keycode::Z),
+                        ..
+                    } => {
+                        self.cpu.mmu.key.press(Button::A);
+                        self.request_keypad_interrupt();
+                    },
+                    Event::KeyDown {
+                        keycode: Some(Keycode::X),
+                        ..
+                    } => {
+                        self.cpu.mmu.key.press(Button::B);
+                        self.request_keypad_interrupt();
+                    },
+                    Event::KeyDown {
+                        keycode: Some(Keycode::A),
+                        ..
+                    } => {
+                        self.cpu.mmu.key.press(Button::SELECT);
+                        self.request_keypad_interrupt();
+                    },
+                    Event::KeyDown {
+                        keycode: Some(Keycode::S),
+                        ..
+                    } => {
+                        self.cpu.mmu.key.press(Button::START);
+                        self.request_keypad_interrupt();
+                    },
+                    Event::KeyDown {
+                        keycode: Some(Keycode::Down),
+                        ..
+                    } => {
+                        self.cpu.mmu.key.press(Button::DOWN);
+                        self.request_keypad_interrupt();
+                    },
+                    Event::KeyDown {
+                        keycode: Some(Keycode::Up),
+                        ..
+                    } => {
+                        self.cpu.mmu.key.press(Button::UP);
+                        self.request_keypad_interrupt();
+                    },
+                    Event::KeyDown {
+                        keycode: Some(Keycode::Left),
+                        ..
+                    } => {
+                        self.cpu.mmu.key.press(Button::LEFT);
+                        self.request_keypad_interrupt();
+                    },
+                    Event::KeyDown {
+                        keycode: Some(Keycode::Right),
+                        ..
+                    } => {
+                        self.cpu.mmu.key.press(Button::RIGHT);
+                        self.request_keypad_interrupt();
+                    },
+                    Event::KeyUp {
+                        keycode: Some(Keycode::Z),
+                        ..
+                    } => {
+                        self.cpu.mmu.key.release(Button::A);
+                    },
+                    Event::KeyUp {
+                        keycode: Some(Keycode::X),
+                        ..
+                    } => {
+                        self.cpu.mmu.key.release(Button::B);
+                    },
+                    Event::KeyUp {
+                        keycode: Some(Keycode::A),
+                        ..
+                    } => {
+                        self.cpu.mmu.key.release(Button::SELECT);
+                    },
+                    Event::KeyUp {
+                        keycode: Some(Keycode::S),
+                        ..
+                    } => {
+                        self.cpu.mmu.key.release(Button::START);
+                    },
+                    Event::KeyUp {
+                        keycode: Some(Keycode::Down),
+                        ..
+                    } => {
+                        self.cpu.mmu.key.release(Button::DOWN);
+                    },
+                    Event::KeyUp {
+                        keycode: Some(Keycode::Up),
+                        ..
+                    } => {
+                        self.cpu.mmu.key.release(Button::UP);
+                    },
+                    Event::KeyUp {
+                        keycode: Some(Keycode::Left),
+                        ..
+                    } => {
+                        self.cpu.mmu.key.release(Button::LEFT);
+                    },
+                    Event::KeyUp {
+                        keycode: Some(Keycode::Right),
+                        ..
+                    } => {
+                        self.cpu.mmu.key.release(Button::RIGHT);
                     }
                     _ => {}
                 }

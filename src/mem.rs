@@ -1,5 +1,6 @@
 use crate::gpu::GPUMemoriesAccess;
 use crate::link::Link;
+use crate::keypad::Key;
 
 pub struct MMU<M: GPUMemoriesAccess> {
     still_bios: bool,
@@ -14,6 +15,7 @@ pub struct MMU<M: GPUMemoriesAccess> {
     pub interrupt_flags: u8,
 
     pub gpu: M, // todo: remove pub
+    pub key: Key,
     pub link: Link,
 }
 
@@ -29,9 +31,10 @@ impl<M: GPUMemoriesAccess> MMU<M> {
             zram: [0; 0x0080],
 
             interrupt_enable: 0,
-            interrupt_flags: 0,
+            interrupt_flags: 0xe0,
 
             gpu,
+            key: Key::new(),
             link: Link::new(),
         }
     }
@@ -108,7 +111,7 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                         } else {
                             // io
                             match addr & 0x3F {
-                                0x0 => 0xFF,
+                                0x0 => self.key.read_byte(),
                                 _ => 0,
                             }
                         }
@@ -170,6 +173,10 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                             if byte == 0x81 {
                                 self.link.send(self.zram[(0xFF01 & 0x007F)] as char);
                             }
+                        }
+                        // keypad
+                        if addr == 0xFF00 {
+                            self.key.write_byte(byte);
                         }
                         if addr >= 0xFF80 {
                             self.zram[(addr & 0x007F) as usize] = byte;

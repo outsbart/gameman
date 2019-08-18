@@ -96,6 +96,8 @@ impl GPU {
 
         let tilemap0_offset = 0x9800 - 0x8000;
 
+        // background
+
         for tile in 0..20 {
             // todo: right now only draws the first 20 tiles from the left, use scroll X
             let tilemap_index =
@@ -122,6 +124,10 @@ impl GPU {
                 self.buffer[index] = color;
             }
         }
+
+        // sprites
+
+
     }
 
     // go forward based on the cpu's last operation clocks
