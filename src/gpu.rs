@@ -76,10 +76,17 @@ pub struct GPU {
     mode: u8,
     line: u8,
 
-    control: u8,
+    bg_enabled: bool,
+    obj_enabled: bool,
+    bg_map: bool,
+    bg_tile: bool,
+    lcd_enabled: bool,
+
     scroll_x: u8,
     scroll_y: u8,
     palette: u8,
+    obj_palette_1: u8,
+    obj_palette_2: u8,
 }
 
 impl GPUMemoriesAccess for GPU {
@@ -102,7 +109,13 @@ impl GPUMemoriesAccess for GPU {
     }
     fn read_byte(&mut self, addr: u16) -> u8 {
         match addr {
-            0xFF40 => self.control,
+            0xFF40 => {
+                (if self.bg_enabled { 0x01 } else { 0 })
+                    | (if self.obj_enabled { 0x02 } else { 0 })
+                    | (if self.bg_map { 0x08 } else { 0 })
+                    | (if self.bg_tile { 0x10 } else { 0 })
+                    | (if self.lcd_enabled { 0x80 } else { 0 })
+            },
             0xFF42 => self.scroll_y,
             0xFF43 => self.scroll_x,
             0xFF44 => self.line,
@@ -112,7 +125,11 @@ impl GPUMemoriesAccess for GPU {
     fn write_byte(&mut self, addr: u16, byte: u8) {
         match addr {
             0xFF40 => {
-                self.control = byte;
+                self.bg_enabled = if (byte & 0x01) != 0 { true } else { false };
+                self.obj_enabled = if (byte & 0x02) != 0 { true } else { false };
+                self.bg_map = if (byte & 0x08) != 0 { true } else { false };
+                self.bg_tile = if (byte & 0x10) != 0 { true } else { false };
+                self.lcd_enabled = if (byte & 0x80) != 0 { true } else { false };
             }
             0xFF42 => {
                 self.scroll_y = byte;
@@ -122,6 +139,12 @@ impl GPUMemoriesAccess for GPU {
             }
             0xFF47 => {
                 self.palette = byte;
+            }
+            0xFF48 => {
+                self.obj_palette_1 = byte;
+            }
+            0xFF49 => {
+                self.obj_palette_2 = byte;
             }
             _ => {}
         }
@@ -138,10 +161,17 @@ impl GPU {
             modeclock: 0,
             mode: 2,
             line: 0,
+            bg_enabled: false,
+            obj_enabled: false,
+            bg_map: false,
+            bg_tile: false,
+            lcd_enabled: false,
             scroll_x: 0,
             scroll_y: 0,
             palette: 0,
-            control: 0,
+            obj_palette_1: 0,
+            obj_palette_2: 0,
+
         }
     }
 
@@ -265,7 +295,6 @@ impl GPU {
 #[cfg(test)]
 mod tests {
     use super::*;
-
     // test scroll_y write and read access, as well as the default value
     #[test]
     fn test_scroll_y() {
@@ -312,12 +341,32 @@ mod tests {
     fn test_control() {
         let mut gpu = GPU::new();
 
-        assert_eq!(gpu.control, 0);
+        assert_eq!(gpu.bg_enabled, false);
+        assert_eq!(gpu.obj_enabled, false);
+        assert_eq!(gpu.bg_map, false);
+        assert_eq!(gpu.bg_tile, false);
+        assert_eq!(gpu.lcd_enabled, false);
 
         gpu.write_byte(0xFF40, 1);
-
-        assert_eq!(gpu.control, 1);
+        assert_eq!(gpu.bg_enabled, true);
         assert_eq!(gpu.read_byte(0xFF40), 1);
+
+        gpu.write_byte(0xFF40, 0x02);
+        assert_eq!(gpu.obj_enabled, true);
+        assert_eq!(gpu.read_byte(0xFF40), 0x02);
+
+        gpu.write_byte(0xFF40, 0x08);
+        assert_eq!(gpu.bg_map, true);
+        assert_eq!(gpu.read_byte(0xFF40), 0x08);
+
+        gpu.write_byte(0xFF40, 0x10);
+        assert_eq!(gpu.bg_tile, true);
+        assert_eq!(gpu.read_byte(0xFF40), 0x10);
+
+        gpu.write_byte(0xFF40, 0x80);
+        assert_eq!(gpu.lcd_enabled, true);
+        assert_eq!(gpu.read_byte(0xFF40), 0x80);
+
     }
 
     // test line read and write access
