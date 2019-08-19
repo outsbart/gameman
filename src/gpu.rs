@@ -12,6 +12,38 @@ pub trait GPUMemoriesAccess {
     fn write_byte(&mut self, addr: u16, byte: u8);
 }
 
+#[repr(u8)]
+pub enum Color {
+    Off = 0,
+    Light = 1,
+    Dark = 2,
+    On = 3,
+}
+
+impl Color {
+    #[inline]
+    pub fn from_u8(value: u8) -> Color {
+        use self::Color::*;
+        match value {
+            1 => Light,
+            2 => Dark,
+            3 => On,
+            _ => Off,
+        }
+    }
+}
+
+impl Into<u8> for Color {
+    fn into(self) -> u8 {
+        match self {
+            Color::Off => 0,
+            Color::Light => 1,
+            Color::Dark => 2,
+            Color::On => 3,
+        }
+    }
+}
+
 struct SpriteOptions {
     z: bool, // 0 = above background, 1 = below background (unless colour is 0)
     flip_y: bool, // 1 = flipped vertically
@@ -38,8 +70,8 @@ impl SpriteOptions {
 }
 
 struct Sprite {
-    y: i16, // y coordinate of top left corner, minus 16
-    x: i16, // x coordinate of top left corner, minus 8
+    y: u8, // y coordinate of top left corner, minus 16
+    x: u8, // x coordinate of top left corner, minus 8
     tile_number: u8, // which tile to use
     options: SpriteOptions
 }
@@ -47,8 +79,8 @@ struct Sprite {
 impl Sprite {
     pub fn new() -> Self {
         Sprite {
-            y: -16,
-            x: -8,
+            y: 0,
+            x: 0,
             tile_number: 0,
             options: SpriteOptions::new()
         }
@@ -56,8 +88,8 @@ impl Sprite {
 
     pub fn update(&mut self, field: u8, value: u8) {
         match field {
-            0 => { self.y = i16::from(value - 16) }
-            1 => { self.x = i16::from(value - 8) }
+            0 => { self.y = value.wrapping_sub(16) }
+            1 => { self.x = value.wrapping_sub(8) }
             2 => { self.tile_number = value }
             3 => { self.options.update(value) }
             _ => { panic!("Unhandled sprite field update")}
@@ -85,8 +117,8 @@ pub struct GPU {
     scroll_x: u8,
     scroll_y: u8,
     palette: u8,
+    obj_palette_0: u8,
     obj_palette_1: u8,
-    obj_palette_2: u8,
 }
 
 impl GPUMemoriesAccess for GPU {
@@ -141,10 +173,10 @@ impl GPUMemoriesAccess for GPU {
                 self.palette = byte;
             }
             0xFF48 => {
-                self.obj_palette_1 = byte;
+                self.obj_palette_0 = byte;
             }
             0xFF49 => {
-                self.obj_palette_2 = byte;
+                self.obj_palette_1 = byte;
             }
             _ => {}
         }
@@ -169,9 +201,8 @@ impl GPU {
             scroll_x: 0,
             scroll_y: 0,
             palette: 0,
+            obj_palette_0: 0,
             obj_palette_1: 0,
-            obj_palette_2: 0,
-
         }
     }
 
@@ -198,35 +229,74 @@ impl GPU {
         let tilemap0_offset = 0x9800 - 0x8000;
 
         // background
+        if self.bg_enabled {
 
-        for tile in 0..20 {
-            // todo: right now only draws the first 20 tiles from the left, use scroll X
-            let tilemap_index =
-                tilemap0_offset + (tilemap_row * tiles_in_a_tilemap_row + tile) as usize;
-            let pos = self.vram[tilemap_index];
+            // a row is 20 tiles
+            for tile in 0..tiles_in_a_screen_row {
+                // todo: right now only draws the first 20 tiles from the left, use scroll X
+                let tilemap_index =
+                    tilemap0_offset + (tilemap_row * tiles_in_a_tilemap_row + tile) as usize;
+                let pos = self.vram[tilemap_index];
 
-            let tile_in_tileset: usize =
-                (2 * tile_size * (pos as usize) + (pixel_row as usize) * 2) as usize;
+                let tile_in_tileset: usize =
+                    (2 * tile_size * (pos as usize) + (pixel_row as usize) * 2) as usize;
 
-            // a tile pixel line is encoded in two consecutive bytes
-            let byte_1 = self.vram[tile_in_tileset];
-            let byte_2 = self.vram[tile_in_tileset + 1];
+                // a tile pixel line is encoded in two consecutive bytes
+                let byte_1 = self.vram[tile_in_tileset];
+                let byte_2 = self.vram[tile_in_tileset + 1];
 
-            for pixel in 0..8u8 {
-                let ix = 7 - pixel;
-                let high_bit: u8 = is_bit_set(ix, byte_2 as u16) as u8;
-                let low_bit: u8 = is_bit_set(ix, byte_1 as u16) as u8;
+                for pixel in 0..8u8 {
+                    let ix = 7 - pixel;
+                    let high_bit: u8 = is_bit_set(ix, byte_2 as u16) as u8;
+                    let low_bit: u8 = is_bit_set(ix, byte_1 as u16) as u8;
 
-                let color: u8 = (high_bit << 1) + low_bit;
-                let index: usize = (self.line as usize * tiles_in_a_screen_row * tile_size)
-                    + (tile as usize) * tile_size
-                    + pixel as usize;
+                    let color: u8 = (high_bit << 1) + low_bit;
+                    let index: usize = (self.line as usize * tiles_in_a_screen_row * tile_size)
+                        + (tile as usize) * tile_size
+                        + pixel as usize;
 
-                self.buffer[index] = color;
+                    self.buffer[index] = color;
+                }
             }
+
         }
 
         // sprites
+        if self.obj_enabled {
+            let sprite_size = 8; // todo: allow 16pixel sprites
+
+            for sprite_num in 0..40 {
+                let sprite = &self.sprites[sprite_num];
+
+                // is it along scanline?
+                if (sprite.y <= self.line) && (sprite.y + sprite_size > self.line) {
+                    let sprite_pixel_row = self.line - sprite.y;
+
+                    let pos = sprite.tile_number;
+                    let tile_in_tileset: usize = (2 * sprite_size as usize * pos as usize * sprite_pixel_row as usize * 2) as usize;
+
+                    // a tile pixel line is encoded in two consecutive bytes
+                    let byte_1 = self.vram[tile_in_tileset];
+                    let byte_2 = self.vram[tile_in_tileset + 1];
+
+                    for pixel in 0..8u8 {
+                        // check if it is in the screen. Is it within first 160 pixels?
+                        // todo: use scroll_x instead of first 160...
+                        if (sprite.x + pixel >= 0) && (sprite.x < 160) {
+                            let ix = 7 - pixel;
+                            let high_bit: u8 = is_bit_set(ix, byte_2 as u16) as u8;
+                            let low_bit: u8 = is_bit_set(ix, byte_1 as u16) as u8;
+
+                            let color: u8 = (high_bit << 1) + low_bit;
+                            let index: usize = (self.line as usize * tiles_in_a_screen_row * tile_size)
+                                + sprite.x as usize + pixel as usize;
+
+                            self.buffer[index] = color;
+                        }
+                    }
+                }
+            }
+        }
 
 
     }
