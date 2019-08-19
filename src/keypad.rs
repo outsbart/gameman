@@ -28,12 +28,12 @@ impl Key {
             0x20 => self.rows[1],
             _ => 0xCF
         } | self.column;
-        println!("somebody read {:b}", ret);
+        // println!("somebody read {:b}", ret);
         ret
     }
 
     pub fn write_byte(&mut self, value: u8) {
-        println!("somebody wrote {:b}", value);
+        // println!("somebody wrote {:b}", value);
         self.column = value & 0b110000;
     }
 

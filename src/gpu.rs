@@ -12,35 +12,71 @@ pub trait GPUMemoriesAccess {
     fn write_byte(&mut self, addr: u16, byte: u8);
 }
 
+#[derive(Clone, Copy)]
 #[repr(u8)]
-pub enum Color {
+pub enum Colour {
     Off = 0,
     Light = 1,
     Dark = 2,
     On = 3,
 }
 
-impl Color {
-    #[inline]
-    pub fn from_u8(value: u8) -> Color {
-        use self::Color::*;
+impl Colour {
+    pub fn from_u8(value: u8) -> Self {
         match value {
-            1 => Light,
-            2 => Dark,
-            3 => On,
-            _ => Off,
+            1 => Colour::Light,
+            2 => Colour::Dark,
+            3 => Colour::On,
+            _ => Colour::Off,
         }
     }
 }
 
-impl Into<u8> for Color {
+impl Into<u8> for Colour {
     fn into(self) -> u8 {
         match self {
-            Color::Off => 0,
-            Color::Light => 1,
-            Color::Dark => 2,
-            Color::On => 3,
+            Colour::Off => 0,
+            Colour::Light => 1,
+            Colour::Dark => 2,
+            Colour::On => 3,
         }
+    }
+}
+
+struct Palette {
+    colour_3: Colour,
+    colour_2: Colour,
+    colour_1: Colour,
+    colour_0: Colour,
+    byte: u8
+}
+
+impl Palette {
+    fn new() -> Self {
+        Palette {
+            colour_3: Colour::Off,
+            colour_2: Colour::Off,
+            colour_1: Colour::Off,
+            colour_0: Colour::Off,
+            byte: 0xFF
+        }
+    }
+
+    fn get(&self, colour_number: u8) -> Colour {
+        match colour_number {
+            3 => self.colour_3,
+            2 => self.colour_2,
+            1 => self.colour_1,
+            _ => self.colour_0,
+        }
+    }
+
+    fn update(&mut self, value: u8) {
+        self.colour_0 = Colour::from_u8(value & 0b0000_0011);
+        self.colour_1 = Colour::from_u8((value & 0b0000_1100) >> 2);
+        self.colour_2 = Colour::from_u8((value & 0b0011_0000) >> 4);
+        self.colour_3 = Colour::from_u8((value & 0b1100_0000) >> 6);
+        self.byte = value;
     }
 }
 
@@ -116,9 +152,9 @@ pub struct GPU {
 
     scroll_x: u8,
     scroll_y: u8,
-    palette: u8,
-    obj_palette_0: u8,
-    obj_palette_1: u8,
+    bg_palette: Palette,
+    obj_palette_0: Palette,
+    obj_palette_1: Palette,
 }
 
 impl GPUMemoriesAccess for GPU {
@@ -151,6 +187,9 @@ impl GPUMemoriesAccess for GPU {
             0xFF42 => self.scroll_y,
             0xFF43 => self.scroll_x,
             0xFF44 => self.line,
+            0xFF47 => self.bg_palette.byte,
+            0xFF48 => self.obj_palette_0.byte,
+            0xFF49 => self.obj_palette_1.byte,
             _ => 0,
         }
     }
@@ -170,13 +209,13 @@ impl GPUMemoriesAccess for GPU {
                 self.scroll_x = byte;
             }
             0xFF47 => {
-                self.palette = byte;
+                self.bg_palette.update(byte);
             }
             0xFF48 => {
-                self.obj_palette_0 = byte;
+                self.obj_palette_0.update(byte);
             }
             0xFF49 => {
-                self.obj_palette_1 = byte;
+                self.obj_palette_1.update(byte);
             }
             _ => {}
         }
@@ -200,9 +239,9 @@ impl GPU {
             lcd_enabled: false,
             scroll_x: 0,
             scroll_y: 0,
-            palette: 0,
-            obj_palette_0: 0,
-            obj_palette_1: 0,
+            bg_palette: Palette::new(),
+            obj_palette_0: Palette::new(),
+            obj_palette_1: Palette::new(),
         }
     }
 
@@ -250,12 +289,14 @@ impl GPU {
                     let high_bit: u8 = is_bit_set(ix, byte_2 as u16) as u8;
                     let low_bit: u8 = is_bit_set(ix, byte_1 as u16) as u8;
 
-                    let color: u8 = (high_bit << 1) + low_bit;
+                    let colour_number = (high_bit << 1) + low_bit;
+                    let palette_colour = self.bg_palette.get(colour_number);
+
                     let index: usize = (self.line as usize * tiles_in_a_screen_row * tile_size)
                         + (tile as usize) * tile_size
                         + pixel as usize;
 
-                    self.buffer[index] = color;
+                    self.buffer[index] = palette_colour as u8;
                 }
             }
 
@@ -287,11 +328,14 @@ impl GPU {
                             let high_bit: u8 = is_bit_set(ix, byte_2 as u16) as u8;
                             let low_bit: u8 = is_bit_set(ix, byte_1 as u16) as u8;
 
-                            let color: u8 = (high_bit << 1) + low_bit;
+                            let colour_number= (high_bit << 1) + low_bit;
+                            let palette = if sprite.options.palette { &self.obj_palette_1 } else { &self.obj_palette_0 };
+                            let colour = palette.get(colour_number);
+
                             let index: usize = (self.line as usize * tiles_in_a_screen_row * tile_size)
                                 + sprite.x as usize + pixel as usize;
 
-                            self.buffer[index] = color;
+                            self.buffer[index] = colour as u8;
                         }
                     }
                 }
@@ -393,17 +437,41 @@ mod tests {
 
     // test palette write and read access, as well as the default value
     #[test]
-    fn test_palette() {
+    fn test_bg_palette() {
         let mut gpu = GPU::new();
 
         // default value
-        assert_eq!(gpu.palette, 0);
+        assert_eq!(gpu.bg_palette.byte, 0xFF);
 
         gpu.write_byte(0xFF47, 1);
 
-        assert_eq!(gpu.palette, 1);
-        // no read access
-        assert_eq!(gpu.read_byte(0xFF47), 0);
+        assert_eq!(gpu.bg_palette.byte, 1);
+    }
+
+    // test obj palette 0 write and read access, as well as the default value
+    #[test]
+    fn test_obj_palette_0() {
+        let mut gpu = GPU::new();
+
+        // default value
+        assert_eq!(gpu.obj_palette_0.byte, 0xFF);
+
+        gpu.write_byte(0xFF48, 1);
+
+        assert_eq!(gpu.obj_palette_0.byte, 1);
+    }
+
+        // test palette write and read access, as well as the default value
+    #[test]
+    fn test_obj_palette_2() {
+        let mut gpu = GPU::new();
+
+        // default value
+        assert_eq!(gpu.obj_palette_1.byte, 0xFF);
+
+        gpu.write_byte(0xFF49, 1);
+
+        assert_eq!(gpu.obj_palette_1.byte, 1);
     }
 
     // test control write and read access, as well as the default value
@@ -459,12 +527,12 @@ mod tests {
         let mut gpu = GPU::new();
 
         // should update first sprite's first property
-        assert_eq!(gpu.sprites[0].y, -16);
+        assert_eq!(gpu.sprites[0].y, 0);
         gpu.update_sprite(0, 18);
         assert_eq!(gpu.sprites[0].y, 2);
 
         // should update first sprite's 2nd property
-        assert_eq!(gpu.sprites[0].x, -8);
+        assert_eq!(gpu.sprites[0].x, 0);
         gpu.update_sprite(1, 14);
         assert_eq!(gpu.sprites[0].x, 6);
 
