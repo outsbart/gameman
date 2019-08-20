@@ -213,9 +213,11 @@ impl GPUMemoriesAccess for GPU {
             }
             0xFF48 => {
                 self.obj_palette_0.update(byte);
+                println!("obj palette 0 set");
             }
             0xFF49 => {
                 self.obj_palette_1.update(byte);
+                println!("obj palette 1 set");
             }
             _ => {}
         }
@@ -267,6 +269,9 @@ impl GPU {
 
         let tilemap0_offset = 0x9800 - 0x8000;
 
+        // save colour numbers being rendered before palette application. 0 is transparent
+        let mut rendering_row = [0u8; 160];
+
         // background
         if self.bg_enabled {
 
@@ -296,6 +301,8 @@ impl GPU {
                         + (tile as usize) * tile_size
                         + pixel as usize;
 
+                    rendering_row[tile * tile_size + pixel as usize] = colour_number;
+
                     self.buffer[index] = palette_colour as u8;
                 }
             }
@@ -314,7 +321,7 @@ impl GPU {
                     let sprite_pixel_row = self.line - sprite.y;
 
                     let pos = sprite.tile_number;
-                    let tile_in_tileset: usize = (2 * sprite_size as usize * pos as usize * sprite_pixel_row as usize * 2) as usize;
+                    let tile_in_tileset: usize = (2 * sprite_size as usize * pos as usize + sprite_pixel_row as usize * 2) as usize;
 
                     // a tile pixel line is encoded in two consecutive bytes
                     let byte_1 = self.vram[tile_in_tileset];
@@ -323,26 +330,31 @@ impl GPU {
                     for pixel in 0..8u8 {
                         // check if it is in the screen. Is it within first 160 pixels?
                         // todo: use scroll_x instead of first 160...
-                        if (sprite.x + pixel >= 0) && (sprite.x < 160) {
+                        if (sprite.x + pixel >= 0) && (sprite.x + pixel < 160)
+                        {
                             let ix = 7 - pixel;
                             let high_bit: u8 = is_bit_set(ix, byte_2 as u16) as u8;
                             let low_bit: u8 = is_bit_set(ix, byte_1 as u16) as u8;
 
                             let colour_number= (high_bit << 1) + low_bit;
+
+                            // transparent, don't draw
+                            if colour_number == 0 { continue; }
+
                             let palette = if sprite.options.palette { &self.obj_palette_1 } else { &self.obj_palette_0 };
-                            let colour = palette.get(colour_number);
 
                             let index: usize = (self.line as usize * tiles_in_a_screen_row * tile_size)
                                 + sprite.x as usize + pixel as usize;
 
-                            self.buffer[index] = colour as u8;
+                            if (sprite.options.z == true) || (rendering_row[(sprite.x + pixel) as usize] == 0) {
+                                let colour = palette.get(colour_number);
+                                self.buffer[index] = colour as u8;
+                            }
                         }
                     }
                 }
             }
         }
-
-
     }
 
     // go forward based on the cpu's last operation clocks
