@@ -285,10 +285,10 @@ impl Emulator {
                                 let color: u8 = (high_bit << 1) + low_bit;
 
                                 let paletted_color = match color {
-                                    0x00 => 255,
-                                    0x01 => 192,
-                                    0x10 => 96,
-                                    0x11 => 0,
+                                    0b00 => 255,
+                                    0b01 => 192,
+                                    0b10 => 96,
+                                    0b11 => 0,
                                     _ => 128,
                                 };
 
@@ -351,20 +351,21 @@ impl Emulator {
                     for y in 0..144 {
                         for x in 0..160 {
                             let pixel = gpu_buffer[x + y * 160];
-                            let paletted_color = match pixel {
-                                0x00 => 255,
-                                0x01 => 192,
-                                0x10 => 96,
-                                0x11 => 0,
-                                _ => 128,
+
+                            let paletted_color: (u8, u8, u8) = match pixel {
+                                0b00 => (0xc4, 0xf0, 0xc2),
+                                0b01 => (0x5a, 0xb9, 0xa8),
+                                0b10 => (0x1e, 0x60, 0x6e),
+                                0b11 => (0x2d, 0x1b, 0x00),
+                                _ => panic!("unexpected pixel color"),
                             };
 
                             let x_out = x * 3;
                             let y_out = y * pitch;
 
-                            buffer[x_out + y_out] = paletted_color;
-                            buffer[x_out + y_out + 1] = paletted_color;
-                            buffer[x_out + y_out + 2] = paletted_color;
+                            buffer[x_out + y_out] = paletted_color.0;
+                            buffer[x_out + y_out + 1] = paletted_color.1;
+                            buffer[x_out + y_out + 2] = paletted_color.2;
                         }
                     }
                 })
