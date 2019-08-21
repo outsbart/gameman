@@ -52,6 +52,10 @@ impl<M: GPUMemoriesAccess> MMU<M> {
     pub fn set_rom(&mut self, rom: [u8; 0x8000]) {
         self.rom = rom;
     }
+
+    pub fn tick_timers(&mut self, cycles: u8) {
+        self.timers.tick(cycles);
+    }
 }
 
 pub trait Memory {
@@ -66,6 +70,7 @@ pub trait Memory {
         self.write_byte(addr, (word & 0x00FF) as u8);
         self.write_byte(addr + 1, ((word & 0xFF00) >> 8) as u8);
     }
+    fn tick(&mut self, cpu_cycles: u8) {}
 }
 
 impl<M: GPUMemoriesAccess> Memory for MMU<M> {
@@ -219,6 +224,15 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
             }
 
             _ => panic!("Unhandled memory write"),
+        }
+    }
+
+    fn tick(&mut self, cpu_cycles: u8) {
+        let raise_interrupt = self.timers.tick(cpu_cycles);
+
+        if raise_interrupt {
+            let interrupt_flags = self.read_byte(0xFF0F);
+            self.write_byte(0xFF0F, interrupt_flags | 4);
         }
     }
 }

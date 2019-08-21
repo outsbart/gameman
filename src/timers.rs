@@ -34,14 +34,15 @@ impl Into<u8> for TimerSpeed {
 pub struct Timers {
     main: u8,
     sub: u8,
+    div: u8,
 
-    // value of divider register
+    speed: TimerSpeed,
+    running: bool, // true if enabled
+
+    // registers
     divider: u8,
     counter: u8,
     modulo: u8,
-    speed: TimerSpeed,
-    // true if enabled
-    running: bool
 }
 
 impl Timers {
@@ -49,6 +50,8 @@ impl Timers {
         Timers {
             main: 0,
             sub: 0,
+            div: 0,
+
             divider: 0,
             counter: 0,
             modulo: 0,
@@ -58,7 +61,44 @@ impl Timers {
     }
 
     // send the timers forward; returns true if timer interrupt should be triggered
-    pub fn tick(&mut self, cycles: u8) {
+    pub fn tick(&mut self, cycles: u8) -> bool {
+        let m = cycles / 4;
+        self.sub += m;
+
+        if self.sub >= 4 {
+            self.main += 1;
+            self.sub -= 4;
+
+            self.div += 1;
+            if self.div == 16 {
+                self.divider = self.divider.wrapping_add(1);
+                self.div = 0;
+            }
+        }
+
+        // check if enabled
+        if !self.running { return false; }
+
+        let threshold = match self.speed {
+            TimerSpeed::Speed0 => 64,
+            TimerSpeed::Speed1 => 1,
+            TimerSpeed::Speed2 => 4,
+            TimerSpeed::Speed3 => 16
+        };
+
+        // no need to send timer forward
+        if self.main < threshold { return false; }
+
+        self.main = 0;
+        self.counter = self.counter.wrapping_add(1);
+
+        // overflow
+        if self.counter == 0 {
+            self.counter = self.modulo;
+            return true;
+        }
+
+        false
     }
 
     // when writing to 0xFF04

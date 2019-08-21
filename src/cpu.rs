@@ -319,7 +319,7 @@ impl<M: Memory> CPU<M> {
     fn tick_timers(&mut self) {
         let cycles = self.regs.read_byte(REG_T);
 
-        // self.timers.tick(cycles);
+        self.mmu.tick(cycles);
     }
 
     pub fn execute(&mut self, op: &Operation) {
