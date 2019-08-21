@@ -14,6 +14,7 @@ pub mod emu;
 pub mod gpu;
 pub mod keypad;
 pub mod link;
+pub mod timers;
 pub mod mem;
 pub mod ops;
 pub mod utils;

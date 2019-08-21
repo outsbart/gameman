@@ -1,6 +1,7 @@
 use crate::gpu::GPUMemoriesAccess;
 use crate::link::Link;
 use crate::keypad::Key;
+use crate::timers::Timers;
 
 pub struct MMU<M: GPUMemoriesAccess> {
     still_bios: bool,
@@ -10,6 +11,8 @@ pub struct MMU<M: GPUMemoriesAccess> {
     wram: [u8; 0x2000], // second half of rom is swappable (aka rom banking)
     eram: [u8; 0x2000],
     zram: [u8; 0x0080],
+
+    pub timers: Timers,
 
     pub interrupt_enable: u8,
     pub interrupt_flags: u8,
@@ -29,6 +32,8 @@ impl<M: GPUMemoriesAccess> MMU<M> {
             wram: [0; 0x2000],
             eram: [0; 0x2000],
             zram: [0; 0x0080],
+
+            timers: Timers::new(),
 
             interrupt_enable: 0,
             interrupt_flags: 0xe0,
@@ -104,6 +109,14 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                             self.interrupt_enable
                         } else if addr == 0xFF0F {
                             self.interrupt_flags
+                        } else if addr == 0xFF04 {
+                            self.timers.read_divider()
+                        } else if addr == 0xFF05 {
+                            self.timers.read_counter()
+                        } else if addr == 0xFF06 {
+                            self.timers.read_modulo()
+                        } else if addr == 0xFF07 {
+                            self.timers.read_control()
                         } else if addr >= 0xFF80 {
                             self.zram[(addr & 0x007F) as usize]
                         } else if addr >= 0xFF40 {
@@ -166,6 +179,10 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                         if addr == 0xFF0F {
                             self.interrupt_flags = byte
                         }
+                        // keypad
+                        if addr == 0xFF00 {
+                            self.key.write_byte(byte);
+                        }
                         if addr == 0xFF01 {
                             self.zram[(addr & 0x007F) as usize] = byte;
                             return;
@@ -175,9 +192,17 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                                 self.link.send(self.zram[(0xFF01 & 0x007F)] as char);
                             }
                         }
-                        // keypad
-                        if addr == 0xFF00 {
-                            self.key.write_byte(byte);
+                        if addr == 0xFF04 {
+                            self.timers.change_divider(byte);
+                        }
+                        if addr == 0xFF05 {
+                            self.timers.change_counter(byte);
+                        }
+                        if addr == 0xFF06 {
+                            self.timers.change_modulo(byte);
+                        }
+                        if addr == 0xFF07 {
+                            self.timers.change_control(byte);
                         }
                         if addr >= 0xFF80 {
                             self.zram[(addr & 0x007F) as usize] = byte;
@@ -226,18 +251,18 @@ mod tests {
     }
 
     impl GPUMemoriesAccess for DummyGPU {
-        fn read_vram(&mut self, addr: u16) -> u8 {
-            self.vram[addr as usize]
-        }
-        fn write_vram(&mut self, addr: u16, byte: u8) {
-            self.vram[addr as usize] = byte;
-        }
-        fn update_sprite(&mut self, _addr: u16, _byte: u8) { }
         fn read_oam(&mut self, addr: u16) -> u8 {
             self.oam[addr as usize]
         }
         fn write_oam(&mut self, addr: u16, byte: u8) {
             self.oam[addr as usize] = byte;
+        }
+        fn update_sprite(&mut self, _addr: u16, _byte: u8) { }
+        fn read_vram(&mut self, addr: u16) -> u8 {
+            self.vram[addr as usize]
+        }
+        fn write_vram(&mut self, addr: u16, byte: u8) {
+            self.vram[addr as usize] = byte;
         }
         fn read_byte(&mut self, addr: u16) -> u8 {
             self.registers[addr as usize]
