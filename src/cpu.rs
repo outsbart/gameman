@@ -166,7 +166,6 @@ impl<M: Memory> CPU<M> {
         let mut cycles_this_step: u8 = 0;
 
         if !self.halted {
-
             let mut prefixed = false;
             let mut byte = self.read_byte();
 
@@ -174,7 +173,6 @@ impl<M: Memory> CPU<M> {
                 byte = self.read_byte();
                 prefixed = true;
             }
-
 
             let op: &Operation = fetch_operation(byte, prefixed);
 

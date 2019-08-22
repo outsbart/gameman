@@ -402,9 +402,12 @@ impl GPU {
                     self.modeclock = 0;
                     self.line += 1;
 
+                    if self.line == 144 {
+                        vblank_interrupt = true;
+                    }
+
                     // restart
                     if self.line > 153 {
-                        vblank_interrupt = true;
 
                         self.mode = 2;
                         self.line = 0;
