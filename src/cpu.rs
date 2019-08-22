@@ -107,6 +107,7 @@ pub struct CPU<M: Memory> {
     interrupt_master_enable: bool,
     schedule_interrupt_enable: bool, // if set to true, next step interrupt_master_enable will be set to 1
     stopped: bool,
+    halted: bool, // used for HALT
 }
 
 impl<M: Memory> ByteStream for CPU<M> {
@@ -127,6 +128,7 @@ impl<M: Memory> CPU<M> {
             interrupt_master_enable: false,
             schedule_interrupt_enable: false,
             stopped: false,
+            halted: false,
         };
         cpu.reset();
         cpu
@@ -161,27 +163,34 @@ impl<M: Memory> CPU<M> {
     pub fn step(&mut self) -> (u16, u8) {
         let line_number = self.get_registry_value("PC");
 
-        let mut prefixed = false;
-        let mut byte = self.read_byte();
-
-        if byte == 0xcb {
-            byte = self.read_byte();
-            prefixed = true;
-        }
-
         let mut cycles_this_step: u8 = 0;
 
-        let op: &Operation = fetch_operation(byte, prefixed);
+        if !self.halted {
 
-        info!(
-            "0x{:x}\t0x{:x}\t{}\t{:?}\t{:?}",
-            line_number,
-            op.code_as_u8(),
-            op.mnemonic,
-            op.operand1,
-            op.operand2
-        );
-        self.execute(op);
+            let mut prefixed = false;
+            let mut byte = self.read_byte();
+
+            if byte == 0xcb {
+                byte = self.read_byte();
+                prefixed = true;
+            }
+
+
+            let op: &Operation = fetch_operation(byte, prefixed);
+
+            info!(
+                "0x{:x}\t0x{:x}\t{}\t{:?}\t{:?}",
+                line_number,
+                op.code_as_u8(),
+                op.mnemonic,
+                op.operand1,
+                op.operand2
+            );
+
+            self.execute(op);
+        } else {
+            self.regs.write_byte(REG_T, 4);
+        }
 
         cycles_this_step += self.regs.read_byte(REG_T);
 
@@ -323,6 +332,8 @@ impl<M: Memory> CPU<M> {
     }
 
     pub fn execute(&mut self, op: &Operation) {
+        self.regs.write_byte(REG_T, 4);
+
         if self.schedule_interrupt_enable {
             self.interrupt_master_enable = true;
             self.schedule_interrupt_enable = false;
@@ -534,6 +545,10 @@ impl<M: Memory> CPU<M> {
             "SET" => {
                 result = set_bit(op1 as u8, op2 as u8);
             }
+            "HALT" => {
+                println!("halting");
+                self.halted = true;
+            } // todo: implement halt bug
             _ => {
                 panic!(
                     "0x{:x}\t{} not implemented yet!",
@@ -598,83 +613,90 @@ impl<M: Memory> CPU<M> {
         self.regs.write_byte(REG_T, cycles);
     }
 
-    fn handle_interrupts(&mut self) {
-        let mut interrupt_cycles_t: u8 = 0;
+    // return IE & IF
+    fn interrupts_to_handle(&mut self) -> u8 {
         let interrupt_enable = self.mmu.read_byte(0xFFFF);
         let interrupt_flags = self.mmu.read_byte(0xFF0F);
+        return interrupt_enable & interrupt_flags;
+    }
 
-        if self.interrupt_master_enable && (interrupt_enable != 0) && (interrupt_flags != 0) {
-            let fired = interrupt_enable & interrupt_flags;
+    fn handle_interrupts(&mut self) {
+        let mut interrupt_cycles_t: u8 = 0;
+        let interrupts = self.interrupts_to_handle();
 
-            // if we have to handle an interrupt
-            if fired != 0 {
-
-                println!("fired?{:b} interrupt enable={:b}; interrupt_flags={:b}", fired, interrupt_enable, interrupt_flags);
-
-                // only one interrupt handling at a time
-                self.interrupt_master_enable = false;
-
-                // put current instruction on the stack, handle interrupt immediately
-                let value = self.get_registry_value("PC");
-                self.push(value);
-
-                interrupt_cycles_t = 12;
-
-                // vblank
-                if (fired & 0x1) != 0 {
-                    // turn interrupt flag off cause we are handling it now
-                    println!("handling vblank");
-                    self.mmu
-                        .write_byte(0xFF0F, reset_bit(0, interrupt_flags) as u8);
-
-                    self.set_registry_value("PC", 0x0040);
-                }
-
-                // lcd status triggers
-                else if (fired & 0x2) != 0 {
-                    println!("Handling lcd stat");
-
-                    self.mmu
-                        .write_byte(0xFF0F, reset_bit(1, interrupt_flags) as u8);
-
-                    self.set_registry_value("PC", 0x0048);
-                }
-
-                // timer
-                if (fired & 0x4) != 0 {
-                    println!("Handling timer");
-
-                    self.mmu
-                        .write_byte(0xFF0F, reset_bit(2, interrupt_flags) as u8);
-
-                    self.set_registry_value("PC", 0x0050);
-                }
-
-                // serial
-                else if (fired & 0b1000) != 0 {
-                    println!("Handling serial");
-
-                    self.mmu
-                        .write_byte(0xFF0F, reset_bit(3, interrupt_flags) as u8);
-
-                    self.set_registry_value("PC", 0x0058);
-                }
-
-                // joypad
-                else if (fired & 0b10000) != 0 {
-                    println!("Handling joypad");
-
-                    self.mmu
-                        .write_byte(0xFF0F, reset_bit(4, interrupt_flags) as u8);
-
-                    self.set_registry_value("PC", 0x0060);
-                }
-            }
-
-            // todo: on button press resume from stop
-
+        // wake up cpu if there is an interrupt, even if ime = 0
+        if interrupts != 0 && self.halted {
+            println!("dehalting");
+            self.halted = false;
         }
 
+        // if we have to handle an interrupt
+        if self.interrupt_master_enable && interrupts != 0 {
+            println!("handling interrupts={:b}", interrupts);
+
+            // only one interrupt handling at a time
+            self.interrupt_master_enable = false;
+
+            // put current instruction on the stack, handle interrupt immediately
+            let value = self.get_registry_value("PC");
+            self.push(value);
+
+            interrupt_cycles_t = 12;
+
+            let interrupt_flags = self.mmu.read_byte(0xFF0F);
+
+            // vblank
+            if (interrupts & 0x1) != 0 {
+                // turn interrupt flag off cause we are handling it now
+                println!("handling vblank");
+                self.mmu
+                    .write_byte(0xFF0F, reset_bit(0, interrupt_flags) as u8);
+
+                self.set_registry_value("PC", 0x0040);
+            }
+
+            // lcd status triggers
+            else if (interrupts & 0x2) != 0 {
+                println!("Handling lcd stat");
+
+                self.mmu
+                    .write_byte(0xFF0F, reset_bit(1, interrupt_flags) as u8);
+
+                self.set_registry_value("PC", 0x0048);
+            }
+
+            // timer
+            if (interrupts & 0x4) != 0 {
+                println!("Handling timer");
+
+                self.mmu
+                    .write_byte(0xFF0F, reset_bit(2, interrupt_flags) as u8);
+
+                self.set_registry_value("PC", 0x0050);
+            }
+
+            // serial
+            else if (interrupts & 0b1000) != 0 {
+                println!("Handling serial");
+
+                self.mmu
+                    .write_byte(0xFF0F, reset_bit(3, interrupt_flags) as u8);
+
+                self.set_registry_value("PC", 0x0058);
+            }
+
+            // joypad
+            else if (interrupts & 0b10000) != 0 {
+                println!("Handling joypad");
+
+                self.mmu
+                    .write_byte(0xFF0F, reset_bit(4, interrupt_flags) as u8);
+
+                self.set_registry_value("PC", 0x0060);
+            }
+        }
+
+        // todo: on button press resume from stop
         self.regs.write_byte(REG_T, interrupt_cycles_t);
     }
 }
