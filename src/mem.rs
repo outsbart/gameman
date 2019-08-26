@@ -89,22 +89,24 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                 self.rom[addr as usize]
             }
 
-            0x1000...0x3000 => self.rom[addr as usize], // ROM 0
-            0x4000...0x7000 => self.rom[addr as usize], // TODO: banking
+            0x1000 | 0x2000| 0x3000 => self.rom[addr as usize], // ROM 0
+            0x4000 | 0x5000 | 0x6000 | 0x7000 => self.rom[addr as usize], // TODO: banking
             0x8000 | 0x9000 => self.gpu.read_vram(addr & 0x1FFF), // VRAM
             0xA000 | 0xB000 => self.eram[(addr & 0x1FFF) as usize], // External RAM
-            0xC000...0xE000 => self.wram[(addr & 0x1FFF) as usize], // Working RAM
+            0xC000 | 0xD000 | 0xE000 => self.wram[(addr & 0x1FFF) as usize], // Working RAM
 
             0xF000 => {
                 match addr & 0x0F00 {
-                    0x0000...0x0D00 => self.wram[(addr & 0x1FFF) as usize], // Working RAM echo
+                    0x0000 | 0x0100 | 0x0200 | 0x0300 | 0x0400 |
+                    0x0500 | 0x0600 | 0x0700 | 0x0800 | 0x0900 |
+                    0x0A00 | 0x0B00 | 0x0C00 | 0x0D00 => self.wram[(addr & 0x1FFF) as usize], // Working RAM echo
 
                     // GPU OAM
                     0x0E00 => {
                         if addr < 0xFEA0 {
                             self.gpu.read_oam(addr & 0x00FF)
                         } else {
-                            0
+                            0xFF
                         }
                     }
 
@@ -130,7 +132,7 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                             // io
                             match addr & 0x3F {
                                 0x0 => self.key.read_byte(),
-                                _ => 0,
+                                _ => 0xFF,
                             }
                         }
                     }
@@ -145,8 +147,8 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
     fn write_byte(&mut self, addr: u16, byte: u8) {
         // TODO: once everything works and is tested, refactor using actual ranges
         match addr & 0xF000 {
-            0x0000...0x3000 => return, // BIOS AND ROM 0
-            0x4000...0x7000 => return, // ROM 1
+            0x0000 | 0x1000 | 0x2000 | 0x3000 => return, // BIOS AND ROM 0
+            0x4000 | 0x5000 | 0x6000 | 0x7000 => return, // ROM 1
             0x8000 | 0x9000 => {
                 self.gpu.write_vram(addr & 0x1FFF, byte);
                 return;
@@ -155,14 +157,16 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                 self.eram[(addr & 0x1FFF) as usize] = byte;
                 return;
             } // External RAM
-            0xC000...0xE000 => {
+            0xC000 | 0xD000 | 0xE000 => {
                 self.wram[(addr & 0x1FFF) as usize] = byte;
                 return;
             } // Working RAM
 
             0xF000 => {
                 match addr & 0x0F00 {
-                    0x0000...0x0D00 => {
+                    0x0000 | 0x0100 | 0x0200 | 0x0300 | 0x0400 |
+                    0x0500 | 0x0600 | 0x0700 | 0x0800 | 0x0900 |
+                    0x0A00 | 0x0B00 | 0x0C00 | 0x0D00 => {
                         self.wram[(addr & 0x1FFF) as usize] = byte;
                         return;
                     } // Working RAM echo
@@ -319,7 +323,7 @@ mod tests {
         assert_eq!(mmu.read_byte(0x00FF), 5);
     }
 
-    /// test succesful mapping for rom access
+    /// test successful mapping for rom access
     /// from 0x0000 to 0x7FFF should access rom
     #[test]
     fn rom_access() {
@@ -336,7 +340,7 @@ mod tests {
         assert_eq!(mmu.read_byte(0x8000), 0);
     }
 
-    /// test succesful mapping for eram access
+    /// test successful mapping for eram access
     /// from 0xA000 to 0xBFFF should access eram
     #[test]
     fn eram_access() {
@@ -352,7 +356,7 @@ mod tests {
         assert_eq!(mmu.read_byte(0xC000), 0);
     }
 
-    /// test succesful mapping for eram write
+    /// test successful mapping for eram write
     /// from 0xA000 to 0xBFFF should write to eram at addr &0x1FFF
     #[test]
     fn eram_write() {
@@ -367,7 +371,7 @@ mod tests {
         assert_eq!(mmu.eram[0xBFFF & 0x1FFF], 1);
     }
 
-    /// test succesful mapping for wram access
+    /// test successful mapping for wram access
     /// from 0xC000 to 0xFDFF should access wram
     #[test]
     fn wram_access() {
@@ -384,7 +388,7 @@ mod tests {
         assert_eq!(mmu.read_byte(0xFE00), 0);
     }
 
-    /// test succesful mapping for wram write
+    /// test successful mapping for wram write
     /// from 0xC000 to 0xFDFF should write to wram at addr &0x1FFF
     #[test]
     fn wram_write() {
@@ -401,7 +405,7 @@ mod tests {
         assert_eq!(mmu.wram[0xFDFF & 0x1FFF], 1);
     }
 
-    /// test succesful mapping for zero ram access
+    /// test successful mapping for zero ram access
     /// from 0xFF80 to 0xFFFF should access zero ram
     /// careful, cause the areas overlaps with IO
     #[test]
@@ -415,7 +419,7 @@ mod tests {
         assert_eq!(mmu.read_byte(0xFF80), 2);
     }
 
-    /// test succesful mapping for zram write
+    /// test successful mapping for zram write
     /// from 0xFF80 to 0xFFFF should write to zram at addr &0x007F
     #[test]
     fn zram_write() {
@@ -430,7 +434,7 @@ mod tests {
         assert_eq!(mmu.zram[0xFFFF & 0x007F], 1);
     }
 
-    /// test succesful mapping for gpu vram access
+    /// test successful mapping for gpu vram access
     /// from 0x8000 to 0x9FFF should access gpu vram
     #[test]
     fn gpu_vram_access() {
@@ -438,12 +442,13 @@ mod tests {
 
         assert_eq!(mmu.read_byte(0x7FFF), 0);
         assert_eq!(mmu.read_byte(0x8000), 1);
+        assert_eq!(mmu.read_byte(0x8000), 1);
         assert_eq!(mmu.read_byte(0x9000), 1);
         assert_eq!(mmu.read_byte(0x9FFF), 1);
         assert_eq!(mmu.read_byte(0xA000), 0);
     }
 
-    /// test succesful mapping for gpu vram write
+    /// test successful mapping for gpu vram write
     /// from 0x8000 to 0x9FFF should write to gpu vram at addr &0x1FFF
     #[test]
     fn gpu_vram_write() {
@@ -458,7 +463,7 @@ mod tests {
         assert_eq!(mmu.gpu.vram[0x9FFF & 0x1FFF], 1);
     }
 
-    /// test succesful mapping for gpu oam access
+    /// test successful mapping for gpu oam access
     /// from 0xFE00 to 0xFE9F should access gpu oam
     #[test]
     fn gpu_oam_access() {
@@ -468,10 +473,10 @@ mod tests {
         assert_eq!(mmu.read_byte(0xFE00), 1);
         assert_eq!(mmu.read_byte(0xFE70), 1);
         assert_eq!(mmu.read_byte(0xFE9F), 1);
-        assert_eq!(mmu.read_byte(0xFEA0), 0);
+        assert_eq!(mmu.read_byte(0xFEA0), 0xFF);
     }
 
-    /// test succesful mapping for gpu oam write
+    /// test successful mapping for gpu oam write
     /// from 0xFE00 to 0xFE9F should write to gpu oam at addr &0x00FF
     #[test]
     fn gpu_oam_write() {
@@ -486,7 +491,7 @@ mod tests {
         assert_eq!(mmu.gpu.oam[0xFE9F & 0x00FF], 1);
     }
 
-    /// test succesful mapping for gpu register write
+    /// test successful mapping for gpu register write
     /// from 0xFF40 to 0xFF7F should write to gpu registers
     #[test]
     fn gpu_registers_write() {
@@ -504,4 +509,20 @@ mod tests {
         }
     }
 
+    /// unmapped area (FEA0-FEFF) are unwritable and should always return 0xFF
+    #[test]
+    fn unmapped_areas() {
+        let mut mmu = MMU::new(DummyGPU::new());
+
+        mmu.write_byte(0xFEA0, 0);
+        assert_eq!(mmu.read_byte(0xFEA0), 0xFF);
+        mmu.write_byte(0xFEB0, 0);
+        assert_eq!(mmu.read_byte(0xFEB0), 0xFF);
+        mmu.write_byte(0xFEC0, 0);
+        assert_eq!(mmu.read_byte(0xFEC0), 0xFF);
+        mmu.write_byte(0xFED0, 0);
+        assert_eq!(mmu.read_byte(0xFED0), 0xFF);
+        mmu.write_byte(0xFEFF, 0);
+        assert_eq!(mmu.read_byte(0xFEFF), 0xFF);
+    }
 }

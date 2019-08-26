@@ -1,4 +1,3 @@
-extern crate log;
 extern crate gameman;
 
 
