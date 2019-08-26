@@ -89,7 +89,7 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                 self.rom[addr as usize]
             }
 
-            0x1000 | 0x2000| 0x3000 => self.rom[addr as usize], // ROM 0
+            0x1000 | 0x2000 | 0x3000 => self.rom[addr as usize], // ROM 0
             0x4000 | 0x5000 | 0x6000 | 0x7000 => self.rom[addr as usize], // TODO: banking
             0x8000 | 0x9000 => self.gpu.read_vram(addr & 0x1FFF), // VRAM
             0xA000 | 0xB000 => self.eram[(addr & 0x1FFF) as usize], // External RAM
@@ -183,41 +183,39 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                     // Zero page
                     0x0F00 => {
                         if addr == 0xFFFF {
-                            self.interrupt_enable = byte
-                        }
-                        if addr == 0xFF0F {
+                            self.interrupt_enable = byte;
+                        } else if addr == 0xFF0F {
                             self.interrupt_flags = byte
                         }
                         // keypad
-                        if addr == 0xFF00 {
+                        else if addr == 0xFF00 {
                             self.key.write_byte(byte);
                         }
-                        if addr == 0xFF01 {
+                        else if addr == 0xFF01 {
                             self.zram[(addr & 0x007F) as usize] = byte;
-                            return;
                         } // handle link bus properly
-                        if addr == 0xFF02 {
+                        else if addr == 0xFF02 {
                             if byte == 0x81 {
                                 self.link.send(self.zram[(0xFF01 & 0x007F)] as char);
                             }
                         }
-                        if addr == 0xFF04 {
+                        else if addr == 0xFF04 {
                             self.timers.change_divider(byte);
                         }
-                        if addr == 0xFF05 {
+                        else if addr == 0xFF05 {
                             self.timers.change_counter(byte);
                         }
-                        if addr == 0xFF06 {
+                        else if addr == 0xFF06 {
                             self.timers.change_modulo(byte);
                         }
-                        if addr == 0xFF07 {
+                        else if addr == 0xFF07 {
                             self.timers.change_control(byte);
                         }
-                        if addr >= 0xFF80 {
+                        else if addr >= 0xFF80 {
                             self.zram[(addr & 0x007F) as usize] = byte;
                             return;
                         }
-                        if addr >= 0xFF40 {
+                        else if addr >= 0xFF40 {
                             self.gpu.write_byte(addr, byte);
                             return;
                         }
@@ -427,11 +425,9 @@ mod tests {
 
         mmu.write_byte(0xFF80, 1);
         mmu.write_byte(0xFFB0, 1);
-        mmu.write_byte(0xFFFF, 1);
 
         assert_eq!(mmu.zram[0xFF80 & 0x007F], 1);
         assert_eq!(mmu.zram[0xFFB0 & 0x007F], 1);
-        assert_eq!(mmu.zram[0xFFFF & 0x007F], 1);
     }
 
     /// test successful mapping for gpu vram access
@@ -509,7 +505,7 @@ mod tests {
         }
     }
 
-    /// unmapped area (FEA0-FEFF) are unwritable and should always return 0xFF
+    /// unmapped area (0xFEA0-0xFEFF) is unwritable and reads should always return 0xFF
     #[test]
     fn unmapped_areas() {
         let mut mmu = MMU::new(DummyGPU::new());
