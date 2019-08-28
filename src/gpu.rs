@@ -262,11 +262,9 @@ impl GPU {
     // draws a line on the buffer
     pub fn render_scan_to_buffer(&mut self) {
         // todo: reuse some calculations
-        let (tiles_in_a_tilemap_row, tiles_in_a_screen_row, tile_size) = (32, 20, 8);
-        let line_to_draw: usize = (self.line + self.scroll_y) as usize;
-        let tilemap_row: usize = line_to_draw / tile_size; //todo: go back on top if line > 256
-        let pixel_row: usize = line_to_draw % tile_size;
+        let (tiles_in_a_tilemap_row, tiles_in_a_screen_row, tiles_in_a_screen_col, tile_size) = (32, 20, 18, 8);
 
+        let line_to_draw: usize = (self.line + self.scroll_y) as usize;
         let tilemap0_offset = 0x9800 - 0x8000;
 
         // save colour numbers being rendered before palette application. 0 is transparent
@@ -275,36 +273,47 @@ impl GPU {
         // background
         if self.bg_enabled {
 
-            // a row is 20 tiles
-            for tile in 0..tiles_in_a_screen_row {
-                // todo: right now only draws the first 20 tiles from the left, use scroll X
+            // the row of the cell in the tilemap
+            let tilemap_y: usize = (line_to_draw / tile_size) % tiles_in_a_screen_col;
+
+            // the row of the pixel in the cell
+            let cell_y: usize = line_to_draw % tile_size;
+
+            // for each pixel in the line (which is long 160 pixel)
+            for row_pixel in 0..tiles_in_a_screen_row * tile_size {
+
+                let curr_pixel_x = self.scroll_x as usize + row_pixel;
+
+                // the col of the cell in the tilemap
+                let tilemap_x: usize = (curr_pixel_x / tile_size) % tiles_in_a_screen_row;
+
+                // the col of the pixel in the cell
+                let cell_x: usize = curr_pixel_x % tile_size;
+
+                // find the tile in the vram
                 let tilemap_index =
-                    tilemap0_offset + (tilemap_row * tiles_in_a_tilemap_row + tile) as usize;
+                    tilemap0_offset + (tilemap_y * tiles_in_a_tilemap_row + tilemap_x) as usize;
                 let pos = self.vram[tilemap_index];
 
-                let tile_in_tileset: usize =
-                    (2 * tile_size * (pos as usize) + (pixel_row as usize) * 2) as usize;
+                // find out the row in the tile data
+                let tileset_index: usize = (2 * tile_size * (pos as usize) + 2 * cell_y as usize);
 
                 // a tile pixel line is encoded in two consecutive bytes
-                let byte_1 = self.vram[tile_in_tileset];
-                let byte_2 = self.vram[tile_in_tileset + 1];
+                let byte_1 = self.vram[tileset_index];
+                let byte_2 = self.vram[tileset_index + 1];
 
-                for pixel in 0..8u8 {
-                    let ix = 7 - pixel;
-                    let high_bit: u8 = is_bit_set(ix, byte_2 as u16) as u8;
-                    let low_bit: u8 = is_bit_set(ix, byte_1 as u16) as u8;
+                // get the pixel colour from the line
+                let high_bit: u8 = is_bit_set(7 - cell_x as u8, byte_2 as u16) as u8;
+                let low_bit: u8 = is_bit_set(7 - cell_x as u8, byte_1 as u16) as u8;
+                let colour_number = (high_bit << 1) + low_bit;
+                let palette_colour = self.bg_palette.get(colour_number);
 
-                    let colour_number = (high_bit << 1) + low_bit;
-                    let palette_colour = self.bg_palette.get(colour_number);
+                let index: usize = (self.line as usize * tiles_in_a_screen_row * tile_size)
+                    + row_pixel;
 
-                    let index: usize = (self.line as usize * tiles_in_a_screen_row * tile_size)
-                        + (tile as usize) * tile_size
-                        + pixel as usize;
+                 rendering_row[row_pixel] = colour_number;
 
-                    rendering_row[tile * tile_size + pixel as usize] = colour_number;
-
-                    self.buffer[index] = palette_colour as u8;
-                }
+                self.buffer[index] = palette_colour as u8;
             }
 
         }
