@@ -1,6 +1,13 @@
 use crate::cpu::is_bit_set;
 use std::iter;
 
+const TILES_IN_A_TILEMAP_ROW: usize = 32;
+const TILES_IN_A_TILEMAP_COL: usize = 32;
+const TILES_IN_A_SCREEN_ROW: usize = 20;
+const TILES_IN_A_SCREEN_COL: usize = 18;
+const TILE_SIZE: usize = 8;
+
+
 /// Expose the memories of the GPU
 pub trait GPUMemoriesAccess {
     fn read_oam(&mut self, addr: u16) -> u8;
@@ -262,7 +269,6 @@ impl GPU {
     // draws a line on the buffer
     pub fn render_scan_to_buffer(&mut self) {
         // todo: reuse some calculations
-        let (tiles_in_a_tilemap_row, tiles_in_a_screen_row, tiles_in_a_screen_col, tile_size) = (32, 20, 18, 8);
 
         let line_to_draw: usize = (self.line + self.scroll_y) as usize;
         let tilemap0_offset = 0x9800 - 0x8000;
@@ -274,29 +280,29 @@ impl GPU {
         if self.bg_enabled {
 
             // the row of the cell in the tilemap
-            let tilemap_y: usize = (line_to_draw / tile_size) % 32;
+            let tilemap_y: usize = (line_to_draw / TILE_SIZE) % TILES_IN_A_TILEMAP_COL;
 
             // the row of the pixel in the cell
-            let cell_y: usize = line_to_draw % tile_size;
+            let cell_y: usize = line_to_draw % TILE_SIZE;
 
             // for each pixel in the line (which is long 160 pixel)
-            for row_pixel in 0..tiles_in_a_screen_row * tile_size {
+            for row_pixel in 0..TILES_IN_A_SCREEN_ROW * TILE_SIZE {
 
                 let curr_pixel_x = self.scroll_x as usize + row_pixel;
 
                 // the col of the cell in the tilemap
-                let tilemap_x: usize = (curr_pixel_x / tile_size) % 32;
+                let tilemap_x: usize = (curr_pixel_x / TILE_SIZE) % TILES_IN_A_TILEMAP_ROW;
 
                 // the col of the pixel in the cell
-                let cell_x: usize = curr_pixel_x % tile_size;
+                let cell_x: usize = curr_pixel_x % TILE_SIZE;
 
                 // find the tile in the vram
                 let tilemap_index =
-                    tilemap0_offset + (tilemap_y * tiles_in_a_tilemap_row + tilemap_x) as usize;
+                    tilemap0_offset + (tilemap_y * TILES_IN_A_TILEMAP_ROW + tilemap_x) as usize;
                 let pos = self.vram[tilemap_index];
 
                 // find out the row in the tile data
-                let tileset_index: usize = (2 * tile_size * (pos as usize) + 2 * cell_y as usize);
+                let tileset_index: usize = (2 * TILE_SIZE * (pos as usize) + 2 * cell_y as usize);
 
                 // a tile pixel line is encoded in two consecutive bytes
                 let byte_1 = self.vram[tileset_index];
@@ -308,7 +314,7 @@ impl GPU {
                 let colour_number = (high_bit << 1) + low_bit;
                 let palette_colour = self.bg_palette.get(colour_number);
 
-                let index: usize = (self.line as usize * tiles_in_a_screen_row * tile_size)
+                let index: usize = (self.line as usize * TILES_IN_A_SCREEN_ROW * TILE_SIZE)
                     + row_pixel;
 
                  rendering_row[row_pixel] = colour_number;
@@ -352,7 +358,7 @@ impl GPU {
 
                             let palette = if sprite.options.palette { &self.obj_palette_1 } else { &self.obj_palette_0 };
 
-                            let index: usize = (self.line as usize * tiles_in_a_screen_row * tile_size)
+                            let index: usize = (self.line as usize * TILES_IN_A_SCREEN_ROW * TILE_SIZE)
                                 + sprite.x as usize + pixel as usize;
 
                             if (sprite.options.z == true) || (rendering_row[(sprite.x + pixel) as usize] == 0) {
