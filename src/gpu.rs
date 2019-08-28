@@ -274,7 +274,7 @@ impl GPU {
         if self.bg_enabled {
 
             // the row of the cell in the tilemap
-            let tilemap_y: usize = (line_to_draw / tile_size) % tiles_in_a_screen_col;
+            let tilemap_y: usize = (line_to_draw / tile_size) % 32;
 
             // the row of the pixel in the cell
             let cell_y: usize = line_to_draw % tile_size;
@@ -285,7 +285,7 @@ impl GPU {
                 let curr_pixel_x = self.scroll_x as usize + row_pixel;
 
                 // the col of the cell in the tilemap
-                let tilemap_x: usize = (curr_pixel_x / tile_size) % tiles_in_a_screen_row;
+                let tilemap_x: usize = (curr_pixel_x / tile_size) % 32;
 
                 // the col of the pixel in the cell
                 let cell_x: usize = curr_pixel_x % tile_size;
