@@ -285,14 +285,11 @@ impl GPU {
     }
 
     fn get_tileset_index(&self, mut index: u8) -> usize {
-        // tiledata: true => use tileset 1; false => use tileset 0
-        let mut offset: usize = 0;
+        let mut offset: usize = if self.bg_tile { TILEDATA1_OFFSET } else { TILEDATA0_OFFSET };
 
         if index >= 128 {
             offset = TILEDATA_SHARED;
             index = index - 128;
-        } else {
-            offset = if self.bg_tile { TILEDATA1_OFFSET } else { TILEDATA0_OFFSET };
         }
 
         offset + 2 * TILE_SIZE * (index as usize)
@@ -306,7 +303,7 @@ impl GPU {
 
         // save colour numbers being rendered before palette application. 0 is transparent
         let mut rendering_row = [0u8; 160];
-        
+
         // background
         if self.bg_enabled {
             let tilemap_offset = if self.bg_map { TILEMAP1_OFFSET } else { TILEMAP0_OFFSET };
@@ -359,17 +356,30 @@ impl GPU {
 
         // sprites
         if self.obj_enabled {
-            let sprite_size = 8; // todo: allow 16pixel sprites
+            let sprite_height: u8 = if self.obj_size { 16 } else { 8 };
 
             for sprite_num in 0..40 {
                 let sprite = &self.sprites[sprite_num];
 
                 // is it along scanline?
-                if (sprite.y <= self.line) && (sprite.y + sprite_size > self.line) {
-                    let sprite_pixel_row = self.line - sprite.y;
+                if (sprite.y <= self.line) && (sprite.y + sprite_height > self.line) {
+                    let mut pos = sprite.tile_number;
 
-                    let pos = sprite.tile_number;
-                    let tile_in_tileset: usize = (2 * sprite_size as usize * pos as usize + sprite_pixel_row as usize * 2) as usize;
+                    // handle upside down
+                    let mut sprite_pixel_row = if sprite.options.flip_y {
+                        sprite_height - self.line.wrapping_sub(sprite.y) - 1
+                    } else {
+                        self.line.wrapping_sub(sprite.y)
+                    };
+
+                    // go to next tile if we have to render 2nd part of the 16pixel sprite
+                    if sprite_pixel_row >= 8 {
+                        pos += 1;
+                        sprite_pixel_row -= 8;
+                    }
+
+                    // sprites always use tiledata1
+                    let tile_in_tileset: usize = TILEDATA1_OFFSET + (2 * 8 * pos as usize + sprite_pixel_row as usize * 2) as usize;
 
                     // a tile pixel line is encoded in two consecutive bytes
                     let byte_1 = self.vram[tile_in_tileset];
@@ -380,7 +390,12 @@ impl GPU {
                         // todo: use scroll_x instead of first 160...
                         if (sprite.x + pixel >= 0) && (sprite.x + pixel < 160)
                         {
-                            let ix = 7 - pixel;
+                            let ix = if sprite.options.flip_x {
+                                pixel
+                            } else {
+                                7 - pixel
+                            };
+
                             let high_bit: u8 = is_bit_set(ix, byte_2 as u16) as u8;
                             let low_bit: u8 = is_bit_set(ix, byte_1 as u16) as u8;
 
