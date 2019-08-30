@@ -103,9 +103,10 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
 
                     // GPU OAM
                     0x0E00 => {
-                        if addr < 0xFEA0 {
-                            self.gpu.read_oam(addr & 0x00FF)
+                        if addr & 0xFF < 0xA0  {
+                            self.gpu.read_oam(addr & 0xFF)
                         } else {
+                            // 0xFEA0 <= addr <= 0xFEFF, unused memory area
                             0xFF
                         }
                     }
@@ -114,25 +115,22 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                     0x0F00 => {
                         if addr == 0xFFFF {
                             self.interrupt_enable
-                        } else if addr == 0xFF0F {
-                            self.interrupt_flags
-                        } else if addr == 0xFF04 {
-                            self.timers.read_divider()
-                        } else if addr == 0xFF05 {
-                            self.timers.read_counter()
-                        } else if addr == 0xFF06 {
-                            self.timers.read_modulo()
-                        } else if addr == 0xFF07 {
-                            self.timers.read_control()
-                        } else if addr >= 0xFF80 {
-                            self.zram[(addr & 0x007F) as usize]
-                        } else if addr >= 0xFF40 {
-                            self.gpu.read_byte(addr)
+                        } else if addr > 0xFF7F {
+                            self.zram[(addr & 0x7F) as usize]
                         } else {
-                            // io
-                            match addr & 0x3F {
-                                0x0 => self.key.read_byte(),
-                                _ => 0xFF,
+                            match addr & 0xF0 {
+                                0x00 => match addr & 0xF {
+                                    0 => { self.key.read_byte() }
+                                    4 => { self.timers.read_divider() }
+                                    5 => { self.timers.read_counter() }
+                                    6 => { self.timers.read_modulo() }
+                                    7 => { self.timers.read_control() }
+                                    0xF => { self.interrupt_flags }
+                                    _ => { 0 }
+                                }
+                                0x10 | 0x20 | 0x30 => { 0 }
+                                0x40 | 0x50 | 0x60 | 0x70 => { self.gpu.read_byte(addr) }
+                                _ => panic!("Unhandled memory access")
                             }
                         }
                     }
@@ -149,18 +147,21 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
         match addr & 0xF000 {
             0x0000 | 0x1000 | 0x2000 | 0x3000 => return, // BIOS AND ROM 0
             0x4000 | 0x5000 | 0x6000 | 0x7000 => return, // ROM 1
+            // VRAM
             0x8000 | 0x9000 => {
                 self.gpu.write_vram(addr & 0x1FFF, byte);
                 return;
-            } // VRAM
+            }
+            // External RAM
             0xA000 | 0xB000 => {
                 self.eram[(addr & 0x1FFF) as usize] = byte;
                 return;
-            } // External RAM
+            }
+            // Working RAM
             0xC000 | 0xD000 | 0xE000 => {
                 self.wram[(addr & 0x1FFF) as usize] = byte;
                 return;
-            } // Working RAM
+            }
 
             0xF000 => {
                 match addr & 0x0F00 {
@@ -169,14 +170,13 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                     0x0A00 | 0x0B00 | 0x0C00 | 0x0D00 => {
                         self.wram[(addr & 0x1FFF) as usize] = byte;
                         return;
-                    } // Working RAM echo
-
+                    }
                     // GPU OAM
                     0x0E00 => {
-                        if addr < 0xFEA0 {
+                        if addr & 0x00FF < 0xA0 {
                             self.gpu.write_oam(addr & 0x00FF, byte);
+                            self.gpu.update_sprite(addr - 0xFE00, byte);
                         }
-                        self.gpu.update_sprite(addr - 0xFE00, byte);
                         return;
                     }
 

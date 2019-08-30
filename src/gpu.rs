@@ -7,6 +7,12 @@ const TILES_IN_A_SCREEN_ROW: usize = 20;
 const TILES_IN_A_SCREEN_COL: usize = 18;
 const TILE_SIZE: usize = 8;
 
+const TILEMAP0_OFFSET: usize = 0x9800 - 0x8000;
+const TILEMAP1_OFFSET: usize = 0x9C00 - 0x8000;
+
+const TILEDATA1_OFFSET: usize = 0;
+const TILEDATA0_OFFSET: usize = 0x9000 - 0x8000;
+const TILEDATA_SHARED: usize = 0x8800 - 0x8000;  // when tile index >= 128
 
 /// Expose the memories of the GPU
 pub trait GPUMemoriesAccess {
@@ -151,10 +157,13 @@ pub struct GPU {
     mode: u8,
     line: u8,
 
-    bg_enabled: bool,
-    obj_enabled: bool,
-    bg_map: bool,
-    bg_tile: bool,
+    bg_enabled: bool,  // draw bg?
+    obj_enabled: bool,  // draw sprites?
+    obj_size: bool,  // sprite is tall 16 or 8 pixel?
+    bg_map: bool,  // which tilemap to use for the bg
+    bg_tile: bool,  // tiles data to use for both bg and window
+    window_enabled: bool,  // draw window?
+    window_map: bool,   // which tilemap use for the window?
     lcd_enabled: bool,
 
     scroll_x: u8,
@@ -187,8 +196,11 @@ impl GPUMemoriesAccess for GPU {
             0xFF40 => {
                 (if self.bg_enabled { 0x01 } else { 0 })
                     | (if self.obj_enabled { 0x02 } else { 0 })
+                    | (if self.obj_size { 0x04 } else { 0 })
                     | (if self.bg_map { 0x08 } else { 0 })
                     | (if self.bg_tile { 0x10 } else { 0 })
+                    | (if self.window_enabled { 0x20 } else { 0 })
+                    | (if self.window_map { 0x40 } else { 0 })
                     | (if self.lcd_enabled { 0x80 } else { 0 })
             },
             0xFF42 => self.scroll_y,
@@ -205,8 +217,11 @@ impl GPUMemoriesAccess for GPU {
             0xFF40 => {
                 self.bg_enabled = if (byte & 0x01) != 0 { true } else { false };
                 self.obj_enabled = if (byte & 0x02) != 0 { true } else { false };
+                self.obj_size = if (byte & 0x04) != 0 { true } else { false };
                 self.bg_map = if (byte & 0x08) != 0 { true } else { false };
                 self.bg_tile = if (byte & 0x10) != 0 { true } else { false };
+                self.window_enabled = if (byte & 0x20) != 0 { true } else { false };
+                self.window_map = if (byte & 0x40) != 0 { true } else { false };
                 self.lcd_enabled = if (byte & 0x80) != 0 { true } else { false };
             }
             0xFF42 => {
@@ -243,8 +258,11 @@ impl GPU {
             line: 0,
             bg_enabled: false,
             obj_enabled: false,
+            obj_size: false,
             bg_map: false,
             bg_tile: false,
+            window_enabled: false,
+            window_map: false,
             lcd_enabled: false,
             scroll_x: 0,
             scroll_y: 0,
@@ -266,18 +284,32 @@ impl GPU {
         return &self.buffer;
     }
 
+    fn get_tileset_index(&self, mut index: u8) -> usize {
+        // tiledata: true => use tileset 1; false => use tileset 0
+        let mut offset: usize = 0;
+
+        if index >= 128 {
+            offset = TILEDATA_SHARED;
+            index = index - 128;
+        } else {
+            offset = if self.bg_tile { TILEDATA1_OFFSET } else { TILEDATA0_OFFSET };
+        }
+
+        offset + 2 * TILE_SIZE * (index as usize)
+    }
+
     // draws a line on the buffer
     pub fn render_scan_to_buffer(&mut self) {
         // todo: reuse some calculations
 
         let line_to_draw: usize = (self.line + self.scroll_y) as usize;
-        let tilemap0_offset = 0x9800 - 0x8000;
 
         // save colour numbers being rendered before palette application. 0 is transparent
         let mut rendering_row = [0u8; 160];
-
+        
         // background
         if self.bg_enabled {
+            let tilemap_offset = if self.bg_map { TILEMAP1_OFFSET } else { TILEMAP0_OFFSET };
 
             // the row of the cell in the tilemap
             let tilemap_y: usize = (line_to_draw / TILE_SIZE) % TILES_IN_A_TILEMAP_COL;
@@ -298,11 +330,12 @@ impl GPU {
 
                 // find the tile in the vram
                 let tilemap_index =
-                    tilemap0_offset + (tilemap_y * TILES_IN_A_TILEMAP_ROW + tilemap_x) as usize;
+                    tilemap_offset + (tilemap_y * TILES_IN_A_TILEMAP_ROW + tilemap_x) as usize;
+
                 let pos = self.vram[tilemap_index];
 
                 // find out the row in the tile data
-                let tileset_index: usize = (2 * TILE_SIZE * (pos as usize) + 2 * cell_y as usize);
+                let tileset_index: usize = (self.get_tileset_index(pos) + 2 * cell_y as usize);
 
                 // a tile pixel line is encoded in two consecutive bytes
                 let byte_1 = self.vram[tileset_index];
@@ -511,8 +544,11 @@ mod tests {
 
         assert_eq!(gpu.bg_enabled, false);
         assert_eq!(gpu.obj_enabled, false);
+        assert_eq!(gpu.obj_size, false);
         assert_eq!(gpu.bg_map, false);
         assert_eq!(gpu.bg_tile, false);
+        assert_eq!(gpu.window_enabled, false);
+        assert_eq!(gpu.window_map, false);
         assert_eq!(gpu.lcd_enabled, false);
 
         gpu.write_byte(0xFF40, 1);
@@ -523,6 +559,10 @@ mod tests {
         assert_eq!(gpu.obj_enabled, true);
         assert_eq!(gpu.read_byte(0xFF40), 0x02);
 
+        gpu.write_byte(0xFF40, 0x04);
+        assert_eq!(gpu.obj_size, true);
+        assert_eq!(gpu.read_byte(0xFF40), 0x04);
+
         gpu.write_byte(0xFF40, 0x08);
         assert_eq!(gpu.bg_map, true);
         assert_eq!(gpu.read_byte(0xFF40), 0x08);
@@ -530,6 +570,14 @@ mod tests {
         gpu.write_byte(0xFF40, 0x10);
         assert_eq!(gpu.bg_tile, true);
         assert_eq!(gpu.read_byte(0xFF40), 0x10);
+
+        gpu.write_byte(0xFF40, 0x20);
+        assert_eq!(gpu.window_enabled, true);
+        assert_eq!(gpu.read_byte(0xFF40), 0x20);
+
+        gpu.write_byte(0xFF40, 0x40);
+        assert_eq!(gpu.window_map, true);
+        assert_eq!(gpu.read_byte(0xFF40), 0x40);
 
         gpu.write_byte(0xFF40, 0x80);
         assert_eq!(gpu.lcd_enabled, true);
