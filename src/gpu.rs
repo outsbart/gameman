@@ -255,11 +255,9 @@ impl GPUMemoriesAccess for GPU {
             }
             0xFF48 => {
                 self.obj_palette_0.update(byte);
-                println!("obj palette 0 set");
             }
             0xFF49 => {
                 self.obj_palette_1.update(byte);
-                println!("obj palette 1 set");
             }
             _ => {}
         }

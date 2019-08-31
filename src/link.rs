@@ -3,6 +3,8 @@
 pub struct Link {
     buffer_out: [char; 256],
     buffer_index: usize,
+    data: u8,
+    control: u8,
 }
 
 impl Link {
@@ -10,12 +12,32 @@ impl Link {
         Link {
             buffer_out: [char::from(32); 256],
             buffer_index: 0,
+            data: 0,
+            control: 0,
         }
     }
 
-    pub fn send(&mut self, value: char) {
-        warn!("New char on the serial port: {}", value);
-        self.buffer_out[self.buffer_index] = value;
+    pub fn set_data(&mut self, byte: u8) {
+        self.data = byte;
+    }
+
+    pub fn set_control(&mut self, byte: u8) {
+        self.control = byte;
+        if byte == 0x81 {
+            self.send();
+        }
+    }
+
+    pub fn get_data(&self) -> u8 {
+        self.data
+    }
+
+    pub fn get_control(&self) -> u8 {
+        self.control
+    }
+
+    fn send(&mut self) {
+        self.buffer_out[self.buffer_index] = self.data as char;
         self.buffer_index = (self.buffer_index + 1) % 256;
     }
 
@@ -41,9 +63,12 @@ mod tests {
     fn send() {
         let mut link = Link::new();
 
-        link.send('w');
-        link.send('o');
-        link.send('w');
+        link.set_data('w' as u8);
+        link.send();
+        link.set_data('o' as u8);
+        link.send();
+        link.set_data('w' as u8);
+        link.send();
 
         assert_eq!(link.get_buffer()[0], 'w');
         assert_eq!(link.get_buffer()[1], 'o');

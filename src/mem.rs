@@ -121,6 +121,8 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                             match addr & 0xF0 {
                                 0x00 => match addr & 0xF {
                                     0 => { self.key.read_byte() }
+                                    1 => { self.link.get_data() }
+                                    2 => { self.link.get_control() }
                                     4 => { self.timers.read_divider() }
                                     5 => { self.timers.read_counter() }
                                     6 => { self.timers.read_modulo() }
@@ -194,12 +196,10 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                             self.key.write_byte(byte);
                         }
                         else if addr == 0xFF01 {
-                            self.zram[(addr & 0x007F) as usize] = byte;
-                        } // handle link bus properly
+                            self.link.set_data(byte);
+                        }
                         else if addr == 0xFF02 {
-                            if byte == 0x81 {
-                                self.link.send(self.zram[(0xFF01 & 0x007F)] as char);
-                            }
+                            self.link.set_control(byte);
                         }
                         else if addr == 0xFF04 {
                             self.timers.change_divider(byte);
@@ -416,6 +416,12 @@ mod tests {
 
         assert_eq!(mmu.read_byte(0xFF7F), 0);
         assert_eq!(mmu.read_byte(0xFF80), 2);
+
+        mmu.write_byte(0xFF80, 3);
+        assert_eq!(mmu.read_byte(0xFF80), 3);
+        assert_eq!(mmu.zram[0], 3);
+
+        assert_eq!(mmu.read_byte(0xFF81), 1);
     }
 
     /// test successful mapping for zram write
