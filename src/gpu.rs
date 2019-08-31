@@ -18,7 +18,6 @@ const TILEDATA_SHARED: usize = 0x8800 - 0x8000;  // when tile index >= 128
 pub trait GPUMemoriesAccess {
     fn read_oam(&mut self, addr: u16) -> u8;
     fn write_oam(&mut self, addr: u16, byte: u8);
-    fn update_sprite(&mut self, addr: u16, byte: u8);
     fn read_vram(&mut self, addr: u16) -> u8;
     fn write_vram(&mut self, addr: u16, byte: u8);
     fn read_byte(&mut self, addr: u16) -> u8;
@@ -116,7 +115,15 @@ impl SpriteOptions {
         self.flip_y = if (value & 0x40) != 0 { true } else { false };
         self.z = if (value & 0x80) != 0 { true } else { false };
     }
+
+    pub fn byte(&self) -> u8 {
+        (if self.palette { 0x10 } else { 0 }) |
+            (if self.flip_x { 0x20 } else { 0 }) |
+            (if self.flip_y { 0x40 } else { 0 }) |
+            (if self.z { 0x80 } else { 0 })
+    }
 }
+
 
 struct Sprite {
     y: u8, // y coordinate of top left corner, minus 16
@@ -128,20 +135,30 @@ struct Sprite {
 impl Sprite {
     pub fn new() -> Self {
         Sprite {
-            y: 0,
-            x: 0,
+            y: 0u8.wrapping_sub(16),
+            x: 0u8.wrapping_sub(8),
             tile_number: 0,
             options: SpriteOptions::new()
         }
     }
 
-    pub fn update(&mut self, field: u8, value: u8) {
-        match field {
+    pub fn update(&mut self, field_num: u8, value: u8) {
+        match field_num {
             0 => { self.y = value.wrapping_sub(16) }
             1 => { self.x = value.wrapping_sub(8) }
             2 => { self.tile_number = value }
             3 => { self.options.update(value) }
-            _ => { panic!("Unhandled sprite field update")}
+            _ => { panic!("Unhandled sprite field update") }
+        }
+    }
+
+    pub fn get(&self, field_num: u8) -> u8 {
+        match field_num {
+            0 => { self.y.wrapping_add(16) }
+            1 => { self.x.wrapping_add(8) }
+            2 => { self.tile_number }
+            3 => { self.options.byte() }
+            _ => { panic!("Unhandled sprite field read") }
         }
     }
 }
@@ -149,7 +166,6 @@ impl Sprite {
 
 pub struct GPU {
     vram: [u8; 8192],
-    oam: [u8; 256],
     sprites: Vec<Sprite>, // todo: make it an array of 40
     buffer: [u8; 160 * 144], // every pixel can have 4 values (4 shades of grey)
 
@@ -175,16 +191,20 @@ pub struct GPU {
 
 impl GPUMemoriesAccess for GPU {
     fn read_oam(&mut self, addr: u16) -> u8 {
-        self.oam[addr as usize]
+        let sprite_num = addr >> 2;
+        if sprite_num > 39 { panic!("Tried to access sprite number {}", sprite_num); }
+
+        let property = (addr & 3) as u8;
+        self.sprites[sprite_num as usize].get(property)
     }
     fn write_oam(&mut self, addr: u16, byte: u8) {
-        self.oam[addr as usize] = byte;
-    }
+        let sprite_num = addr >> 2;
+        if sprite_num > 39 { panic!("Tried to update sprite number {}", sprite_num); }
 
-    fn update_sprite(&mut self, addr: u16, byte: u8) {
-        self.update_sprite(addr, byte);
-    }
+        let property = (addr & 3) as u8;
+        self.sprites[sprite_num as usize].update(property, byte);
 
+    }
     fn read_vram(&mut self, addr: u16) -> u8 {
         self.vram[addr as usize]
     }
@@ -250,7 +270,6 @@ impl GPU {
     pub fn new() -> Self {
         GPU {
             vram: [0; 8192],
-            oam: [0; 256],
             sprites: iter::repeat_with(|| Sprite::new()).take(40).collect(),
             buffer: [0; 160 * 144],
             modeclock: 0,
@@ -269,14 +288,6 @@ impl GPU {
             bg_palette: Palette::new(),
             obj_palette_0: Palette::new(),
             obj_palette_1: Palette::new(),
-        }
-    }
-
-    pub fn update_sprite(&mut self, address: u16, value: u8) {
-        let sprite_num = address >> 2;
-        let property = (address & 3) as u8;
-        if sprite_num < 40 {
-            self.sprites[sprite_num as usize].update(property, value);
         }
     }
 
@@ -344,11 +355,10 @@ impl GPU {
                 let colour_number = (high_bit << 1) + low_bit;
                 let palette_colour = self.bg_palette.get(colour_number);
 
+                rendering_row[row_pixel] = colour_number;
+
                 let index: usize = (self.line as usize * TILES_IN_A_SCREEN_ROW * TILE_SIZE)
                     + row_pixel;
-
-                 rendering_row[row_pixel] = colour_number;
-
                 self.buffer[index] = palette_colour as u8;
             }
 
@@ -361,60 +371,60 @@ impl GPU {
             for sprite_num in 0..40 {
                 let sprite = &self.sprites[sprite_num];
 
-                // is it along scanline?
-                if (sprite.y <= self.line) && (sprite.y + sprite_height > self.line) {
-                    let mut pos = sprite.tile_number;
+                // not insersecting with scanline, dont draw
+                if self.line.wrapping_sub(sprite.y) >= sprite_height { continue; }
 
-                    // handle upside down
-                    let mut sprite_pixel_row = if sprite.options.flip_y {
-                        sprite_height - self.line.wrapping_sub(sprite.y) - 1
+                let mut pos = sprite.tile_number;
+
+                // handle upside down
+                let mut sprite_pixel_row = if sprite.options.flip_y {
+                    sprite_height - self.line.wrapping_sub(sprite.y) - 1
+                } else {
+                    self.line.wrapping_sub(sprite.y)
+                };
+
+                // go to next tile if we have to render 2nd part of the 16pixel sprite
+                if sprite_pixel_row >= 8 {
+                    pos += 1;
+                    sprite_pixel_row -= 8;
+                }
+
+                // sprites always use tiledata1
+                let tile_in_tileset: usize = TILEDATA1_OFFSET + (2 * 8 * pos as usize + sprite_pixel_row as usize * 2) as usize;
+
+                // a tile pixel line is encoded in two consecutive bytes
+                let byte_1 = self.vram[tile_in_tileset];
+                let byte_2 = self.vram[tile_in_tileset + 1];
+
+                for pixel in 0..8u8 {
+
+                    let ix = if sprite.options.flip_x {
+                        7 - pixel
                     } else {
-                        self.line.wrapping_sub(sprite.y)
+                        pixel
                     };
 
-                    // go to next tile if we have to render 2nd part of the 16pixel sprite
-                    if sprite_pixel_row >= 8 {
-                        pos += 1;
-                        sprite_pixel_row -= 8;
-                    }
+                    let curr_x = sprite.x.wrapping_add(7 - pixel);
 
-                    // sprites always use tiledata1
-                    let tile_in_tileset: usize = TILEDATA1_OFFSET + (2 * 8 * pos as usize + sprite_pixel_row as usize * 2) as usize;
+                    // out of the line, don't draw
+                    if curr_x >= 160 { continue; }
 
-                    // a tile pixel line is encoded in two consecutive bytes
-                    let byte_1 = self.vram[tile_in_tileset];
-                    let byte_2 = self.vram[tile_in_tileset + 1];
+                    let high_bit: u8 = is_bit_set(7 - ix, byte_2 as u16) as u8;
+                    let low_bit: u8 = is_bit_set(7 - ix, byte_1 as u16) as u8;
 
-                    for pixel in 0..8u8 {
-                        // check if it is in the screen. Is it within first 160 pixels?
-                        // todo: use scroll_x instead of first 160...
-                        if (sprite.x + pixel >= 0) && (sprite.x + pixel < 160)
-                        {
-                            let ix = if sprite.options.flip_x {
-                                pixel
-                            } else {
-                                7 - pixel
-                            };
+                    let colour_number= (high_bit << 1) + low_bit;
 
-                            let high_bit: u8 = is_bit_set(ix, byte_2 as u16) as u8;
-                            let low_bit: u8 = is_bit_set(ix, byte_1 as u16) as u8;
+                    // transparent, don't draw
+                    if colour_number == 0 { continue; }
 
-                            let colour_number= (high_bit << 1) + low_bit;
+                    // bg pixel wins over sprite, don't draw
+                    if !sprite.options.z && (rendering_row[curr_x as usize] != 0) { continue; }
 
-                            // transparent, don't draw
-                            if colour_number == 0 { continue; }
-
-                            let palette = if sprite.options.palette { &self.obj_palette_1 } else { &self.obj_palette_0 };
-
-                            let index: usize = (self.line as usize * TILES_IN_A_SCREEN_ROW * TILE_SIZE)
-                                + sprite.x as usize + pixel as usize;
-
-                            if (sprite.options.z == true) || (rendering_row[(sprite.x + pixel) as usize] == 0) {
-                                let colour = palette.get(colour_number);
-                                self.buffer[index] = colour as u8;
-                            }
-                        }
-                    }
+                    let palette = if sprite.options.palette { &self.obj_palette_1 } else { &self.obj_palette_0 };
+                    let colour = palette.get(colour_number);
+                    let index: usize = (self.line as usize * TILES_IN_A_SCREEN_ROW * TILE_SIZE)
+                        + curr_x as usize;
+                    self.buffer[index] = colour as u8;
                 }
             }
         }
@@ -454,6 +464,7 @@ impl GPU {
                     if self.line == 143 {
                         // enter vblank mode
                         self.mode = 1;
+                        vblank_interrupt = true;
                     } else {
                         self.mode = 2;
                     }
@@ -464,10 +475,6 @@ impl GPU {
                 if self.modeclock >= 456 {
                     self.modeclock = 0;
                     self.line += 1;
-
-                    if self.line == 144 {
-                        vblank_interrupt = true;
-                    }
 
                     // restart
                     if self.line > 153 {
@@ -620,43 +627,50 @@ mod tests {
         let mut gpu = GPU::new();
 
         // should update first sprite's first property
-        assert_eq!(gpu.sprites[0].y, 0);
-        gpu.update_sprite(0, 18);
+        gpu.write_oam(0, 18);
         assert_eq!(gpu.sprites[0].y, 2);
+        assert_eq!(gpu.read_oam(0), 18);
+
 
         // should update first sprite's 2nd property
-        assert_eq!(gpu.sprites[0].x, 0);
-        gpu.update_sprite(1, 14);
+        gpu.write_oam(1, 14);
         assert_eq!(gpu.sprites[0].x, 6);
+        assert_eq!(gpu.read_oam(1), 14);
 
         // should update first sprite's 3rd property
         assert_eq!(gpu.sprites[0].tile_number, 0);
-        gpu.update_sprite(2, 4);
+        gpu.write_oam(2, 4);
         assert_eq!(gpu.sprites[0].tile_number, 4);
+        assert_eq!(gpu.read_oam(2), 4);
 
         // should update first sprite's options z
         assert_eq!(gpu.sprites[0].options.z, false);
-        gpu.update_sprite(3, 0b10000000);
+        gpu.write_oam(3, 0b10000000);
         assert_eq!(gpu.sprites[0].options.z, true);
+        assert_eq!(gpu.read_oam(3), 0b10000000);
 
         // should update first sprite's options flip_y
         assert_eq!(gpu.sprites[0].options.flip_y, false);
-        gpu.update_sprite(3, 0b01000000);
+        gpu.write_oam(3, 0b01000000);
         assert_eq!(gpu.sprites[0].options.flip_y, true);
+        assert_eq!(gpu.read_oam(3), 0b01000000);
 
         // should update first sprite's options flip_x
         assert_eq!(gpu.sprites[0].options.flip_x, false);
-        gpu.update_sprite(3, 0b00100000);
+        gpu.write_oam(3, 0b00100000);
         assert_eq!(gpu.sprites[0].options.flip_x, true);
+        assert_eq!(gpu.read_oam(3), 0b00100000);
 
         // should update first sprite's options flip_x
         assert_eq!(gpu.sprites[0].options.palette, false);
-        gpu.update_sprite(3, 0b00010000);
+        gpu.write_oam(3, 0b00010000);
         assert_eq!(gpu.sprites[0].options.palette, true);
+        assert_eq!(gpu.read_oam(3), 0b00010000);
 
         // should update sprite 40's options flip_x
         assert_eq!(gpu.sprites[39].options.palette, false);
-        gpu.update_sprite(159, 0b00010000);
+        gpu.write_oam(159, 0b00010000);
         assert_eq!(gpu.sprites[39].options.palette, true);
+        assert_eq!(gpu.read_oam(3), 0b00010000);
     }
 }

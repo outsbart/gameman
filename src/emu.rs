@@ -305,7 +305,7 @@ impl Emulator {
                 .unwrap();
 
             canvas
-                .copy(&texture, None, Some(Rect::new(0, 0, 160, 144)))
+                .copy(&texture, None, Some(Rect::new(0, 0, 320, 288)))
                 .unwrap();
 
             for tile in 0..1024u16 {
@@ -321,7 +321,7 @@ impl Emulator {
                     .copy(
                         &texture,
                         Some(Rect::new(x_in, y_in, 8, 8)),
-                        Some(Rect::new(x_out, 100 + y_out, 8, 8)),
+                        Some(Rect::new(x_out, 150 + y_out, 8, 8)),
                     )
                     .unwrap();
             }
@@ -329,16 +329,17 @@ impl Emulator {
             // draw screen!
             canvas.set_draw_color(Color::RGB(255, 0, 0));
             let scroll_y = self.cpu.mmu.read_byte(0xFF42);
+            let scroll_x = self.cpu.mmu.read_byte(0xFF43) as i32;
             canvas.draw_rect(Rect::new(
-                self.cpu.mmu.read_byte(0xFF43) as i32,
-                100 + scroll_y as i32,
+                scroll_x,
+                150 + scroll_y as i32,
                 160,
                 144,
             ));
             canvas.set_draw_color(Color::RGB(0, 0, 255));
             canvas.draw_rect(Rect::new(
-                0,
-                100 + self.cpu.mmu.read_byte(0xFF44) as i32 + scroll_y as i32,
+                scroll_x,
+                150 + self.cpu.mmu.read_byte(0xFF44) as i32 + scroll_y as i32,
                 160,
                 1,
             ));
@@ -371,7 +372,7 @@ impl Emulator {
                 })
                 .unwrap();
             canvas
-                .copy(&texture2, None, Some(Rect::new(260, 100, 160, 144)))
+                .copy(&texture2, None, Some(Rect::new(260, 150, 160*2, 144*2)))
                 .unwrap();
 
             canvas.present();

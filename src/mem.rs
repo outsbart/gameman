@@ -173,11 +173,13 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                     }
                     // GPU OAM
                     0x0E00 => {
+                        // Sprite Attribute Table (OAM - Object Attribute Memory) at $FE00-FE9F
                         if addr & 0x00FF < 0xA0 {
-                            self.gpu.write_oam(addr & 0x00FF, byte);
-                            self.gpu.update_sprite(addr - 0xFE00, byte);
+                            self.gpu.write_oam(addr & 0xFF, byte);
+                        } else {
+                            // 0xFEA0 <= addr <= 0xFEFF, unused memory area
+                            return;
                         }
-                        return;
                     }
 
                     // Zero page
@@ -273,7 +275,6 @@ mod tests {
         fn write_oam(&mut self, addr: u16, byte: u8) {
             self.oam[addr as usize] = byte;
         }
-        fn update_sprite(&mut self, _addr: u16, _byte: u8) { }
         fn read_vram(&mut self, addr: u16) -> u8 {
             self.vram[addr as usize]
         }
