@@ -398,9 +398,9 @@ impl GPU {
                 for pixel in 0..8u8 {
 
                     let ix = if sprite.options.flip_x {
-                        7 - pixel
-                    } else {
                         pixel
+                    } else {
+                        7 - pixel
                     };
 
                     let curr_x = sprite.x.wrapping_add(7 - pixel);
@@ -408,8 +408,8 @@ impl GPU {
                     // out of the line, don't draw
                     if curr_x >= 160 { continue; }
 
-                    let high_bit: u8 = is_bit_set(ix, byte_2 as u16) as u8;
-                    let low_bit: u8 = is_bit_set(ix, byte_1 as u16) as u8;
+                    let high_bit: u8 = is_bit_set(7 - ix, byte_2 as u16) as u8;
+                    let low_bit: u8 = is_bit_set(7 - ix, byte_1 as u16) as u8;
 
                     let colour_number= (high_bit << 1) + low_bit;
 
@@ -460,7 +460,7 @@ impl GPU {
                     self.modeclock = 0;
                     self.line += 1;
 
-                    if self.line == 143 {
+                    if self.line == 144 {
                         // enter vblank mode
                         self.mode = 1;
                         vblank_interrupt = true;
