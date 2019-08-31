@@ -237,7 +237,6 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                                     let to_be_copied = self.read_byte(start+i);
                                     self.gpu.write_oam(i, to_be_copied);
                                 }
-                                return;
                             }
                             self.gpu.write_byte(addr, byte);
                             return;

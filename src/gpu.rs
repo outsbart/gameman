@@ -187,6 +187,8 @@ pub struct GPU {
     bg_palette: Palette,
     obj_palette_0: Palette,
     obj_palette_1: Palette,
+    window_x: u8,
+    window_y: u8,
 }
 
 impl GPUMemoriesAccess for GPU {
@@ -229,6 +231,8 @@ impl GPUMemoriesAccess for GPU {
             0xFF47 => self.bg_palette.byte,
             0xFF48 => self.obj_palette_0.byte,
             0xFF49 => self.obj_palette_1.byte,
+            0xFF4A => self.window_y,
+            0xFF4B => self.window_x,
             _ => 0,
         }
     }
@@ -262,6 +266,12 @@ impl GPUMemoriesAccess for GPU {
             0xFF49 => {
                 self.obj_palette_1.update(byte);
             }
+            0xFF4A => {
+                self.window_y = byte;
+            }
+            0xFF4B => {
+                self.window_x = byte;
+            }
             _ => {}
         }
     }
@@ -289,6 +299,8 @@ impl GPU {
             bg_palette: Palette::new(),
             obj_palette_0: Palette::new(),
             obj_palette_1: Palette::new(),
+            window_x: 0,
+            window_y: 0,
         }
     }
 
@@ -363,6 +375,58 @@ impl GPU {
 
         }
 
+        // window
+        if self.window_enabled {
+            let window_x = self.window_x.wrapping_sub(7);
+            let tilemap_offset = if self.window_map { TILEMAP1_OFFSET } else { TILEMAP0_OFFSET };
+
+            let window_line: usize = (self.line - self.window_y) as usize;
+
+            // the row of the cell in the window tilemap
+            let tilemap_y: usize = (window_line / TILE_SIZE) % TILES_IN_A_TILEMAP_COL;
+
+            // the row of the pixel in the cell
+            let cell_y: usize = window_line % TILE_SIZE;
+
+            for pixel in (window_x as usize)..TILES_IN_A_SCREEN_ROW * TILE_SIZE {
+                let mut curr_pixel_x = (pixel as u8).wrapping_add(self.scroll_x);
+                if curr_pixel_x >= window_x {
+                    curr_pixel_x = pixel as u8 - window_x;
+                }
+
+                // the col of the cell in the tilemap
+                let tilemap_x: usize = (curr_pixel_x as usize / TILE_SIZE) % TILES_IN_A_TILEMAP_ROW;
+
+                // the col of the pixel in the cell
+                let cell_x: usize = curr_pixel_x as usize % TILE_SIZE;
+
+                // find the tile in the vram
+                let tilemap_index =
+                    tilemap_offset + (tilemap_y * TILES_IN_A_TILEMAP_ROW + tilemap_x) as usize;
+
+                let pos = self.vram[tilemap_index];
+
+                // find out the row in the tile data
+                let tileset_index: usize = (self.get_tileset_index(pos) + 2 * cell_y as usize);
+
+                // a tile pixel line is encoded in two consecutive bytes
+                let byte_1 = self.vram[tileset_index];
+                let byte_2 = self.vram[tileset_index + 1];
+
+                // get the pixel colour from the line
+                let high_bit: u8 = is_bit_set(7 - cell_x as u8, byte_2 as u16) as u8;
+                let low_bit: u8 = is_bit_set(7 - cell_x as u8, byte_1 as u16) as u8;
+                let colour_number = (high_bit << 1) + low_bit;
+                let palette_colour = self.bg_palette.get(colour_number);
+
+                rendering_row[pixel] = colour_number;
+
+                let index: usize = (self.line as usize * TILES_IN_A_SCREEN_ROW * TILE_SIZE)
+                    + pixel;
+                self.buffer[index] = palette_colour as u8;
+            }
+        }
+
         // sprites
         if self.obj_enabled {
             let sprite_height: u8 = if self.obj_size { 16 } else { 8 };
@@ -417,7 +481,7 @@ impl GPU {
                     if colour_number == 0 { continue; }
 
                     // bg pixel wins over sprite, don't draw
-                    if !sprite.options.z && (rendering_row[curr_x as usize] != 0) { continue; }
+                    if sprite.options.z && (rendering_row[curr_x as usize] != 0) { continue; }
 
                     let palette = if sprite.options.palette { &self.obj_palette_1 } else { &self.obj_palette_0 };
                     let colour = palette.get(colour_number);
@@ -546,7 +610,7 @@ mod tests {
 
         // test palette write and read access, as well as the default value
     #[test]
-    fn test_obj_palette_2() {
+    fn test_obj_palette_1() {
         let mut gpu = GPU::new();
 
         // default value
@@ -555,6 +619,22 @@ mod tests {
         gpu.write_byte(0xFF49, 1);
 
         assert_eq!(gpu.obj_palette_1.byte, 1);
+    }
+
+    #[test]
+    fn test_window_x_y() {
+        let mut gpu = GPU::new();
+
+        // default value
+        assert_eq!(gpu.window_y, 0);
+        assert_eq!(gpu.window_x, 0);
+
+
+        gpu.write_byte(0xFF4A, 1);
+        gpu.write_byte(0xFF4B, 2);
+
+        assert_eq!(gpu.window_y, 1);
+        assert_eq!(gpu.window_x, 2);
     }
 
     // test control write and read access, as well as the default value
