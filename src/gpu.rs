@@ -135,8 +135,8 @@ struct Sprite {
 impl Sprite {
     pub fn new() -> Self {
         Sprite {
-            y: 0u8.wrapping_sub(16),
-            x: 0u8.wrapping_sub(8),
+            y: 0,
+            x: 0,
             tile_number: 0,
             options: SpriteOptions::new()
         }
@@ -250,6 +250,9 @@ impl GPUMemoriesAccess for GPU {
             0xFF43 => {
                 self.scroll_x = byte;
             }
+            0xFF46 => {
+                // DMA transfer, handled from outside
+            }
             0xFF47 => {
                 self.bg_palette.update(byte);
             }
@@ -306,8 +309,6 @@ impl GPU {
 
     // draws a line on the buffer
     pub fn render_scan_to_buffer(&mut self) {
-        // todo: reuse some calculations
-
         let line_to_draw: usize = (self.line + self.scroll_y) as usize;
 
         // save colour numbers being rendered before palette application. 0 is transparent
@@ -407,8 +408,8 @@ impl GPU {
                     // out of the line, don't draw
                     if curr_x >= 160 { continue; }
 
-                    let high_bit: u8 = is_bit_set(7 - ix, byte_2 as u16) as u8;
-                    let low_bit: u8 = is_bit_set(7 - ix, byte_1 as u16) as u8;
+                    let high_bit: u8 = is_bit_set(ix, byte_2 as u16) as u8;
+                    let low_bit: u8 = is_bit_set(ix, byte_1 as u16) as u8;
 
                     let colour_number= (high_bit << 1) + low_bit;
 
@@ -476,7 +477,6 @@ impl GPU {
 
                     // restart
                     if self.line > 153 {
-
                         self.mode = 2;
                         self.line = 0;
                     }

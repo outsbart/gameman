@@ -424,7 +424,6 @@ impl<M: Memory> CPU<M> {
             "PUSH" => self.push(op1),
             "POP" | "RET" => result = self.pop(),
             "RETI" => {
-                println!("got out of interrupt handling");
                 result = self.pop();
                 self.interrupt_master_enable = true;
             }
@@ -630,7 +629,6 @@ impl<M: Memory> CPU<M> {
 
         // if we have to handle an interrupt
         if self.interrupt_master_enable && interrupts != 0 {
-            println!("handling interrupts={:b}", interrupts);
 
             // only one interrupt handling at a time
             self.interrupt_master_enable = false;
@@ -646,7 +644,6 @@ impl<M: Memory> CPU<M> {
             // vblank
             if (interrupts & 0x1) != 0 {
                 // turn interrupt flag off cause we are handling it now
-                println!("handling vblank");
                 self.mmu
                     .write_byte(0xFF0F, reset_bit(0, interrupt_flags) as u8);
 

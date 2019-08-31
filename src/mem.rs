@@ -130,8 +130,10 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                                     0xF => { self.interrupt_flags }
                                     _ => { 0 }
                                 }
-                                0x10 | 0x20 | 0x30 => { 0 }
-                                0x40 | 0x50 | 0x60 | 0x70 => { self.gpu.read_byte(addr) }
+                                0x10 | 0x20 | 0x30 => { 0 }  // sound
+                                0x40 | 0x50 | 0x60 | 0x70 => {
+                                    self.gpu.read_byte(addr)
+                                }
                                 _ => panic!("Unhandled memory access")
                             }
                         }
@@ -178,6 +180,7 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                         // Sprite Attribute Table (OAM - Object Attribute Memory) at $FE00-FE9F
                         if addr & 0x00FF < 0xA0 {
                             self.gpu.write_oam(addr & 0xFF, byte);
+                            return;
                         } else {
                             // 0xFEA0 <= addr <= 0xFEFF, unused memory area
                             return;
@@ -188,36 +191,54 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                     0x0F00 => {
                         if addr == 0xFFFF {
                             self.interrupt_enable = byte;
+                            return;
                         } else if addr == 0xFF0F {
-                            self.interrupt_flags = byte
+                            self.interrupt_flags = byte;
+                            return;
                         }
                         // keypad
                         else if addr == 0xFF00 {
                             self.key.write_byte(byte);
+                            return;
                         }
                         else if addr == 0xFF01 {
                             self.link.set_data(byte);
+                            return;
                         }
                         else if addr == 0xFF02 {
                             self.link.set_control(byte);
+                            return;
                         }
                         else if addr == 0xFF04 {
                             self.timers.change_divider(byte);
+                            return;
                         }
                         else if addr == 0xFF05 {
                             self.timers.change_counter(byte);
+                            return;
                         }
                         else if addr == 0xFF06 {
                             self.timers.change_modulo(byte);
+                            return;
                         }
                         else if addr == 0xFF07 {
                             self.timers.change_control(byte);
+                            return;
                         }
                         else if addr >= 0xFF80 {
                             self.zram[(addr & 0x007F) as usize] = byte;
                             return;
                         }
                         else if addr >= 0xFF40 {
+                            if addr == 0xFF46 {
+                                // OAM DMA transfer
+                                let start: u16 = (byte as u16) << 8;
+                                for i in 0u16..160 {
+                                    let to_be_copied = self.read_byte(start+i);
+                                    self.gpu.write_oam(i, to_be_copied);
+                                }
+                                return;
+                            }
                             self.gpu.write_byte(addr, byte);
                             return;
                         }
@@ -229,6 +250,8 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
 
             _ => panic!("Unhandled memory write"),
         }
+
+        // println!("Memory write ignored addr=0x{:x} value={}", addr, byte);
     }
 
     fn tick(&mut self, cpu_cycles: u8) {
