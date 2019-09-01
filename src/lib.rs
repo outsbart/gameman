@@ -12,6 +12,7 @@ extern crate serde_derive;
 pub mod cpu;
 pub mod emu;
 pub mod gpu;
+pub mod cartridge;
 pub mod keypad;
 pub mod link;
 pub mod timers;

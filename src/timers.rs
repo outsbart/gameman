@@ -63,13 +63,13 @@ impl Timers {
     // send the timers forward; returns true if timer interrupt should be triggered
     pub fn tick(&mut self, cycles: u8) -> bool {
         let m = cycles / 4;
-        self.sub += m;
+        self.sub = self.sub.wrapping_add(m);
 
         if self.sub >= 4 {
-            self.main += 1;
-            self.sub -= 4;
+            self.main = self.main.wrapping_add(1);
+            self.sub = self.sub.wrapping_sub(4);
 
-            self.div += 1;
+            self.div = self.div.wrapping_add(1);
             if self.div == 16 {
                 self.divider = self.divider.wrapping_add(1);
                 self.div = 0;

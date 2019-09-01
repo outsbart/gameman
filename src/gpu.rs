@@ -321,7 +321,7 @@ impl GPU {
 
     // draws a line on the buffer
     pub fn render_scan_to_buffer(&mut self) {
-        let line_to_draw: usize = (self.line + self.scroll_y) as usize;
+        let line_to_draw: usize = self.line.wrapping_add(self.scroll_y) as usize;
 
         // save colour numbers being rendered before palette application. 0 is transparent
         let mut rendering_row = [0u8; 160];
@@ -354,7 +354,7 @@ impl GPU {
                 let pos = self.vram[tilemap_index];
 
                 // find out the row in the tile data
-                let tileset_index: usize = (self.get_tileset_index(pos) + 2 * cell_y as usize);
+                let tileset_index: usize = self.get_tileset_index(pos) + 2 * cell_y as usize;
 
                 // a tile pixel line is encoded in two consecutive bytes
                 let byte_1 = self.vram[tileset_index];
@@ -380,7 +380,7 @@ impl GPU {
             let window_x = self.window_x.wrapping_sub(7);
             let tilemap_offset = if self.window_map { TILEMAP1_OFFSET } else { TILEMAP0_OFFSET };
 
-            let window_line: usize = (self.line - self.window_y) as usize;
+            let window_line: usize = self.line.wrapping_sub(self.window_y) as usize;
 
             // the row of the cell in the window tilemap
             let tilemap_y: usize = (window_line / TILE_SIZE) % TILES_IN_A_TILEMAP_COL;
@@ -407,7 +407,7 @@ impl GPU {
                 let pos = self.vram[tilemap_index];
 
                 // find out the row in the tile data
-                let tileset_index: usize = (self.get_tileset_index(pos) + 2 * cell_y as usize);
+                let tileset_index: usize = self.get_tileset_index(pos) + 2 * cell_y as usize;
 
                 // a tile pixel line is encoded in two consecutive bytes
                 let byte_1 = self.vram[tileset_index];
@@ -448,7 +448,7 @@ impl GPU {
 
                 // go to next tile if we have to render 2nd part of the 16pixel sprite
                 if sprite_pixel_row >= 8 {
-                    pos += 1;
+                    pos = pos.wrapping_add(1);
                     sprite_pixel_row -= 8;
                 }
 

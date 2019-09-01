@@ -2,24 +2,25 @@
 
 extern crate sdl2;
 
+use keypad::Button;
+
+use crate::cartridge::Cartridge;
+use crate::cpu::CPU;
+use crate::cpu::is_bit_set;
+use crate::gpu::GPU;
+use crate::mem::{Memory, MMU};
+use crate::utils::{load_boot_rom};
+
 use self::sdl2::event::Event;
 use self::sdl2::keyboard::Keycode;
 use self::sdl2::pixels::Color;
 use self::sdl2::pixels::PixelFormatEnum;
 use self::sdl2::rect::Rect;
 
-use crate::cpu::is_bit_set;
-
 const SCREEN_WIDTH: u32 = 800;
 const SCREEN_HEIGHT: u32 = 600;
 const CLOCKS_IN_A_FRAME: u32 = 70224;
 const FPS: u32 = 60;
-
-use crate::cpu::CPU;
-use crate::gpu::GPU;
-use crate::mem::{Memory, MMU};
-use crate::utils::{load_boot_rom, load_rom};
-use keypad::Button;
 
 pub struct Emulator {
     cpu: CPU<MMU<GPU>>,
@@ -27,8 +28,9 @@ pub struct Emulator {
 }
 
 impl Emulator {
-    pub fn new() -> Emulator {
-        let mmu = MMU::new(GPU::new());
+    pub fn new(path: &str) -> Emulator {
+        let cartridge = Cartridge::from_rom(path);
+        let mmu = MMU::new(GPU::new(), cartridge);
         let cpu = CPU::new(mmu);
 
         Emulator {
@@ -40,10 +42,6 @@ impl Emulator {
     pub fn load_bios(&mut self) {
         self.cpu.mmu.set_bios(load_boot_rom());
         self.cpu.set_registry_value("PC", 0);
-    }
-
-    pub fn load_rom(&mut self, path: &str) {
-        self.cpu.mmu.set_rom(load_rom(path));
     }
 
     fn step(&mut self) {

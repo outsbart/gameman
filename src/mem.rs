@@ -2,36 +2,36 @@ use crate::gpu::GPUMemoriesAccess;
 use crate::link::Link;
 use crate::keypad::Key;
 use crate::timers::Timers;
+use cartridge::Cartridge;
 
 pub struct MMU<M: GPUMemoriesAccess> {
     still_bios: bool,
     bios: [u8; 0x0100],
 
-    rom: [u8; 0x8000],
-    wram: [u8; 0x2000], // second half of rom is swappable (aka rom banking)
-    eram: [u8; 0x2000],
+    wram: [u8; 0x2000],
     zram: [u8; 0x0080],
 
+    pub cartridge: Cartridge,
     pub timers: Timers,
 
     pub interrupt_enable: u8,
     pub interrupt_flags: u8,
 
-    pub gpu: M, // todo: remove pub
+    pub gpu: M,
     pub key: Key,
     pub link: Link,
 }
 
 impl<M: GPUMemoriesAccess> MMU<M> {
-    pub fn new(gpu: M) -> MMU<M> {
+    pub fn new(gpu: M, cartridge: Cartridge) -> MMU<M> {
         MMU {
             still_bios: false,
             bios: [0; 0x0100],
 
-            rom: [0; 0x8000],
             wram: [0; 0x2000],
-            eram: [0; 0x2000],
             zram: [0; 0x0080],
+
+            cartridge,
 
             timers: Timers::new(),
 
@@ -47,10 +47,6 @@ impl<M: GPUMemoriesAccess> MMU<M> {
     pub fn set_bios(&mut self, bios: [u8; 0x0100]) {
         self.bios = bios;
         self.still_bios = true; // TODO: move this into a reset fn
-    }
-
-    pub fn set_rom(&mut self, rom: [u8; 0x8000]) {
-        self.rom = rom;
     }
 
     pub fn tick_timers(&mut self, cycles: u8) {
@@ -86,13 +82,13 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                         self.still_bios = false;
                     }
                 }
-                self.rom[addr as usize]
+                self.cartridge.read_rom(addr)
             }
 
-            0x1000 | 0x2000 | 0x3000 => self.rom[addr as usize], // ROM 0
-            0x4000 | 0x5000 | 0x6000 | 0x7000 => self.rom[addr as usize], // TODO: banking
+            0x1000 | 0x2000 | 0x3000 => self.cartridge.read_rom(addr), // ROM 0
+            0x4000 | 0x5000 | 0x6000 | 0x7000 => self.cartridge.read_rom(addr),
             0x8000 | 0x9000 => self.gpu.read_vram(addr & 0x1FFF), // VRAM
-            0xA000 | 0xB000 => self.eram[(addr & 0x1FFF) as usize], // External RAM
+            0xA000 | 0xB000 => self.cartridge.read_ram(addr & 0x1FFF), // External RAM
             0xC000 | 0xD000 | 0xE000 => self.wram[(addr & 0x1FFF) as usize], // Working RAM
 
             0xF000 => {
@@ -149,8 +145,8 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
     fn write_byte(&mut self, addr: u16, byte: u8) {
         // TODO: once everything works and is tested, refactor using actual ranges
         match addr & 0xF000 {
-            0x0000 | 0x1000 | 0x2000 | 0x3000 => return, // BIOS AND ROM 0
-            0x4000 | 0x5000 | 0x6000 | 0x7000 => return, // ROM 1
+            0x0000 | 0x1000 | 0x2000 | 0x3000 => self.cartridge.write_rom(addr, byte), // BIOS AND ROM 0
+            0x4000 | 0x5000 | 0x6000 | 0x7000 => self.cartridge.write_rom(addr, byte), // ROM 1
             // VRAM
             0x8000 | 0x9000 => {
                 self.gpu.write_vram(addr & 0x1FFF, byte);
@@ -158,7 +154,7 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
             }
             // External RAM
             0xA000 | 0xB000 => {
-                self.eram[(addr & 0x1FFF) as usize] = byte;
+                self.cartridge.write_ram(addr & 0x1FFF, byte);
                 return;
             }
             // Working RAM
@@ -313,7 +309,10 @@ mod tests {
 
     #[test]
     fn little_endian() {
-        let mut mmu = MMU::new(DummyGPU::new());
+        let mut mmu = MMU::new(
+            DummyGPU::new(),
+            Cartridge::from_rom("tests/cpu_instrs/01-special.gb")
+        );
 
         mmu.write_word(0xC000, 0x1FF);
         assert_eq!(0x1FF, mmu.read_word(0xC000))
@@ -321,7 +320,10 @@ mod tests {
 
     #[test]
     fn read_and_write_byte() {
-        let mut mmu = MMU::new(DummyGPU::new());
+        let mut mmu = MMU::new(
+            DummyGPU::new(),
+            Cartridge::from_rom("tests/cpu_instrs/01-special.gb")
+        );
 
         mmu.write_byte(0xC000, 0x1);
         assert_eq!(0x1, mmu.read_byte(0xC000))
@@ -331,12 +333,15 @@ mod tests {
     /// for addresses < 0x0100, rom should be accessed instead of bios
     #[test]
     fn bios_gets_replaced_by_rom() {
-        let mut mmu = MMU::new(DummyGPU::new());
+        let mut mmu = MMU::new(
+            DummyGPU::new(),
+            Cartridge::from_rom("tests/cpu_instrs/01-special.gb")
+        );
 
         mmu.still_bios = true;
 
-        mmu.rom[0x00FF] = 5;
-        mmu.rom[0x0100] = 6;
+        mmu.cartridge.rom[0x00FF] = 5;
+        mmu.cartridge.rom[0x0100] = 6;
         mmu.bios[0x00FF] = 3;
 
         assert_eq!(mmu.read_byte(0x00FF), 3);
@@ -348,60 +353,64 @@ mod tests {
     /// from 0x0000 to 0x7FFF should access rom
     #[test]
     fn rom_access() {
-        let mut mmu = MMU::new(DummyGPU::new());
+        let mut mmu = MMU::new(
+            DummyGPU::new(),
+            Cartridge::from_rom("tests/cpu_instrs/01-special.gb")
+        );
 
         mmu.still_bios = false;
-        mmu.rom = [1; 0x8000];
-        mmu.rom[0x6000] = 2;
+        mmu.cartridge.rom[0x6000] = 2;
 
-        assert_eq!(mmu.read_byte(0x0000), 1);
-        assert_eq!(mmu.read_byte(0x3000), 1);
+        assert_eq!(mmu.read_byte(0x0000), 0);
+        assert_eq!(mmu.read_byte(0x3000), 0);
         assert_eq!(mmu.read_byte(0x6000), 2);
-        assert_eq!(mmu.read_byte(0x7FFF), 1);
-        assert_eq!(mmu.read_byte(0x8000), 0);
+        assert_eq!(mmu.read_byte(0x7FFF), 0);
     }
 
     /// test successful mapping for eram access
     /// from 0xA000 to 0xBFFF should access eram
     #[test]
     fn eram_access() {
-        let mut mmu = MMU::new(DummyGPU::new());
+        let mut mmu = MMU::new(
+            DummyGPU::new(),
+            Cartridge::from_rom("tests/cpu_instrs/01-special.gb")
+        );
 
-        mmu.eram = [1; 0x2000];
-        mmu.eram[0xB000 & 0x1FFF] = 2;
-
-        assert_eq!(mmu.read_byte(0x0FFF), 0);
-        assert_eq!(mmu.read_byte(0xA000), 1);
-        assert_eq!(mmu.read_byte(0xB000), 2);
-        assert_eq!(mmu.read_byte(0xBFFF), 1);
-        assert_eq!(mmu.read_byte(0xC000), 0);
+        assert_eq!(mmu.read_byte(0xA000), 0xFF);
+        // returns 0xFF because this rom doesnt need an eram
+        // change when one is found
     }
 
     /// test successful mapping for eram write
     /// from 0xA000 to 0xBFFF should write to eram at addr &0x1FFF
     #[test]
+    #[should_panic]
     fn eram_write() {
-        let mut mmu = MMU::new(DummyGPU::new());
+        let mut mmu = MMU::new(
+            DummyGPU::new(),
+            Cartridge::from_rom("tests/cpu_instrs/01-special.gb")
+        );
 
         mmu.write_byte(0xA000, 1);
-        mmu.write_byte(0xB000, 1);
-        mmu.write_byte(0xBFFF, 1);
-
-        assert_eq!(mmu.eram[0xA000 & 0x1FFF], 1);
-        assert_eq!(mmu.eram[0xB000 & 0x1FFF], 1);
-        assert_eq!(mmu.eram[0xBFFF & 0x1FFF], 1);
+        assert_eq!(mmu.read_byte(0xA000), 1)
+        // panics because this cartridge doesnt allocate an eram
+        // change when one is found
     }
 
     /// test successful mapping for wram access
     /// from 0xC000 to 0xFDFF should access wram
     #[test]
     fn wram_access() {
-        let mut mmu = MMU::new(DummyGPU::new());
+        let mut mmu = MMU::new(
+            DummyGPU::new(),
+            Cartridge::from_rom("tests/cpu_instrs/01-special.gb")
+        );
+
 
         mmu.wram = [1; 0x2000];
         mmu.wram[0xD000 & 0x1FFF] = 2;
 
-        assert_eq!(mmu.read_byte(0xBFFF), 0);
+        assert_eq!(mmu.read_byte(0xBFFF), 0xFF);
         assert_eq!(mmu.read_byte(0xC000), 1);
         assert_eq!(mmu.read_byte(0xD000), 2);
         assert_eq!(mmu.read_byte(0xE000), 1);
@@ -413,7 +422,10 @@ mod tests {
     /// from 0xC000 to 0xFDFF should write to wram at addr &0x1FFF
     #[test]
     fn wram_write() {
-        let mut mmu = MMU::new(DummyGPU::new());
+        let mut mmu = MMU::new(
+            DummyGPU::new(),
+            Cartridge::from_rom("tests/cpu_instrs/01-special.gb")
+        );
 
         mmu.write_byte(0xC000, 1);
         mmu.write_byte(0xD000, 1);
@@ -431,7 +443,10 @@ mod tests {
     /// careful, cause the areas overlaps with IO
     #[test]
     fn zram_access() {
-        let mut mmu = MMU::new(DummyGPU::new());
+        let mut mmu = MMU::new(
+            DummyGPU::new(),
+            Cartridge::from_rom("tests/cpu_instrs/01-special.gb")
+        );
 
         mmu.zram = [1; 0x0080];
         mmu.zram[0xFF80 & 0x007F] = 2;
@@ -450,7 +465,10 @@ mod tests {
     /// from 0xFF80 to 0xFFFF should write to zram at addr &0x007F
     #[test]
     fn zram_write() {
-        let mut mmu = MMU::new(DummyGPU::new());
+        let mut mmu = MMU::new(
+            DummyGPU::new(),
+            Cartridge::from_rom("tests/cpu_instrs/01-special.gb")
+        );
 
         mmu.write_byte(0xFF80, 1);
         mmu.write_byte(0xFFB0, 1);
@@ -463,21 +481,27 @@ mod tests {
     /// from 0x8000 to 0x9FFF should access gpu vram
     #[test]
     fn gpu_vram_access() {
-        let mut mmu = MMU::new(DummyGPU::with([1; 65536], [0; 65536]));
+        let mut mmu = MMU::new(
+            DummyGPU::with([1; 65536], [0; 65536]),
+            Cartridge::from_rom("tests/cpu_instrs/01-special.gb")
+        );
 
         assert_eq!(mmu.read_byte(0x7FFF), 0);
         assert_eq!(mmu.read_byte(0x8000), 1);
         assert_eq!(mmu.read_byte(0x8000), 1);
         assert_eq!(mmu.read_byte(0x9000), 1);
         assert_eq!(mmu.read_byte(0x9FFF), 1);
-        assert_eq!(mmu.read_byte(0xA000), 0);
+        assert_eq!(mmu.read_byte(0xA000), 0xFF);
     }
 
     /// test successful mapping for gpu vram write
     /// from 0x8000 to 0x9FFF should write to gpu vram at addr &0x1FFF
     #[test]
     fn gpu_vram_write() {
-        let mut mmu = MMU::new(DummyGPU::new());
+        let mut mmu = MMU::new(
+            DummyGPU::new(),
+            Cartridge::from_rom("tests/cpu_instrs/01-special.gb")
+        );
 
         mmu.write_byte(0x8000, 1);
         mmu.write_byte(0x9000, 1);
@@ -492,7 +516,10 @@ mod tests {
     /// from 0xFE00 to 0xFE9F should access gpu oam
     #[test]
     fn gpu_oam_access() {
-        let mut mmu = MMU::new(DummyGPU::with([0; 65536], [1; 65536]));
+        let mut mmu = MMU::new(
+            DummyGPU::with([0; 65536], [1; 65536]),
+            Cartridge::from_rom("tests/cpu_instrs/01-special.gb")
+        );
 
         assert_eq!(mmu.read_byte(0xFDFF), 0);
         assert_eq!(mmu.read_byte(0xFE00), 1);
@@ -505,7 +532,10 @@ mod tests {
     /// from 0xFE00 to 0xFE9F should write to gpu oam at addr &0x00FF
     #[test]
     fn gpu_oam_write() {
-        let mut mmu = MMU::new(DummyGPU::new());
+        let mut mmu = MMU::new(
+            DummyGPU::new(),
+            Cartridge::from_rom("tests/cpu_instrs/01-special.gb")
+        );
 
         mmu.write_byte(0xFE00, 1);
         mmu.write_byte(0xFE70, 1);
@@ -520,7 +550,10 @@ mod tests {
     /// from 0xFF40 to 0xFF7F should write to gpu registers
     #[test]
     fn gpu_registers_write() {
-        let mut mmu = MMU::new(DummyGPU::new());
+        let mut mmu = MMU::new(
+            DummyGPU::new(),
+            Cartridge::from_rom("tests/cpu_instrs/01-special.gb")
+        );
 
         for i in 0u16..64u16 {
             mmu.write_byte(0xFF40 + i, 1);
@@ -537,7 +570,11 @@ mod tests {
     /// unmapped area (0xFEA0-0xFEFF) is unwritable and reads should always return 0xFF
     #[test]
     fn unmapped_areas() {
-        let mut mmu = MMU::new(DummyGPU::new());
+        let mut mmu = MMU::new(
+            DummyGPU::new(),
+            Cartridge::from_rom("tests/cpu_instrs/01-special.gb")
+        );
+
 
         mmu.write_byte(0xFEA0, 0);
         assert_eq!(mmu.read_byte(0xFEA0), 0xFF);
