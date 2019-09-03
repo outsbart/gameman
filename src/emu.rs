@@ -4,13 +4,13 @@ extern crate sdl2;
 
 use keypad::Button;
 
-use crate::cartridge::Cartridge;
 use crate::cpu::CPU;
 use crate::cpu::is_bit_set;
 use crate::gpu::GPU;
 use crate::mem::{Memory, MMU};
-use crate::utils::{load_boot_rom};
+use crate::cartridge::load_rom;
 
+use crate::utils::{load_boot_rom};
 use self::sdl2::event::Event;
 use self::sdl2::keyboard::Keycode;
 use self::sdl2::pixels::Color;
@@ -29,7 +29,7 @@ pub struct Emulator {
 
 impl Emulator {
     pub fn new(path: &str) -> Emulator {
-        let cartridge = Cartridge::from_rom(path);
+        let cartridge = load_rom(path);
         let mmu = MMU::new(GPU::new(), cartridge);
         let cpu = CPU::new(mmu);
 
