@@ -402,7 +402,8 @@ impl GPU {
         }
 
         // window
-        if self.window_enabled {
+        if self.window_enabled && self.window_y <= self.line {
+
             let window_x = self.window_x.wrapping_sub(7);
             let tilemap_offset = if self.window_map { TILEMAP1_OFFSET } else { TILEMAP0_OFFSET };
 
