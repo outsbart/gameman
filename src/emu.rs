@@ -48,9 +48,12 @@ impl Emulator {
         // step a frame forward!
         loop {
             let (_line, t) = self.cpu.step();
-            let vblank_interrupt = self.cpu.mmu.gpu.step(t);
+            let (vblank_interrupt, stat_interrupt) = self.cpu.mmu.gpu.step(t);
             if vblank_interrupt {
                 self.request_vblank_interrupt();
+            }
+            if stat_interrupt {
+                self.request_stat_interrupt();
             }
             if self.cpu.clks.t >= self.stop_clock {
                 break;
@@ -91,8 +94,13 @@ impl Emulator {
         self.cpu.mmu.write_byte(0xFF0F, interrupt_flags);
     }
 
-    pub fn run(&mut self) {
+    // TODO: move it away from here!
+    fn request_stat_interrupt(&mut self) {
+        let interrupt_flags = self.cpu.mmu.read_byte(0xFF0F) | 2;
+        self.cpu.mmu.write_byte(0xFF0F, interrupt_flags);
+    }
 
+    pub fn run(&mut self) {
         let sdl = sdl2::init().unwrap();
         let video_subsystem = sdl.video().unwrap();
         let mut timer_subsystem = sdl.timer().unwrap();

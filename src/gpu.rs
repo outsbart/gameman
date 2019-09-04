@@ -182,6 +182,9 @@ pub struct GPU {
     window_map: bool,   // which tilemap use for the window?
     lcd_enabled: bool,
 
+    compare_enabled: bool,  // stat reg. Should compare with compare line?
+    compare_line: u8, // when line == compare_line an interrupt is triggered
+
     scroll_x: u8,
     scroll_y: u8,
     bg_palette: Palette,
@@ -225,9 +228,14 @@ impl GPUMemoriesAccess for GPU {
                     | (if self.window_map { 0x40 } else { 0 })
                     | (if self.lcd_enabled { 0x80 } else { 0 })
             },
+            0xFF41 => {
+                (if self.compare_enabled { 0x20 } else { 0 })
+                    | (if self.compare() { 0x04 } else { 0 })
+            }
             0xFF42 => self.scroll_y,
             0xFF43 => self.scroll_x,
             0xFF44 => self.line,
+            0xFF45 => self.compare_line,
             0xFF47 => self.bg_palette.byte,
             0xFF48 => self.obj_palette_0.byte,
             0xFF49 => self.obj_palette_1.byte,
@@ -238,7 +246,7 @@ impl GPUMemoriesAccess for GPU {
     }
     fn write_byte(&mut self, addr: u16, byte: u8) {
         match addr {
-            0xFF40 => {
+            0xFF40 => {  // LCD Control
                 self.bg_enabled = if (byte & 0x01) != 0 { true } else { false };
                 self.obj_enabled = if (byte & 0x02) != 0 { true } else { false };
                 self.obj_size = if (byte & 0x04) != 0 { true } else { false };
@@ -247,12 +255,24 @@ impl GPUMemoriesAccess for GPU {
                 self.window_enabled = if (byte & 0x20) != 0 { true } else { false };
                 self.window_map = if (byte & 0x40) != 0 { true } else { false };
                 self.lcd_enabled = if (byte & 0x80) != 0 { true } else { false };
+            },
+            0xFF41 => {
+                self.compare_enabled = if (byte & 0x40) != 0 { true } else { false };
+                println!("compare_enabled = {}", self.compare_enabled);
             }
             0xFF42 => {
                 self.scroll_y = byte;
             }
             0xFF43 => {
                 self.scroll_x = byte;
+            }
+            0xFF44 => {
+                self.line = 0;
+                println!("line reset");
+            }
+            0xFF45 => {
+                self.compare_line = byte;
+                println!("compare_line = {}", self.compare_line);
             }
             0xFF46 => {
                 // DMA transfer, handled from outside
@@ -294,6 +314,8 @@ impl GPU {
             window_enabled: false,
             window_map: false,
             lcd_enabled: false,
+            compare_enabled: false,
+            compare_line: 0,
             scroll_x: 0,
             scroll_y: 0,
             bg_palette: Palette::new(),
@@ -302,6 +324,10 @@ impl GPU {
             window_x: 0,
             window_y: 0,
         }
+    }
+
+    fn compare(&self) -> bool {
+        self.line == self.compare_line
     }
 
     pub fn get_buffer(&self) -> &[u8; 160 * 144] {
@@ -418,7 +444,7 @@ impl GPU {
                 let low_bit: u8 = is_bit_set(7 - cell_x as u8, byte_1 as u16) as u8;
                 let colour_number = (high_bit << 1) + low_bit;
                 let palette_colour = self.bg_palette.get(colour_number);
-
+                
                 rendering_row[pixel] = colour_number;
 
                 let index: usize = (self.line as usize * TILES_IN_A_SCREEN_ROW * TILE_SIZE)
@@ -493,11 +519,17 @@ impl GPU {
         }
     }
 
+    // returns true if compare stat interrupt should raise
+    fn check_compare_int(&self) -> bool {
+        return self.compare_enabled && self.compare()
+    }
+
     // go forward based on the cpu's last operation clocks
-    pub fn step(&mut self, t: u8) -> bool {
+    pub fn step(&mut self, t: u8) -> (bool, bool) {
         self.modeclock += t as u16;
 
         let mut vblank_interrupt: bool = false;
+        let mut compare_interrupt: bool = false;
 
         // todo: implement it as a state machine?
         match self.mode {
@@ -531,6 +563,8 @@ impl GPU {
                     } else {
                         self.mode = 2;
                     }
+
+                    compare_interrupt = self.check_compare_int();
                 }
             }
             // vblank (10 lines)
@@ -544,12 +578,14 @@ impl GPU {
                         self.mode = 2;
                         self.line = 0;
                     }
+
+                    compare_interrupt = self.check_compare_int();
                 }
             }
             _ => panic!("Sorry what?"),
         }
 
-        vblank_interrupt
+        (vblank_interrupt, compare_interrupt)
     }
 }
 

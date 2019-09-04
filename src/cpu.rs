@@ -543,7 +543,6 @@ impl<M: Memory> CPU<M> {
                 result = set_bit(op1 as u8, op2 as u8);
             }
             "HALT" => {
-                println!("halting");
                 self.halted = true;
             } // todo: implement halt bug
             _ => {
@@ -614,7 +613,7 @@ impl<M: Memory> CPU<M> {
     fn interrupts_to_handle(&mut self) -> u8 {
         let interrupt_enable = self.mmu.read_byte(0xFFFF);
         let interrupt_flags = self.mmu.read_byte(0xFF0F);
-        return interrupt_enable & interrupt_flags;
+        interrupt_enable & interrupt_flags
     }
 
     fn handle_interrupts(&mut self) {
@@ -623,7 +622,6 @@ impl<M: Memory> CPU<M> {
 
         // wake up cpu if there is an interrupt, even if ime = 0
         if interrupts != 0 && self.halted {
-            println!("dehalting");
             self.halted = false;
         }
 

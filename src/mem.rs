@@ -17,6 +17,7 @@ pub struct MMU<M: GPUMemoriesAccess> {
     pub interrupt_enable: u8,
     pub interrupt_flags: u8,
 
+    pub oam_dma_source: u8,
     pub gpu: M,
     pub key: Key,
     pub link: Link,
@@ -38,6 +39,7 @@ impl<M: GPUMemoriesAccess> MMU<M> {
             interrupt_enable: 0,
             interrupt_flags: 0xe0,
 
+            oam_dma_source: 0,
             gpu,
             key: Key::new(),
             link: Link::new(),
@@ -128,7 +130,11 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                                 }
                                 0x10 | 0x20 | 0x30 => { 0 }  // sound
                                 0x40 | 0x50 | 0x60 | 0x70 => {
-                                    self.gpu.read_byte(addr)
+                                    if addr == 0xFF46 {
+                                        self.oam_dma_source
+                                    } else {
+                                        self.gpu.read_byte(addr)
+                                    }
                                 }
                                 _ => panic!("Unhandled memory access")
                             }
@@ -228,11 +234,13 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                         else if addr >= 0xFF40 {
                             if addr == 0xFF46 {
                                 // OAM DMA transfer
+                                self.oam_dma_source = byte;
                                 let start: u16 = (byte as u16) << 8;
                                 for i in 0u16..160 {
                                     let to_be_copied = self.read_byte(start+i);
                                     self.gpu.write_oam(i, to_be_copied);
                                 }
+                                return;
                             }
                             self.gpu.write_byte(addr, byte);
                             return;
