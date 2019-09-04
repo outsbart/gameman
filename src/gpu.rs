@@ -403,8 +403,8 @@ impl GPU {
 
         // window
         if self.window_enabled && self.window_y <= self.line {
-
-            let window_x = self.window_x.wrapping_sub(7);
+            // window_x is treated as 7 if it's anywhere from 0-6
+            let window_x = (if self.window_x < 7 { 7 } else { self.window_x}).wrapping_sub(7);
             let tilemap_offset = if self.window_map { TILEMAP1_OFFSET } else { TILEMAP0_OFFSET };
 
             let window_line: usize = self.line.wrapping_sub(self.window_y) as usize;
