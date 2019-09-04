@@ -1,5 +1,6 @@
 pub mod nombc;
 pub mod mbc1;
+pub mod mbc3;
 pub mod mbc5;
 
 use std::fs::File;
@@ -8,6 +9,7 @@ use std::io::Read;
 use cartridge::nombc::CartridgeNoMBC;
 use cartridge::mbc1::CartridgeMBC1;
 use cartridge::mbc5::CartridgeMBC5;
+use cartridge::mbc3::CartridgeMBC3;
 
 
 pub trait Cartridge {
@@ -50,6 +52,7 @@ pub fn load_rom(path: &str) -> Box<Cartridge> {
     match cart_type {
         0 => Box::new(CartridgeNoMBC::new(rom)),
         1|2|3 => Box::new(CartridgeMBC1::new(rom, ram_size)),
+        0x13 => Box::new(CartridgeMBC3::new(rom, ram_size)),
         0x19|0x1b => Box::new(CartridgeMBC5::new(rom, ram_size)),
         _ => panic!("Cartridge type {:x} not implemented", cart_type)
     }
