@@ -270,12 +270,61 @@ impl WaveChannel {
 }
 
 struct NoiseChannel {
+    length_load: u8,
+
+    envelope: Envelope,
+
+    clock_shift: u8,
+    lfsr_width_mode: u8,
+    divisor_code: u8,
+
+    trigger: bool,
+    length_enable: bool,
 
 }
 
 impl NoiseChannel {
     pub fn new() -> Self {
-        NoiseChannel { }
+        NoiseChannel {
+            length_load: 0,
+
+            envelope: Envelope::new(),
+
+            clock_shift: 0,
+            lfsr_width_mode: 0,
+            divisor_code: 0,
+
+            trigger: false,
+            length_enable: false
+        }
+    }
+
+    pub fn write_register_3(&mut self, byte: u8) {
+        self.clock_shift = (byte & 0xF0) >> 4;
+        self.lfsr_width_mode = (byte & 0x08) >> 3;
+        self.divisor_code = byte & 0b111;
+    }
+
+    pub fn read_register_3(&self) -> u8 {
+        self.clock_shift << 4 | self.lfsr_width_mode << 3 | self.divisor_code
+    }
+
+    pub fn write_length_load(&mut self, byte: u8) {
+        self.length_load = byte;
+    }
+
+    pub fn read_length_load(&self) -> u8 {
+        self.length_load
+    }
+
+    pub fn write_register_4(&mut self, byte: u8) {
+        self.trigger = byte & 0b1000_0000 != 0;
+        self.length_enable = byte & 0b0100_0000 != 0;
+    }
+
+    pub fn read_register_4(&self) -> u8 {
+        (if self.trigger { 0b1000_0000 } else { 0 }) |
+        (if self.length_enable { 0b0100_0000 } else { 0 })
     }
 }
 
@@ -435,5 +484,39 @@ mod tests {
         channel.frequency_msb = 0b001;
 
         assert_eq!(channel.read_register_4(), 0b0100_0001);
+    }
+
+    #[test]
+    fn test_noise_register_4() {
+        let mut channel: NoiseChannel = NoiseChannel::new();
+
+        assert_eq!(channel.read_register_4(), 0);
+
+        channel.write_register_4(0b1000_1110);
+        assert_eq!(channel.trigger, true);
+        assert_eq!(channel.length_enable, false);
+
+        channel.trigger = false;
+        channel.length_enable = true;
+
+        assert_eq!(channel.read_register_4(), 0b0100_0000);
+    }
+
+    #[test]
+    fn test_noise_register_3() {
+        let mut channel: NoiseChannel = NoiseChannel::new();
+
+        assert_eq!(channel.read_register_3(), 0);
+
+        channel.write_register_3(0b1000_1110);
+        assert_eq!(channel.clock_shift, 0b1000);
+        assert_eq!(channel.lfsr_width_mode, 1);
+        assert_eq!(channel.divisor_code, 0b110);
+
+        channel.clock_shift = 0b1100;
+        channel.lfsr_width_mode = 0;
+        channel.divisor_code = 0b1;
+
+        assert_eq!(channel.read_register_3(), 0b1100_0001);
     }
 }
