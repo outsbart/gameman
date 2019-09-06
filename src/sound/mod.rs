@@ -172,9 +172,42 @@ struct WaveChannel {
     length_load: u8,
     frequency: u8,
 
+    volume: Volume,
     trigger: bool,
     length_enable: bool,
     frequency_msb: u8,
+}
+
+
+#[derive(Clone, Copy)]
+#[repr(u8)]
+enum Volume {
+    Silent = 0,
+    Max = 1,
+    Half = 2,
+    Quarter = 3,
+}
+
+impl Volume {
+    pub fn from_u8(value: u8) -> Self {
+        match value {
+            0 => Volume::Silent,
+            1 => Volume::Max,
+            2 => Volume::Half,
+            _ => Volume::Quarter,
+        }
+    }
+}
+
+impl Into<u8> for Volume {
+    fn into(self) -> u8 {
+        match self {
+            Volume::Silent => 0,
+            Volume::Max => 1,
+            Volume::Half => 2,
+            Volume::Quarter => 3,
+        }
+    }
 }
 
 impl WaveChannel {
@@ -184,6 +217,7 @@ impl WaveChannel {
             length_load: 0,
             frequency: 0,
 
+            volume: Volume::Silent,
             trigger: false,
             length_enable: false,
             frequency_msb: 0
@@ -212,6 +246,14 @@ impl WaveChannel {
 
     pub fn read_frequency(&self) -> u8 {
         self.frequency
+    }
+
+    pub fn write_volume(&mut self, byte: u8) {
+        self.volume = Volume::from_u8((byte & 0b0110_0000) >> 5);
+    }
+
+    pub fn read_volume(&self) -> u8 {
+        (self.volume as u8) << 5
     }
 }
 
@@ -349,5 +391,18 @@ mod tests {
 
         channel.length_load = 0b1111_1011;
         assert_eq!(channel.read_length_load(), 0b1111_1011);
+    }
+
+    #[test]
+    fn test_wave_volume() {
+        let mut channel: WaveChannel = WaveChannel::new();
+
+        assert_eq!(channel.volume as u8, Volume::Silent as u8);
+
+        channel.write_volume(0b0110_0000);
+        assert_eq!(channel.volume as u8, Volume::Quarter as u8);
+
+        channel.volume = Volume::Max;
+        assert_eq!(channel.read_volume(), 0b0010_0000);
     }
 }
