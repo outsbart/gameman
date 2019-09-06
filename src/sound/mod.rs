@@ -112,6 +112,7 @@ struct SquareChannel {
 
     pub duty: u8,
     pub length_load: u8,
+    pub frequency: u8,
 }
 
 impl SquareChannel {
@@ -120,7 +121,8 @@ impl SquareChannel {
             sweep: Sweep::new(),
             envelope: Envelope::new(),
             duty: 0,
-            length_load: 0
+            length_load: 0,
+            frequency: 0,
         }
     }
 
@@ -131,6 +133,14 @@ impl SquareChannel {
 
     pub fn read_register_1(&self) -> u8 {
         (self.duty << 6) | self.length_load
+    }
+
+    pub fn write_frequency(&mut self, byte: u8) {
+        self.frequency = byte;
+    }
+
+    pub fn read_frequency(&self) -> u8 {
+        self.frequency
     }
 }
 
@@ -208,6 +218,19 @@ mod tests {
         envelope.period = 0b111;
 
         assert_eq!(envelope.read(), 0b1110_0111);
+    }
+
+    #[test]
+    fn test_square_frequency() {
+        let mut channel: SquareChannel = SquareChannel::new();
+
+        assert_eq!(channel.frequency, 0);
+
+        channel.write_frequency(0b1110_0111);
+        assert_eq!(channel.frequency, 0b1110_0111);
+
+        channel.frequency = 0b1111_1011;
+        assert_eq!(channel.read_frequency(), 0b1111_1011);
     }
 
 
