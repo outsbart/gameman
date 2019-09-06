@@ -110,9 +110,15 @@ struct SquareChannel {
     pub sweep: Sweep,
     pub envelope: Envelope,
 
+    // register 1
     pub duty: u8,
     pub length_load: u8,
     pub frequency: u8,
+
+    // register 4
+    trigger: bool,
+    length_enable: bool,
+    frequency_msb: u8,
 }
 
 impl SquareChannel {
@@ -120,9 +126,14 @@ impl SquareChannel {
         SquareChannel {
             sweep: Sweep::new(),
             envelope: Envelope::new(),
+
             duty: 0,
             length_load: 0,
             frequency: 0,
+
+            trigger: false,
+            length_enable: false,
+            frequency_msb: 0
         }
     }
 
@@ -133,6 +144,18 @@ impl SquareChannel {
 
     pub fn read_register_1(&self) -> u8 {
         (self.duty << 6) | self.length_load
+    }
+
+    pub fn write_register_4(&mut self, byte: u8) {
+        self.trigger = byte & 0b1000_0000 != 0;
+        self.length_enable = byte & 0b0100_0000 != 0;
+        self.frequency_msb = byte & 0b111;
+    }
+
+    pub fn read_register_4(&self) -> u8 {
+        (if self.trigger { 0b1000_0000 } else { 0 }) |
+        (if self.length_enable { 0b0100_0000 } else { 0 }) |
+        self.frequency_msb
     }
 
     pub fn write_frequency(&mut self, byte: u8) {
@@ -233,5 +256,21 @@ mod tests {
         assert_eq!(channel.read_frequency(), 0b1111_1011);
     }
 
+    #[test]
+    fn test_square_register_4() {
+        let mut channel: SquareChannel = SquareChannel::new();
 
+        assert_eq!(channel.read_register_4(), 0);
+
+        channel.write_register_4(0b1000_1110);
+        assert_eq!(channel.trigger, true);
+        assert_eq!(channel.length_enable, false);
+        assert_eq!(channel.frequency_msb, 0b110);
+
+        channel.trigger = false;
+        channel.length_enable = true;
+        channel.frequency_msb = 0b001;
+
+        assert_eq!(channel.read_register_4(), 0b0100_0001);
+    }
 }
