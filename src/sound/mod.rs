@@ -4,7 +4,18 @@ pub struct Sound {
     channel_1: SquareChannel,
     channel_2: SquareChannel,
     channel_3: WaveChannel,
-    channel_4: NoiseChannel
+    channel_4: NoiseChannel,
+
+    vin_l_enable: bool,
+    vin_r_enable: bool,
+    left_volume: u8,
+    right_volume: u8,
+
+    left_enables: ChannelsFlag,
+    right_enables: ChannelsFlag,
+    length_statuses: ChannelsFlag,
+
+    power: bool,
 }
 
 
@@ -38,14 +49,91 @@ impl Memory for Sound {
     }
 }
 
+struct ChannelsFlag {
+    noise: bool,
+    wave: bool,
+    square_2: bool,
+    square_1: bool,
+}
+
+impl ChannelsFlag {
+    pub fn new() -> Self {
+        ChannelsFlag {
+            noise: false,
+            wave: false,
+            square_2: false,
+            square_1: false,
+        }
+    }
+
+    pub fn write(&mut self, byte: u8) {
+        self.noise = (byte & 0b1000) >> 3 != 0;
+        self.wave = (byte & 0b100) >> 2 != 0;
+        self.square_2 = (byte & 0b10) >> 1 != 0;
+        self.square_1 = byte & 0b1 != 0;
+    }
+
+    pub fn read(&self) -> u8 {
+        (if self.noise { 0b1000 } else { 0 }) |
+        (if self.wave { 0b100 } else { 0 }) |
+        (if self.square_2 { 0b10 } else { 0 }) |
+        (if self.square_1 { 1 } else { 0 })
+    }
+}
+
 impl Sound {
     pub fn new() -> Self {
         Sound {
             channel_1: SquareChannel::new(),
             channel_2: SquareChannel::new(),
             channel_3: WaveChannel::new(),
-            channel_4: NoiseChannel::new()
+            channel_4: NoiseChannel::new(),
+
+            vin_l_enable: false,
+            vin_r_enable: false,
+
+            left_volume: 0,
+            right_volume: 0,
+
+            left_enables: ChannelsFlag::new(),
+            right_enables: ChannelsFlag::new(),
+            length_statuses: ChannelsFlag::new(),
+
+            power: false
         }
+    }
+
+    pub fn read_control_volume(&self) -> u8 {
+        (if self.vin_l_enable { 0b1000_0000 } else { 0 }) |
+            (self.left_volume << 4) |
+            (if self.vin_r_enable { 0b1000} else { 0 }) |
+            (self.right_volume)
+    }
+
+    pub fn write_control_volume(&mut self, byte: u8) {
+        self.vin_l_enable = (byte & 0b1000_0000) >> 7 != 0;
+        self.vin_r_enable = (byte & 0b1000) >> 3 != 0;
+        self.left_volume = (byte & 0b0111_0000) >> 4;
+        self.right_volume = byte & 0b111;
+    }
+
+    pub fn read_channel_enables(&self) -> u8 {
+        self.left_enables.read() << 4 | self.right_enables.read()
+    }
+
+    pub fn write_channel_enables(&mut self, byte: u8) {
+        self.left_enables.write((byte & 0xF0) >> 4);
+        self.right_enables.write(byte & 0xF);
+    }
+
+    pub fn read_control_master(&self) -> u8 {
+        (if self.power { 0b1000_0000 } else { 0 }) |
+            self.length_statuses.read()
+    }
+
+    pub fn write_control_master(&mut self, byte: u8) {
+        self.power = byte & 0b1000_0000 != 0;
+        self.length_statuses.write(byte & 0xF);
     }
 }
 
@@ -518,5 +606,75 @@ mod tests {
         channel.divisor_code = 0b1;
 
         assert_eq!(channel.read_register_3(), 0b1100_0001);
+    }
+
+    #[test]
+    fn test_control_volume() {
+        let mut sound = Sound::new();
+
+        assert_eq!(sound.read_control_volume(), 0);
+
+        sound.write_control_volume(0b1001_0010);
+        assert_eq!(sound.vin_l_enable, true);
+        assert_eq!(sound.vin_r_enable, false);
+        assert_eq!(sound.left_volume, 1);
+        assert_eq!(sound.right_volume, 0b10);
+
+        sound.vin_l_enable = false;
+        sound.vin_r_enable = true;
+        sound.left_volume = 0b100;
+        sound.right_volume = 0b111;
+
+        assert_eq!(sound.read_control_volume(), 0b0100_1111);
+    }
+
+    #[test]
+    fn test_left_right_enables() {
+        let mut sound = Sound::new();
+
+        assert_eq!(sound.read_channel_enables(), 0);
+
+        sound.write_channel_enables(0b1001_0010);
+        assert_eq!(sound.left_enables.noise, true);
+        assert_eq!(sound.left_enables.wave, false);
+        assert_eq!(sound.left_enables.square_2, false);
+        assert_eq!(sound.left_enables.square_1, true);
+        assert_eq!(sound.right_enables.noise, false);
+        assert_eq!(sound.right_enables.wave, false);
+        assert_eq!(sound.right_enables.square_2, true);
+        assert_eq!(sound.right_enables.square_1, false);
+
+        sound.left_enables.noise = false;
+        sound.left_enables.wave = true;
+        sound.left_enables.square_2 = true;
+        sound.left_enables.square_1 = false;
+        sound.right_enables.noise = true;
+        sound.right_enables.wave = true;
+        sound.right_enables.square_2 = false;
+        sound.right_enables.square_1 = true;
+        assert_eq!(sound.read_channel_enables(), 0b0110_1101);
+    }
+
+
+    #[test]
+    fn test_control_master() {
+        let mut sound = Sound::new();
+
+        assert_eq!(sound.read_control_master(), 0);
+
+        sound.write_control_master(0b1000_1010);
+        assert_eq!(sound.power, true);
+        assert_eq!(sound.length_statuses.noise, true);
+        assert_eq!(sound.length_statuses.wave, false);
+        assert_eq!(sound.length_statuses.square_2, true);
+        assert_eq!(sound.length_statuses.square_1, false);
+
+        sound.power = false;
+        sound.length_statuses.noise = false;
+        sound.length_statuses.wave = true;
+        sound.length_statuses.square_2 = false;
+        sound.length_statuses.square_1 = true;
+
+        assert_eq!(sound.read_control_master(), 0b0000_0101);
     }
 }
