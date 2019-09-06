@@ -51,12 +51,28 @@ impl Sound {
 
 
 struct Envelope {
-
+    start_volume: u8,
+    add_mode: bool,
+    period: u8
 }
 
 impl Envelope {
     pub fn new() -> Self {
-        Envelope {}
+        Envelope {
+            start_volume: 0,
+            add_mode: false,
+            period: 0,
+        }
+    }
+
+    pub fn write(&mut self, byte: u8) {
+        self.period = byte & 0b111;
+        self.add_mode = (byte & 0b1000) >> 3 != 0;
+        self.start_volume = (byte & 0xF0) >> 4;
+    }
+
+    pub fn read(&self) -> u8 {
+        self.period | (if self.add_mode == true { 0b1000 } else { 0 }) | (self.start_volume << 4)
     }
 }
 
@@ -175,5 +191,24 @@ mod tests {
 
         assert_eq!(channel.read_register_1(), 0b1100_1110);
     }
+
+    #[test]
+    fn test_envelope() {
+        let mut envelope: Envelope = Envelope::new();
+
+        assert_eq!(envelope.read(), 0);
+
+        envelope.write(0b1000_1011);
+        assert_eq!(envelope.period, 0b011);
+        assert_eq!(envelope.add_mode, true);
+        assert_eq!(envelope.start_volume, 0b1000);
+
+        envelope.start_volume = 0b1110;
+        envelope.add_mode = false;
+        envelope.period = 0b111;
+
+        assert_eq!(envelope.read(), 0b1110_0111);
+    }
+
 
 }
