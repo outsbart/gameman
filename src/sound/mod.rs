@@ -255,6 +255,18 @@ impl WaveChannel {
     pub fn read_volume(&self) -> u8 {
         (self.volume as u8) << 5
     }
+
+    pub fn write_register_4(&mut self, byte: u8) {
+        self.trigger = byte & 0b1000_0000 != 0;
+        self.length_enable = byte & 0b0100_0000 != 0;
+        self.frequency_msb = byte & 0b111;
+    }
+
+    pub fn read_register_4(&self) -> u8 {
+        (if self.trigger { 0b1000_0000 } else { 0 }) |
+        (if self.length_enable { 0b0100_0000 } else { 0 }) |
+        self.frequency_msb
+    }
 }
 
 struct NoiseChannel {
@@ -404,5 +416,24 @@ mod tests {
 
         channel.volume = Volume::Max;
         assert_eq!(channel.read_volume(), 0b0010_0000);
+    }
+
+
+    #[test]
+    fn test_wave_register_4() {
+        let mut channel: WaveChannel = WaveChannel::new();
+
+        assert_eq!(channel.read_register_4(), 0);
+
+        channel.write_register_4(0b1000_1110);
+        assert_eq!(channel.trigger, true);
+        assert_eq!(channel.length_enable, false);
+        assert_eq!(channel.frequency_msb, 0b110);
+
+        channel.trigger = false;
+        channel.length_enable = true;
+        channel.frequency_msb = 0b001;
+
+        assert_eq!(channel.read_register_4(), 0b0100_0001);
     }
 }
