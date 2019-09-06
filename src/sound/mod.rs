@@ -168,12 +168,50 @@ impl SquareChannel {
 }
 
 struct WaveChannel {
+    dac_power: bool,
+    length_load: u8,
+    frequency: u8,
 
+    trigger: bool,
+    length_enable: bool,
+    frequency_msb: u8,
 }
 
 impl WaveChannel {
     pub fn new() -> Self {
-        WaveChannel { }
+        WaveChannel {
+            dac_power: false,
+            length_load: 0,
+            frequency: 0,
+
+            trigger: false,
+            length_enable: false,
+            frequency_msb: 0
+        }
+    }
+
+    pub fn write_dac_power(&mut self, byte: u8) {
+        self.dac_power = (byte & 0b1000_0000) != 0;
+    }
+
+    pub fn read_dac_power(&self) -> u8 {
+        if self.dac_power { 0b1000_0000 } else { 0 }
+    }
+
+    pub fn write_length_load(&mut self, byte: u8) {
+        self.length_load = byte;
+    }
+
+    pub fn read_length_load(&self) -> u8 {
+        self.length_load
+    }
+
+    pub fn write_frequency(&mut self, byte: u8) {
+        self.frequency = byte;
+    }
+
+    pub fn read_frequency(&self) -> u8 {
+        self.frequency
     }
 }
 
@@ -272,5 +310,44 @@ mod tests {
         channel.frequency_msb = 0b001;
 
         assert_eq!(channel.read_register_4(), 0b0100_0001);
+    }
+
+    #[test]
+    fn test_wave_frequency() {
+        let mut channel: WaveChannel = WaveChannel::new();
+
+        assert_eq!(channel.frequency, 0);
+
+        channel.write_frequency(0b1110_0111);
+        assert_eq!(channel.frequency, 0b1110_0111);
+
+        channel.frequency = 0b1111_1011;
+        assert_eq!(channel.read_frequency(), 0b1111_1011);
+    }
+
+    #[test]
+    fn test_wave_dac_power() {
+        let mut channel: WaveChannel = WaveChannel::new();
+
+        assert_eq!(channel.dac_power, false);
+
+        channel.write_dac_power(0b1110_0111);
+        assert_eq!(channel.dac_power, true);
+
+        channel.dac_power = false;
+        assert_eq!(channel.read_dac_power(), 0b0000_0000);
+    }
+
+    #[test]
+    fn test_wave_length_load() {
+        let mut channel: WaveChannel = WaveChannel::new();
+
+        assert_eq!(channel.length_load, 0);
+
+        channel.write_length_load(0b1110_0111);
+        assert_eq!(channel.length_load, 0b1110_0111);
+
+        channel.length_load = 0b1111_1011;
+        assert_eq!(channel.read_length_load(), 0b1111_1011);
     }
 }
