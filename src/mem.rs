@@ -2,6 +2,7 @@ use crate::gpu::GPUMemoriesAccess;
 use crate::link::Link;
 use crate::keypad::Key;
 use crate::timers::Timers;
+use crate::sound::Sound;
 use cartridge::Cartridge;
 
 pub struct MMU<M: GPUMemoriesAccess> {
@@ -13,6 +14,7 @@ pub struct MMU<M: GPUMemoriesAccess> {
 
     pub cartridge: Box<Cartridge>,
     pub timers: Timers,
+    pub sound: Sound,
 
     pub interrupt_enable: u8,
     pub interrupt_flags: u8,
@@ -33,6 +35,7 @@ impl<M: GPUMemoriesAccess> MMU<M> {
             zram: [0; 0x0080],
 
             cartridge,
+            sound: Sound::new(),
 
             timers: Timers::new(),
 
@@ -128,7 +131,7 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                                     0xF => { self.interrupt_flags }
                                     _ => { 0 }
                                 }
-                                0x10 | 0x20 | 0x30 => { 0 }  // sound
+                                0x10 | 0x20 | 0x30 => { self.sound.read_byte(addr) }
                                 0x40 | 0x50 | 0x60 | 0x70 => {
                                     if addr == 0xFF46 {
                                         self.oam_dma_source
@@ -245,6 +248,10 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                             self.gpu.write_byte(addr, byte);
                             return;
                         }
+                        else if addr >= 0xFF10 {
+                            self.sound.write_byte(addr, byte);
+                            return;
+                        }
                     }
 
                     _ => panic!("Unhandled memory write"),
@@ -253,8 +260,6 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
 
             _ => panic!("Unhandled memory write"),
         }
-
-        // println!("Memory write ignored addr=0x{:x} value={}", addr, byte);
     }
 
     fn tick(&mut self, cpu_cycles: u8) {
@@ -536,10 +541,12 @@ mod tests {
         }
 
         assert_eq!(mmu.gpu.registers[0xFF3F], 0);
+        assert_eq!(mmu.gpu.registers[0xFF40], 1);
+        assert_eq!(mmu.gpu.registers[0xFF7F], 1);
         assert_eq!(mmu.gpu.registers[0xFF80], 0);
 
         for i in 0u16..64u16 {
-            assert_eq!(mmu.gpu.registers[(0xFF40 + i) as usize], 1);
+            assert_eq!(mmu.read_byte(0xFF40 + i), 1);
         }
     }
 

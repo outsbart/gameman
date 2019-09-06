@@ -18,4 +18,5 @@ pub mod link;
 pub mod timers;
 pub mod mem;
 pub mod ops;
+pub mod sound;
 pub mod utils;
