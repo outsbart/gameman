@@ -50,7 +50,7 @@ impl Cartridge for CartridgeMBC5 {
                 self.rom_bank = ((byte as u16 & 0x1) << 8) | (self.rom_bank & 0xFF);
                 self.rom_offset = self.rom_bank as usize * 0x4000;
             }
-            0x4000 | 0x5000 => {  // change rom bank or ram bank
+            0x4000 | 0x5000 => {  // change ram bank
                 self.ram_bank = byte & 0xF;
                 self.ram_offset = self.ram_bank as usize * 0x2000;
             }
