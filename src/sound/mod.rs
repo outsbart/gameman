@@ -1,14 +1,16 @@
-use mem::Memory;
-use cpu::is_bit_set;
+pub mod envelope;
+pub mod square;
+pub mod length;
 
+use mem::Memory;
+use sound::envelope::Envelope;
+use sound::square::SquareChannel;
+use sound::length::Length;
 
 const SAMPLE_RATE: usize = 96000;
 const BUFFER_SIZE: usize = 512;
 
 pub type Sample = u8;
-
-const VOLUME_MAX: Sample = 0xF;
-const VOLUME_MIN: Sample = 0;
 
 
 pub struct Sound {
@@ -67,7 +69,7 @@ impl Memory for Sound {
     }
 }
 
-struct ChannelsFlag {
+pub struct ChannelsFlag {
     noise: bool,
     wave: bool,
     square_2: bool,
@@ -243,7 +245,7 @@ impl Sound {
 }
 
 
-struct FrameSequencer {
+pub struct FrameSequencer {
     timer: Timer,
     step: u8,      // goes up by 1 everytime the timer hits 0
     step_max: u8,  // indicates at which value step should go back to 0
@@ -269,7 +271,7 @@ impl FrameSequencer {
 }
 
 
-struct Timer {
+pub struct Timer {
     period: usize, // initial and max value of curr
     curr: usize,   // goes down by 1 every tick and wraps back to period
 }
@@ -296,222 +298,7 @@ impl Timer {
 }
 
 
-// every tick, increases or decreases volume
-struct Envelope {
-    timer: Timer,
-    add_mode: bool,
-    period: u8,
-    volume: u8,
-}
-
-impl Envelope {
-    pub fn new() -> Self {
-        Envelope {
-            timer: Timer::new(0),
-            add_mode: false,
-            period: 0,
-            volume: 0,
-        }
-    }
-
-    pub fn dac_enabled(&self) -> bool {
-        self.add_mode != false || self.volume != 0
-    }
-
-    pub fn write(&mut self, byte: u8) {
-        self.period = byte & 0b111;
-        self.add_mode = byte & 0b1000 != 0;
-        self.volume = byte >> 4;
-
-        self.timer = Timer::new(self.period as usize);
-    }
-
-    pub fn read(&self) -> u8 {
-        self.period | (if self.add_mode == true { 0b1000 } else { 0 }) | (self.volume << 4)
-    }
-
-    pub fn tick(&mut self) {
-        if self.period == 0 {
-            return
-        }
-
-        // when timer runs out
-        if self.timer.tick() {
-            if self.add_mode && self.volume < VOLUME_MAX {
-                self.volume += 1;
-            }
-            else if !self.add_mode && self.volume > VOLUME_MIN {
-                self.volume -= 1;
-            }
-        }
-    }
-}
-
-
-struct Sweep {
-    shifts_number: u8,
-    rising: bool, // true if should be increasing, false if decreasing
-    time: u8,
-}
-
-impl Sweep {
-    pub fn new() -> Self {
-        Sweep {
-            shifts_number: 0,
-            rising: false,
-            time: 0
-        }
-    }
-
-    pub fn write(&mut self, value: u8) {
-        self.shifts_number = value & 0b0000_0111;
-        self.rising = value & (1 << 3) != 0;
-        self.time = (value & 0b0111_0000) >> 4 ;
-    }
-
-    pub fn read(&self) -> u8 {
-        (self.time << 4) |
-            (if self.rising {4} else {0}) |
-            self.shifts_number
-    }
-
-    pub fn tick(&self) {
-
-    }
-}
-
-
-
-// used to shut off a channel after a period of time
-struct Length {
-    timer: Timer,
-    value: u8,
-    enable: bool,
-}
-
-impl Length {
-    pub fn new() -> Self {
-        Length {
-            timer: Timer::new(64),
-            value: 0,
-            enable: false,
-        }
-    }
-
-    pub fn tick(&mut self) {
-        if !self.enable {
-            return;
-        }
-
-        // if timer has run out
-        if self.timer.tick() {
-            self.enable = false;  // todo: should be father's enable?!?!
-        }
-    }
-}
-
-
-struct SquareChannel {
-    sweep: Sweep,
-    envelope: Envelope,
-    length: Length,
-    timer: Timer,  // it resets when it runs out, and the position in the duty pattern moves forward
-
-    running: bool,
-
-    duty_index: usize,  // in which position in the duty cycle we are. From 0 to 7
-
-    // Duty Pattern
-    //  0 — 00000001 (12.5%)
-    //  1 — 10000001 (25.0%)
-    //  2 — 10000111 (50.0%)
-    //  3 — 01111110 (75.0%)
-    duty: u8,
-    frequency: u16,
-
-    // register 4
-    trigger: bool,
-}
-
-
-impl SquareChannel {
-    pub fn new() -> Self {
-        SquareChannel {
-            sweep: Sweep::new(),
-            envelope: Envelope::new(),
-            length: Length::new(),
-            timer: Timer::new(0),
-
-            running: false,  // is set to False from Length or Sweep
-
-            duty_index: 0,
-            duty: 0,
-            frequency: 0,
-
-            trigger: false,
-        }
-    }
-
-    pub fn tick(&mut self) {
-        // if timer runs out
-        if self.timer.tick() {
-            self.duty_index = (self.duty_index + 1) % 8;
-            self.timer.curr = ((2048 - self.frequency) * 4) as usize;
-        }
-    }
-
-    fn enabled(&self) -> bool {
-        self.running && self.length.enable
-    }
-
-    pub fn sample(&mut self) -> Sample {
-        if !self.running {
-            return 0;
-        }
-
-        let duty_pattern = self.get_duty_pattern();
-
-        if is_bit_set((7 - self.duty_index) as u8, duty_pattern as u16) {
-            return self.envelope.volume;
-        }
-
-        0
-    }
-
-    fn get_duty_pattern(&self) -> u8 {
-        match self.duty {
-            0 => 0b0000_0001,
-            1 => 0b1000_0001,
-            2 => 0b1000_0111,
-            _ => 0b1111_1110,
-        }
-    }
-
-    pub fn write_register_1(&mut self, byte: u8) {
-        self.length.value = byte & 0b0011_1111;
-        self.duty = (byte & 0b1100_0000) >> 6;
-    }
-
-    pub fn read_register_1(&self) -> u8 {
-        (self.duty << 6) | self.length.value
-    }
-
-    pub fn write_register_4(&mut self, byte: u8) {
-        self.trigger = byte & 0b1000_0000 != 0;
-        self.length.enable = byte & 0b0100_0000 != 0;
-
-        // set frequency most significative bits
-        self.frequency = (self.frequency & 0xFF) | ((byte as u16 & 0b111) << 8);
-    }
-
-    pub fn read_register_4(&self) -> u8 {
-        (if self.trigger { 0b1000_0000 } else { 0 }) |
-        (if self.length.enable { 0b0100_0000 } else { 0 }) |
-        (self.frequency >> 8) as u8
-    }
-}
-
-struct WaveChannel {
+pub struct WaveChannel {
     dac_power: bool,
     frequency: u16,
     length: Length,
@@ -523,7 +310,7 @@ struct WaveChannel {
 
 #[derive(Clone, Copy)]
 #[repr(u8)]
-enum Volume {
+pub enum Volume {
     Silent = 0,
     Max = 1,
     Half = 2,
@@ -581,11 +368,11 @@ impl WaveChannel {
     }
 
     pub fn write_length_value(&mut self, byte: u8) {
-        self.length.value = byte;
+        self.length.set_value(byte);
     }
 
     pub fn read_length_value(&self) -> u8 {
-        self.length.value
+        self.length.get_value()
     }
 
     pub fn write_volume(&mut self, byte: u8) {
@@ -598,7 +385,7 @@ impl WaveChannel {
 
     pub fn write_register_4(&mut self, byte: u8) {
         self.trigger = byte & 0b1000_0000 != 0;
-        self.length.enable = byte & 0b0100_0000 != 0;
+        self.length.set_enable(byte & 0b0100_0000 != 0);
 
         // set frequency most significative bits
         self.frequency = (self.frequency & 0xFF) | ((byte as u16 & 0b111) << 8);
@@ -606,12 +393,12 @@ impl WaveChannel {
 
     pub fn read_register_4(&self) -> u8 {
         (if self.trigger { 0b1000_0000 } else { 0 }) |
-        (if self.length.enable { 0b0100_0000 } else { 0 }) |
+        (if self.length.enabled() { 0b0100_0000 } else { 0 }) |
         (self.frequency >> 8) as u8
     }
 }
 
-struct NoiseChannel {
+pub struct NoiseChannel {
     length: Length,
     envelope: Envelope,
 
@@ -656,21 +443,21 @@ impl NoiseChannel {
     }
 
     pub fn write_length_value(&mut self, byte: u8) {
-        self.length.value = byte;
+        self.length.set_value(byte);
     }
 
     pub fn read_length_value(&self) -> u8 {
-        self.length.value
+        self.length.get_value()
     }
 
     pub fn write_register_4(&mut self, byte: u8) {
         self.trigger = byte & 0b1000_0000 != 0;
-        self.length.enable = byte & 0b0100_0000 != 0;
+        self.length.set_enable(byte & 0b0100_0000 != 0);
     }
 
     pub fn read_register_4(&self) -> u8 {
         (if self.trigger { 0b1000_0000 } else { 0 }) |
-        (if self.length.enable { 0b0100_0000 } else { 0 })
+        (if self.length.enabled() { 0b0100_0000 } else { 0 })
     }
 }
 
@@ -678,75 +465,6 @@ impl NoiseChannel {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_sweep_read_write() {
-        let mut sweep: Sweep = Sweep::new();
-        assert_eq!(sweep.read(), 0);
-
-        sweep.write(0b0010_1011);
-        assert_eq!(sweep.shifts_number, 0b011);
-        assert_eq!(sweep.rising, true);
-        assert_eq!(sweep.time, 0b010);
-
-        sweep.shifts_number = 0b010;
-        sweep.rising = false;
-        sweep.time = 0b100;
-
-        assert_eq!(sweep.read(), 0b0100_0010);
-    }
-
-    #[test]
-    fn test_square_register_1() {
-        let mut channel: SquareChannel = SquareChannel::new();
-
-        assert_eq!(channel.read_register_1(), 0);
-
-        channel.write_register_1(0b1000_1111);
-        assert_eq!(channel.length.value, 0b1111);
-        assert_eq!(channel.duty, 0b10);
-
-        channel.length.value = 0b1110;
-        channel.duty = 0b11;
-
-        assert_eq!(channel.read_register_1(), 0b1100_1110);
-    }
-
-    #[test]
-    fn test_envelope() {
-        let mut envelope: Envelope = Envelope::new();
-
-        assert_eq!(envelope.read(), 0);
-
-        envelope.write(0b1000_1011);
-        assert_eq!(envelope.period, 0b011);
-        assert_eq!(envelope.add_mode, true);
-        assert_eq!(envelope.volume, 0b1000);
-
-        envelope.volume = 0b1110;
-        envelope.add_mode = false;
-        envelope.period = 0b111;
-
-        assert_eq!(envelope.read(), 0b1110_0111);
-    }
-
-    #[test]
-    fn test_square_register_4() {
-        let mut channel: SquareChannel = SquareChannel::new();
-
-        assert_eq!(channel.read_register_4(), 0);
-
-        channel.write_register_4(0b1000_1110);
-        assert_eq!(channel.trigger, true);
-        assert_eq!(channel.length.enable, false);
-        assert_eq!(channel.frequency, 0b110_0000_0000);
-
-        channel.trigger = false;
-        channel.length.enable = true;
-        channel.frequency = 0b001_0000_0000;
-
-        assert_eq!(channel.read_register_4(), 0b0100_0001);
-    }
 
     #[test]
     fn test_wave_dac_power() {
@@ -765,12 +483,12 @@ mod tests {
     fn test_wave_length_load() {
         let mut channel: WaveChannel = WaveChannel::new();
 
-        assert_eq!(channel.length.value, 0);
+        assert_eq!(channel.length.get_value(), 0);
 
         channel.write_length_value(0b1110_0111);
-        assert_eq!(channel.length.value, 0b1110_0111);
+        assert_eq!(channel.length.get_value(), 0b1110_0111);
 
-        channel.length.value = 0b1111_1011;
+        channel.length.set_value(0b1111_1011);
         assert_eq!(channel.read_length_value(), 0b1111_1011);
     }
 
@@ -796,11 +514,11 @@ mod tests {
 
         channel.write_register_4(0b1000_1110);
         assert_eq!(channel.trigger, true);
-        assert_eq!(channel.length.enable, false);
+        assert_eq!(channel.length.enabled(), false);
         assert_eq!(channel.frequency, 0b110_0000_0000);
 
         channel.trigger = false;
-        channel.length.enable = true;
+        channel.length.set_enable(true);
         channel.frequency = 0b001_0000_0000;
 
         assert_eq!(channel.read_register_4(), 0b0100_0001);
@@ -814,10 +532,10 @@ mod tests {
 
         channel.write_register_4(0b1000_1110);
         assert_eq!(channel.trigger, true);
-        assert_eq!(channel.length.enable, false);
+        assert_eq!(channel.length.enabled(), false);
 
         channel.trigger = false;
-        channel.length.enable = true;
+        channel.length.set_enable(true);
 
         assert_eq!(channel.read_register_4(), 0b0100_0000);
     }
