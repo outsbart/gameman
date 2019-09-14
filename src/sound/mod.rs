@@ -442,7 +442,7 @@ impl SquareChannel {
             length: Length::new(),
             timer: Timer::new(0),
 
-            running: false,
+            running: false,  // is set to False from Length or Sweep
 
             duty_index: 0,
             duty: 0,
@@ -455,9 +455,13 @@ impl SquareChannel {
     pub fn tick(&mut self) {
         // if timer runs out
         if self.timer.tick() {
-            self.duty_index = self.duty_index % 8;
+            self.duty_index = (self.duty_index + 1) % 8;
             self.timer.curr = ((2048 - self.frequency) * 4) as usize;
         }
+    }
+
+    fn enabled(&self) -> bool {
+        self.running && self.length.enable
     }
 
     pub fn sample(&mut self) -> Sample {
@@ -467,7 +471,7 @@ impl SquareChannel {
 
         let duty_pattern = self.get_duty_pattern();
 
-        if is_bit_set(self.duty_index as u8, duty_pattern as u16) {
+        if is_bit_set((7 - self.duty_index) as u8, duty_pattern as u16) {
             return self.envelope.volume;
         }
 
@@ -509,12 +513,11 @@ impl SquareChannel {
 
 struct WaveChannel {
     dac_power: bool,
-    frequency: u8,
+    frequency: u16,
     length: Length,
 
     volume: Volume,
     trigger: bool,
-    frequency_msb: u8,
 }
 
 
@@ -558,7 +561,6 @@ impl WaveChannel {
 
             volume: Volume::Silent,
             trigger: false,
-            frequency_msb: 0
         }
     }
 
@@ -597,13 +599,15 @@ impl WaveChannel {
     pub fn write_register_4(&mut self, byte: u8) {
         self.trigger = byte & 0b1000_0000 != 0;
         self.length.enable = byte & 0b0100_0000 != 0;
-        self.frequency_msb = byte & 0b111;
+
+        // set frequency most significative bits
+        self.frequency = (self.frequency & 0xFF) | ((byte as u16 & 0b111) << 8);
     }
 
     pub fn read_register_4(&self) -> u8 {
         (if self.trigger { 0b1000_0000 } else { 0 }) |
         (if self.length.enable { 0b0100_0000 } else { 0 }) |
-        self.frequency_msb
+        (self.frequency >> 8) as u8
     }
 }
 
@@ -793,11 +797,11 @@ mod tests {
         channel.write_register_4(0b1000_1110);
         assert_eq!(channel.trigger, true);
         assert_eq!(channel.length.enable, false);
-        assert_eq!(channel.frequency_msb, 0b110);
+        assert_eq!(channel.frequency, 0b110_0000_0000);
 
         channel.trigger = false;
         channel.length.enable = true;
-        channel.frequency_msb = 0b001;
+        channel.frequency = 0b001_0000_0000;
 
         assert_eq!(channel.read_register_4(), 0b0100_0001);
     }
