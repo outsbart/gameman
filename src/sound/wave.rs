@@ -56,6 +56,14 @@ impl WaveChannel {
         }
     }
 
+    pub fn reset(&mut self) {
+        self.dac_power = false;
+        self.frequency = 0;
+        self.length = Length::new();
+        self.volume = Volume::Silent;
+        self.trigger = false;
+    }
+
     pub fn tick(&mut self) {
 
     }

@@ -373,6 +373,10 @@ impl Sound {
     // Wave channel DAC power
     // NR30 FF1A E--- ---- DAC power
     pub fn set_nr30(&mut self, value: u8) {
+        if !self.power {
+            return
+        }
+
         self.wave.write_register_0(value);
     }
 
@@ -383,6 +387,10 @@ impl Sound {
     // Wave channel length load
     // NR31 FF1B LLLL LLLL Length load (256-L)
     pub fn set_nr31(&mut self, value: u8) {
+        if !self.power {
+            return
+        }
+
         self.wave.length.set_value(value)
     }
 
@@ -393,6 +401,10 @@ impl Sound {
     // Wave channel volume
     // NR32 FF1C -VV- ---- Volume code (00=0%, 01=100%, 10=50%, 11=25%)
     pub fn set_nr32(&mut self, value: u8) {
+        if !self.power {
+            return
+        }
+
         self.wave.write_volume(value);
     }
 
@@ -403,6 +415,10 @@ impl Sound {
     // Wave channel frequency lsb
     // NR33 FF1D FFFF FFFF Frequency LSB
     pub fn set_nr33(&mut self, value: u8) {
+        if !self.power {
+            return
+        }
+
         self.wave.set_frequency_lsb(value);
     }
 
@@ -413,6 +429,9 @@ impl Sound {
     // Wave channel trigger, length, frequency MSB
     // NR34 FF1E TL-- -FFF Trigger, Length enable, Frequency MSB
     pub fn set_nr34(&mut self, value: u8) {
+        if !self.power {
+            return
+        }
         self.wave.write_register_4(value);
     }
 
@@ -423,6 +442,10 @@ impl Sound {
     // Noise channel length load
     // NR41 FF20 --LL LLLL Length load (64-L)
     pub fn set_nr41(&mut self, value: u8) {
+        if !self.power {
+            return
+        }
+
         self.noise.length.set_value(value);
     }
 
@@ -433,6 +456,9 @@ impl Sound {
     // Noise channel envelope
     // NR42 FF21 VVVV APPP Starting volume, Envelope add mode, period
     pub fn set_nr42(&mut self, value: u8) {
+        if !self.power {
+            return
+        }
         self.noise.envelope.write(value);
     }
 
@@ -443,6 +469,10 @@ impl Sound {
     // Noise channel clock shift, lsfr, divisor
     // NR43 FF22 SSSS WDDD Clock shift, Width mode of LFSR, Divisor code
     pub fn set_nr43(&mut self, value: u8) {
+        if !self.power {
+            return
+        }
+
         self.noise.write_register_3(value);
     }
 
@@ -453,6 +483,10 @@ impl Sound {
     // Noise channel trigger and length enable
     // NR44 FF23 TL-- ---- Trigger, Length enable
     pub fn set_nr44(&mut self, value: u8) {
+        if !self.power {
+            return
+        }
+
         self.noise.write_register_4(value);
     }
 
@@ -462,6 +496,10 @@ impl Sound {
 
     // NR50 FF24 ALLL BRRR	Vin L enable, Left vol, Vin R enable, Right vol
     pub fn set_nr50(&mut self, byte: u8) {
+        if !self.power {
+            return
+        }
+
         self.vin_l_enable = (byte & 0b1000_0000) >> 7 != 0;
         self.vin_r_enable = (byte & 0b1000) >> 3 != 0;
         self.left_volume = (byte & 0b0111_0000) >> 4;
@@ -477,6 +515,10 @@ impl Sound {
 
     // NR51 FF25 NW21 NW21 Left enables, Right enables
     pub fn set_nr51(&mut self, byte: u8) {
+        if !self.power {
+            return
+        }
+
         self.left_enables.write((byte & 0xF0) >> 4);
         self.right_enables.write(byte & 0xF);
     }
@@ -489,11 +531,39 @@ impl Sound {
     pub fn set_nr52(&mut self, byte: u8) {
         self.power = byte & 0b1000_0000 != 0;
         self.length_statuses.write(byte & 0xF);
+
+        if !self.power {
+            self.reset();
+        }
     }
 
     pub fn get_nr52(&self) -> u8 {
-        (if self.power { 0b1000_0000 } else { 0 }) |
-            self.length_statuses.read()
+        0b0111_0000 |
+        (if self.power { 0b1000_0000 } else { 0 })
+    }
+
+    // called when power is set to off, through register nr52
+    pub fn reset(&mut self) {
+        // reset all registers
+
+        // nr 50
+        self.vin_l_enable = false;
+        self.vin_r_enable = false;
+        self.left_volume = 0;
+        self.right_volume = 0;
+
+        // nr51
+        self.left_enables.write(0);
+        self.right_enables.write(0);
+
+        // all the others
+        self.square_1 = SquareChannel::new();
+        self.square_2 = SquareChannel::new();
+
+        self.wave.reset();  // wave table/ram must be left unchanged
+        self.noise = NoiseChannel::new();
+
+        // todo: reset output channels?
     }
 }
 
@@ -657,6 +727,9 @@ mod tests {
     fn test_control_volume() {
         let mut sound = Sound::new();
 
+        // enable sound
+        sound.set_nr52(0x80);
+
         assert_eq!(sound.get_nr50(), 0);
 
         sound.set_nr50(0b1001_0010);
@@ -676,6 +749,9 @@ mod tests {
     #[test]
     fn test_left_right_enables() {
         let mut sound = Sound::new();
+
+        // enable sound
+        sound.set_nr52(0x80);
 
         assert_eq!(sound.get_nr51(), 0);
 
@@ -705,7 +781,7 @@ mod tests {
     fn test_control_master() {
         let mut sound = Sound::new();
 
-        assert_eq!(sound.get_nr52(), 0);
+        assert_eq!(sound.get_nr52(), 0b0111_0000);
 
         sound.set_nr52(0b1000_1010);
         assert_eq!(sound.power, true);
@@ -720,7 +796,7 @@ mod tests {
         sound.length_statuses.square_2 = false;
         sound.length_statuses.square_1 = true;
 
-        assert_eq!(sound.get_nr52(), 0b0000_0101);
+        assert_eq!(sound.get_nr52(), 0b0111_0000);
     }
 
     mod readback {
