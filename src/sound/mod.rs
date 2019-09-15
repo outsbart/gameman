@@ -48,7 +48,6 @@ impl Memory for Sound {
             0x12 => self.get_nr12(),
             0x13 => self.get_nr13(),
             0x14 => self.get_nr14(),
-            0x15 => 0xFF,
             0x16 => self.get_nr21(),
             0x17 => self.get_nr22(),
             0x18 => self.get_nr23(),
@@ -65,8 +64,11 @@ impl Memory for Sound {
             0x24 => self.get_nr50(),
             0x25 => self.get_nr51(),
             0x26 => self.get_nr52(),
-            0x30...0x3f => { panic!("wave channel read not implemented") },
-            _ => 0xff,
+            0x30...0x3f => {
+                println!("wave channel read");
+                0xFF
+            },
+            _ => 0xFF,
         }
     }
 
@@ -93,7 +95,9 @@ impl Memory for Sound {
             0x24 => self.set_nr50(byte),
             0x25 => self.set_nr51(byte),
             0x26 => self.set_nr52(byte),
-            0x30...0x3f => {  },
+            0x30...0x3f => {
+                println!("wave channel write");
+            },
             _ => (),
         }
     }
@@ -732,13 +736,16 @@ mod tests {
     fn test_wave_dac_power() {
         let mut channel: WaveChannel = WaveChannel::new();
 
+        assert_eq!(channel.read_register_0(), 0b0111_1111);
         assert_eq!(channel.dac_power, false);
 
-        channel.write_register_0(0b1110_0111);
+        channel.write_register_0(0b1000_0000);
+        assert_eq!(channel.read_register_0(), 0b1111_1111);
+
         assert_eq!(channel.dac_power, true);
 
         channel.dac_power = false;
-        assert_eq!(channel.read_register_0(), 0b0000_0000);
+        assert_eq!(channel.read_register_0(), 0b0111_1111);
     }
 
     #[test]
@@ -759,12 +766,13 @@ mod tests {
         let mut channel: WaveChannel = WaveChannel::new();
 
         assert_eq!(channel.volume as u8, Volume::Silent as u8);
+        assert_eq!(channel.read_volume(), 0b1001_1111);
 
         channel.write_volume(0b0110_0000);
         assert_eq!(channel.volume as u8, Volume::Quarter as u8);
 
         channel.volume = Volume::Max;
-        assert_eq!(channel.read_volume(), 0b0010_0000);
+        assert_eq!(channel.read_volume(), 0b1011_1111);
     }
 
 
@@ -772,7 +780,7 @@ mod tests {
     fn test_wave_register_4() {
         let mut channel: WaveChannel = WaveChannel::new();
 
-        assert_eq!(channel.read_register_4(), 0);
+        assert_eq!(channel.read_register_4(), 0b1011_1111);
 
         channel.write_register_4(0b1000_1110);
         assert_eq!(channel.trigger, true);
@@ -783,14 +791,14 @@ mod tests {
         channel.length.set_enable(true);
         channel.frequency = 0b001_0000_0000;
 
-        assert_eq!(channel.read_register_4(), 0b0100_0001);
+        assert_eq!(channel.read_register_4(), 0xFF);
     }
 
     #[test]
     fn test_noise_register_4() {
         let mut channel: NoiseChannel = NoiseChannel::new();
 
-        assert_eq!(channel.read_register_4(), 0);
+        assert_eq!(channel.read_register_4(), 0b1011_1111);
 
         channel.write_register_4(0b1000_1110);
         assert_eq!(channel.trigger, true);
@@ -799,7 +807,7 @@ mod tests {
         channel.trigger = false;
         channel.length.set_enable(true);
 
-        assert_eq!(channel.read_register_4(), 0b0100_0000);
+        assert_eq!(channel.read_register_4(), 0xFF);
     }
 
     #[test]
@@ -888,5 +896,61 @@ mod tests {
         sound.length_statuses.square_1 = true;
 
         assert_eq!(sound.get_nr52(), 0b0000_0101);
+    }
+
+    mod readback {
+            //! Test SPU register readback. Test ported from
+            //! 01-registers.s in the GB Accuracy Tests
+
+            use super::*;
+
+            /// Test register readback value. Write-only fields are
+            /// supposed to read as 1s.
+            macro_rules! readback_test {
+            ($reg: ident, $setter: ident, $write_only: expr) => (
+                #[test]
+                fn $reg() {
+                    let mut spu = Sound::new();
+
+                    // Enable SPU
+                    spu.set_nr52(0x80);
+
+                    for v in 0u16..0x100 {
+                        let v = v as u8;
+
+                        let expected = v | $write_only;
+
+                        spu.$setter(v);
+                        let r = spu.$reg();
+
+                        assert!(r == expected);
+                    }
+                })
+        }
+
+        readback_test! {get_nr10, set_nr10, 0x80}
+        readback_test! {get_nr11, set_nr11, 0x3f}
+        readback_test! {get_nr12, set_nr12, 0x00}
+        readback_test! {get_nr13, set_nr13, 0xff}
+        readback_test! {get_nr14, set_nr14, 0xbf}
+
+        readback_test! {get_nr21, set_nr21, 0x3f}
+        readback_test! {get_nr22, set_nr22, 0x00}
+        readback_test! {get_nr23, set_nr23, 0xff}
+        readback_test! {get_nr24, set_nr24, 0xbf}
+
+        readback_test! {get_nr30, set_nr30, 0x7f}
+        readback_test! {get_nr31, set_nr31, 0xff}
+        readback_test! {get_nr32, set_nr32, 0x9f}
+        readback_test! {get_nr33, set_nr33, 0xff}
+        readback_test! {get_nr34, set_nr34, 0xbf}
+
+        readback_test! {get_nr41, set_nr41, 0xff}
+        readback_test! {get_nr42, set_nr42, 0x00}
+        readback_test! {get_nr43, set_nr43, 0x00}
+        readback_test! {get_nr44, set_nr44, 0xbf}
+
+        readback_test! {get_nr50, set_nr50, 0x00}
+        readback_test! {get_nr51, set_nr51, 0x00}
     }
 }

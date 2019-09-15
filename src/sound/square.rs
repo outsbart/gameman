@@ -174,7 +174,7 @@ mod tests {
     fn test_square_register_1() {
         let mut channel: SquareChannel = SquareChannel::new();
 
-        assert_eq!(channel.read_register_1(), 0);
+        assert_eq!(channel.read_register_1(), 0b11_1111);
 
         channel.write_register_1(0b1000_1111);
         assert_eq!(channel.length.get_value(), 0b1111);
@@ -183,14 +183,14 @@ mod tests {
         channel.length.set_value(0b1110);
         channel.duty = 0b11;
 
-        assert_eq!(channel.read_register_1(), 0b1100_1110);
+        assert_eq!(channel.read_register_1(), 0b1111_1111);
     }
 
     #[test]
     fn test_square_register_4() {
         let mut channel: SquareChannel = SquareChannel::new();
 
-        assert_eq!(channel.read_register_4(), 0);
+        assert_eq!(channel.read_register_4(), 0b1011_1111);
 
         channel.write_register_4(0b1000_1110);
         assert_eq!(channel.trigger, true);
@@ -201,6 +201,6 @@ mod tests {
         channel.length.set_enable(true);
         channel.frequency = 0b001_0000_0000;
 
-        assert_eq!(channel.read_register_4(), 0b0100_0001);
+        assert_eq!(channel.read_register_4(), 0xFF);
     }
 }
