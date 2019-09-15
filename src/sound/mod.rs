@@ -43,29 +43,59 @@ pub struct Sound {
 impl Memory for Sound {
     fn read_byte(&mut self, addr: u16) -> u8 {
         match addr & 0xff {
-            0x10 => self.square_1.sweep.read(),
-            0x11 => self.square_1.read_register_1(),
-            0x12 => self.square_1.envelope.read(),
-            0x14 => self.square_1.read_register_4(),
-            0x16 => self.square_2.read_register_1(),
-            0x17 => self.square_2.envelope.read(),
-            0x19 => self.square_2.read_register_4(),
-            0x1a => self.wave.read_register_0(),
-            0x1c => self.wave.read_volume(),
-            0x1e => self.wave.read_register_4(),
-            0x21 => self.noise.envelope.read(),
-            0x22 => self.noise.read_register_3(),
-            0x23 => self.noise.read_register_4(),
-            0x24 => self.read_control_volume(),
-            0x25 => self.read_channel_enables(),
-            0x26 => self.read_control_master(),
-            0x30...0x3f => { panic!("wave channel ram not implemented") },
+            0x10 => self.get_nr10(),
+            0x11 => self.get_nr11(),
+            0x12 => self.get_nr12(),
+            0x13 => self.get_nr13(),
+            0x14 => self.get_nr14(),
+            0x15 => 0xFF,
+            0x16 => self.get_nr21(),
+            0x17 => self.get_nr22(),
+            0x18 => self.get_nr23(),
+            0x19 => self.get_nr24(),
+            0x1a => self.get_nr30(),
+            0x1b => self.get_nr31(),
+            0x1c => self.get_nr32(),
+            0x1d => self.get_nr33(),
+            0x1e => self.get_nr34(),
+            0x20 => self.get_nr41(),
+            0x21 => self.get_nr42(),
+            0x22 => self.get_nr43(),
+            0x23 => self.get_nr44(),
+            0x24 => self.get_nr50(),
+            0x25 => self.get_nr51(),
+            0x26 => self.get_nr52(),
+            0x30...0x3f => { panic!("wave channel read not implemented") },
             _ => 0xff,
         }
     }
 
     fn write_byte(&mut self, addr: u16, byte: u8) {
-
+        match addr & 0xff {
+            0x10 => self.set_nr10(byte),
+            0x11 => self.set_nr11(byte),
+            0x12 => self.set_nr12(byte),
+            0x13 => self.set_nr13(byte),
+            0x14 => self.set_nr14(byte),
+            0x16 => self.set_nr21(byte),
+            0x17 => self.set_nr22(byte),
+            0x18 => self.set_nr23(byte),
+            0x19 => self.set_nr24(byte),
+            0x1a => self.set_nr30(byte),
+            0x1b => self.set_nr31(byte),
+            0x1c => self.set_nr32(byte),
+            0x1d => self.set_nr33(byte),
+            0x1e => self.set_nr34(byte),
+            0x20 => self.set_nr41(byte),
+            0x21 => self.set_nr42(byte),
+            0x22 => self.set_nr43(byte),
+            0x23 => self.set_nr44(byte),
+            0x24 => self.set_nr50(byte),
+            0x25 => self.set_nr51(byte),
+            0x26 => self.set_nr52(byte),
+            0x30...0x3f => {  },
+            _ => (),
+        }
     }
 }
 
@@ -128,41 +158,6 @@ impl Sound {
             power: false,
         }
     }
-
-
-    pub fn read_control_volume(&self) -> u8 {
-        (if self.vin_l_enable { 0b1000_0000 } else { 0 }) |
-            (self.left_volume << 4) |
-            (if self.vin_r_enable { 0b1000} else { 0 }) |
-            (self.right_volume)
-    }
-
-    pub fn write_control_volume(&mut self, byte: u8) {
-        self.vin_l_enable = (byte & 0b1000_0000) >> 7 != 0;
-        self.vin_r_enable = (byte & 0b1000) >> 3 != 0;
-        self.left_volume = (byte & 0b0111_0000) >> 4;
-        self.right_volume = byte & 0b111;
-    }
-
-    pub fn read_channel_enables(&self) -> u8 {
-        self.left_enables.read() << 4 | self.right_enables.read()
-    }
-
-    pub fn write_channel_enables(&mut self, byte: u8) {
-        self.left_enables.write((byte & 0xF0) >> 4);
-        self.right_enables.write(byte & 0xF);
-    }
-
-    pub fn read_control_master(&self) -> u8 {
-        (if self.power { 0b1000_0000 } else { 0 }) |
-            self.length_statuses.read()
-    }
-
-    pub fn write_control_master(&mut self, byte: u8) {
-        self.power = byte & 0b1000_0000 != 0;
-        self.length_statuses.write(byte & 0xF);
-    }
-
 
     pub fn tick(&mut self) {
         for _i in 0u8..4 {
@@ -229,7 +224,6 @@ impl Sound {
 
     }
 
-
     fn output_sample(&mut self, sample: Sample) {
         self.buffer[self.buffer_index] = sample;
 
@@ -240,7 +234,256 @@ impl Sound {
 
             self.buffer_index = 0;
         }
+    }
 
+    // Square channel 1 sweep
+    // NR10 FF10 -PPP NSSS Sweep period, negate, shift
+    pub fn set_nr10(&mut self, value: u8) {
+        if !self.power {
+            return
+        }
+
+        self.square_1.sweep.write(value);
+    }
+
+    pub fn get_nr10(&self) -> u8 {
+        self.square_1.sweep.read()
+    }
+
+    // Square channel 1 duty and length load
+    // NR11 FF11 DDLL LLLL Duty, Length load (64-L)
+    pub fn set_nr11(&mut self, value: u8) {
+        if !self.power {
+            return
+        }
+
+        self.square_1.write_register_1(value);
+    }
+
+    pub fn get_nr11(&self) -> u8 {
+        self.square_1.read_register_1()
+    }
+
+    // Square channel 1 envelope
+    // NR12 FF12 VVVV APPP Starting volume, Envelope add mode, period
+    pub fn set_nr12(&mut self, value: u8) {
+        if !self.power {
+            return
+        }
+
+        self.square_1.envelope.write(value);
+    }
+
+    pub fn get_nr12(&self) -> u8 {
+        self.square_1.envelope.read()
+    }
+
+    // Square channel 1 frequency LSB
+    pub fn set_nr13(&mut self, value: u8) {
+        if !self.power {
+            return
+        }
+
+        self.square_1.set_frequency_lsb(value);
+    }
+
+    pub fn get_nr13(&self) -> u8 {
+        0xFF
+    }
+
+    // Square channel 1 trigger, frequency MSB and length
+    pub fn set_nr14(&mut self, value: u8) {
+        if !self.power {
+            return
+        }
+
+        self.square_1.write_register_4(value);
+    }
+
+    pub fn get_nr14(&self) -> u8 {
+        self.square_1.read_register_4()
+    }
+
+    // Square channel 2 duty and length load
+    // NR21 FF16 DDLL LLLL Duty, Length load (64-L)
+    pub fn set_nr21(&mut self, value: u8) {
+        if !self.power {
+            return
+        }
+
+        self.square_2.write_register_1(value);
+    }
+
+    pub fn get_nr21(&self) -> u8 {
+        self.square_2.read_register_1()
+    }
+
+    // Square channel 2 envelope
+    // NR22 FF17 VVVV APPP Starting volume, Envelope add mode, period
+    pub fn set_nr22(&mut self, value: u8) {
+        if !self.power {
+            return
+        }
+
+        self.square_2.envelope.write(value);
+    }
+
+    pub fn get_nr22(&self) -> u8 {
+        self.square_2.envelope.read()
+    }
+
+    // Square channel 2 frequency lsb
+    // NR23 FF18 FFFF FFFF Frequency LSB
+    pub fn set_nr23(&mut self, value: u8) {
+        if !self.power {
+            return
+        }
+
+        self.square_2.set_frequency_lsb(value);
+    }
+
+    pub fn get_nr23(&self) -> u8 {
+        0xFF
+    }
+
+    // Square channel 2 trigger, length and frequency msb
+    // NR24 FF19 TL-- -FFF Trigger, Length enable, Frequency MSB
+    pub fn set_nr24(&mut self, value: u8) {
+        if !self.power {
+            return
+        }
+
+        self.square_2.write_register_4(value);
+    }
+
+    pub fn get_nr24(&self) -> u8 {
+        self.square_2.read_register_4()
+    }
+
+    // Wave channel DAC power
+    // NR30 FF1A E--- ---- DAC power
+    pub fn set_nr30(&mut self, value: u8) {
+        self.wave.write_register_0(value);
+    }
+
+    pub fn get_nr30(&self) -> u8 {
+        self.wave.read_register_0()
+    }
+
+    // Wave channel length load
+    // NR31 FF1B LLLL LLLL Length load (256-L)
+    pub fn set_nr31(&mut self, value: u8) {
+        self.wave.length.set_value(value)
+    }
+
+    pub fn get_nr31(&self) -> u8 {
+        0xFF
+    }
+
+    // Wave channel volume
+    // NR32 FF1C -VV- ---- Volume code (00=0%, 01=100%, 10=50%, 11=25%)
+    pub fn set_nr32(&mut self, value: u8) {
+        self.wave.write_volume(value);
+    }
+
+    pub fn get_nr32(&self) -> u8 {
+        self.wave.read_volume()
+    }
+
+    // Wave channel frequency lsb
+    // NR33 FF1D FFFF FFFF Frequency LSB
+    pub fn set_nr33(&mut self, value: u8) {
+        self.wave.set_frequency_lsb(value);
+    }
+
+    pub fn get_nr33(&self) -> u8 {
+        0xFF
+    }
+
+    // Wave channel trigger, length, frequency MSB
+    // NR34 FF1E TL-- -FFF Trigger, Length enable, Frequency MSB
+    pub fn set_nr34(&mut self, value: u8) {
+        self.wave.write_register_4(value);
+    }
+
+    pub fn get_nr34(&self) -> u8 {
+        self.wave.read_register_4()
+    }
+
+    // Noise channel length load
+    // NR41 FF20 --LL LLLL Length load (64-L)
+    pub fn set_nr41(&mut self, value: u8) {
+        self.noise.length.set_value(value);
+    }
+
+    pub fn get_nr41(&self) -> u8 {
+        0xFF
+    }
+
+    // Noise channel envelope
+    // NR42 FF21 VVVV APPP Starting volume, Envelope add mode, period
+    pub fn set_nr42(&mut self, value: u8) {
+        self.noise.envelope.write(value);
+    }
+
+    pub fn get_nr42(&self) -> u8 {
+        self.noise.envelope.read()
+    }
+
+    // Noise channel clock shift, lsfr, divisor
+    // NR43 FF22 SSSS WDDD Clock shift, Width mode of LFSR, Divisor code
+    pub fn set_nr43(&mut self, value: u8) {
+        self.noise.write_register_3(value);
+    }
+
+    pub fn get_nr43(&self) -> u8 {
+        self.noise.read_register_3()
+    }
+
+    // Noise channel trigger and length enable
+    // NR44 FF23 TL-- ---- Trigger, Length enable
+    pub fn set_nr44(&mut self, value: u8) {
+        self.noise.write_register_4(value);
+    }
+
+    pub fn get_nr44(&self) -> u8 {
+        self.noise.read_register_4()
+    }
+
+    // NR50 FF24 ALLL BRRR	Vin L enable, Left vol, Vin R enable, Right vol
+    pub fn set_nr50(&mut self, byte: u8) {
+        self.vin_l_enable = (byte & 0b1000_0000) >> 7 != 0;
+        self.vin_r_enable = (byte & 0b1000) >> 3 != 0;
+        self.left_volume = (byte & 0b0111_0000) >> 4;
+        self.right_volume = byte & 0b111;
+}
+
+    pub fn get_nr50(&self) -> u8 {
+        (if self.vin_l_enable { 0b1000_0000 } else { 0 }) |
+            (self.left_volume << 4) |
+            (if self.vin_r_enable { 0b1000} else { 0 }) |
+            (self.right_volume)
+    }
+
+    // NR51 FF25 NW21 NW21 Left enables, Right enables
+    pub fn set_nr51(&mut self, byte: u8) {
+        self.left_enables.write((byte & 0xF0) >> 4);
+        self.right_enables.write(byte & 0xF);
+    }
+
+    pub fn get_nr51(&self) -> u8 {
+        self.left_enables.read() << 4 | self.right_enables.read()
+    }
+
+    // NR52 FF26 P--- NW21 Power control/status, Channel length statuses
+    pub fn set_nr52(&mut self, byte: u8) {
+        self.power = byte & 0b1000_0000 != 0;
+        self.length_statuses.write(byte & 0xF);
+    }
+
+    pub fn get_nr52(&self) -> u8 {
+        (if self.power { 0b1000_0000 } else { 0 }) |
+            self.length_statuses.read()
     }
 }
 
@@ -359,12 +602,31 @@ impl WaveChannel {
         0
     }
 
+    // sets frequency least significate bits
+    pub fn set_frequency_lsb(&mut self, byte: u8) {
+        self.frequency = (self.frequency & 0xF00) | byte as u16;
+    }
+
+    pub fn get_frequency_lsb(&self) -> u8 {
+        (self.frequency & 0xFF) as u8
+    }
+
+    // sets frequency most significate bits
+    pub fn set_frequency_msb(&mut self, byte: u8) {
+        self.frequency = (self.frequency & 0xFF) | ((byte as u16 & 0b111) << 8);
+    }
+
+    pub fn get_frequency_msb(&self) -> u8 {
+        (self.frequency >> 8) as u8
+    }
+
     pub fn write_register_0(&mut self, byte: u8) {
         self.dac_power = (byte & 0b1000_0000) != 0;
     }
 
     pub fn read_register_0(&self) -> u8 {
-        if self.dac_power { 0b1000_0000 } else { 0 }
+        0b111_1111 |
+        (if self.dac_power { 0b1000_0000 } else { 0 })
     }
 
     pub fn write_length_value(&mut self, byte: u8) {
@@ -380,6 +642,7 @@ impl WaveChannel {
     }
 
     pub fn read_volume(&self) -> u8 {
+        0b1001_1111 |
         (self.volume as u8) << 5
     }
 
@@ -388,13 +651,12 @@ impl WaveChannel {
         self.length.set_enable(byte & 0b0100_0000 != 0);
 
         // set frequency most significative bits
-        self.frequency = (self.frequency & 0xFF) | ((byte as u16 & 0b111) << 8);
+        self.set_frequency_msb(byte);
     }
 
     pub fn read_register_4(&self) -> u8 {
-        (if self.trigger { 0b1000_0000 } else { 0 }) |
-        (if self.length.enabled() { 0b0100_0000 } else { 0 }) |
-        (self.frequency >> 8) as u8
+        0b1011_1111 |
+        (if self.length.enabled() { 0b0100_0000 } else { 0 })
     }
 }
 
@@ -456,7 +718,7 @@ impl NoiseChannel {
     }
 
     pub fn read_register_4(&self) -> u8 {
-        (if self.trigger { 0b1000_0000 } else { 0 }) |
+        0b1011_1111 |
         (if self.length.enabled() { 0b0100_0000 } else { 0 })
     }
 }
@@ -562,9 +824,9 @@ mod tests {
     fn test_control_volume() {
         let mut sound = Sound::new();
 
-        assert_eq!(sound.read_control_volume(), 0);
+        assert_eq!(sound.get_nr50(), 0);
 
-        sound.write_control_volume(0b1001_0010);
+        sound.set_nr50(0b1001_0010);
         assert_eq!(sound.vin_l_enable, true);
         assert_eq!(sound.vin_r_enable, false);
         assert_eq!(sound.left_volume, 1);
@@ -575,16 +837,16 @@ mod tests {
         sound.left_volume = 0b100;
         sound.right_volume = 0b111;
 
-        assert_eq!(sound.read_control_volume(), 0b0100_1111);
+        assert_eq!(sound.get_nr50(), 0b0100_1111);
     }
 
     #[test]
     fn test_left_right_enables() {
         let mut sound = Sound::new();
 
-        assert_eq!(sound.read_channel_enables(), 0);
+        assert_eq!(sound.get_nr51(), 0);
 
-        sound.write_channel_enables(0b1001_0010);
+        sound.set_nr51(0b1001_0010);
         assert_eq!(sound.left_enables.noise, true);
         assert_eq!(sound.left_enables.wave, false);
         assert_eq!(sound.left_enables.square_2, false);
@@ -602,7 +864,7 @@ mod tests {
         sound.right_enables.wave = true;
         sound.right_enables.square_2 = false;
         sound.right_enables.square_1 = true;
-        assert_eq!(sound.read_channel_enables(), 0b0110_1101);
+        assert_eq!(sound.get_nr51(), 0b0110_1101);
     }
 
 
@@ -610,9 +872,9 @@ mod tests {
     fn test_control_master() {
         let mut sound = Sound::new();
 
-        assert_eq!(sound.read_control_master(), 0);
+        assert_eq!(sound.get_nr52(), 0);
 
-        sound.write_control_master(0b1000_1010);
+        sound.set_nr52(0b1000_1010);
         assert_eq!(sound.power, true);
         assert_eq!(sound.length_statuses.noise, true);
         assert_eq!(sound.length_statuses.wave, false);
@@ -625,6 +887,6 @@ mod tests {
         sound.length_statuses.square_2 = false;
         sound.length_statuses.square_1 = true;
 
-        assert_eq!(sound.read_control_master(), 0b0000_0101);
+        assert_eq!(sound.get_nr52(), 0b0000_0101);
     }
 }

@@ -8,20 +8,18 @@ pub struct SquareChannel {
     pub length: Length,
     pub timer: Timer,  // it resets when it runs out, and the position in the duty pattern moves forward
 
-    pub running: bool,
-
-    pub duty_index: usize,  // in which position in the duty cycle we are. From 0 to 7
+    duty_index: usize,  // in which position in the duty cycle we are. From 0 to 7
 
     // Duty Pattern
     //  0 — 00000001 (12.5%)
     //  1 — 10000001 (25.0%)
     //  2 — 10000111 (50.0%)
     //  3 — 01111110 (75.0%)
-    pub duty: u8,
-    pub frequency: u16,
+    duty: u8,
+    frequency: u16,
 
     // register 4
-    pub trigger: bool,
+    trigger: bool,
 }
 
 
@@ -32,8 +30,6 @@ impl SquareChannel {
             envelope: Envelope::new(),
             length: Length::new(),
             timer: Timer::new(0),
-
-            running: false,  // is set to False from Length or Sweep
 
             duty_index: 0,
             duty: 0,
@@ -52,11 +48,11 @@ impl SquareChannel {
     }
 
     fn enabled(&self) -> bool {
-        self.running && self.length.enabled()
+        self.length.enabled() && self.envelope.dac_enabled()
     }
 
     pub fn sample(&mut self) -> Sample {
-        if !self.running {
+        if !self.enabled() {
             return 0;
         }
 
@@ -78,27 +74,43 @@ impl SquareChannel {
         }
     }
 
+    // sets frequency least significate bits
+    pub fn set_frequency_lsb(&mut self, byte: u8) {
+        self.frequency = (self.frequency & 0xF00) | byte as u16;
+    }
+
+    pub fn get_frequency_lsb(&self) -> u8 {
+        (self.frequency & 0xFF) as u8
+    }
+
+    // sets frequency most significate bits
+    pub fn set_frequency_msb(&mut self, byte: u8) {
+        self.frequency = (self.frequency & 0xFF) | ((byte as u16 & 0b111) << 8);
+    }
+
+    pub fn get_frequency_msb(&self) -> u8 {
+        (self.frequency >> 8) as u8
+    }
+
     pub fn write_register_1(&mut self, byte: u8) {
         self.length.set_value(byte & 0b0011_1111);
         self.duty = (byte & 0b1100_0000) >> 6;
     }
 
     pub fn read_register_1(&self) -> u8 {
-        (self.duty << 6) | self.length.get_value()
+        (self.duty << 6) | 0b11_1111
     }
 
     pub fn write_register_4(&mut self, byte: u8) {
-        self.trigger = byte & 0b1000_0000 != 0;
         self.length.set_enable(byte & 0b0100_0000 != 0);
+        self.set_frequency_msb(byte);
 
-        // set frequency most significative bits
-        self.frequency = (self.frequency & 0xFF) | ((byte as u16 & 0b111) << 8);
+        self.trigger = byte & 0b1000_0000 != 0;  // todo: trigger should call a function
     }
 
     pub fn read_register_4(&self) -> u8 {
-        (if self.trigger { 0b1000_0000 } else { 0 }) |
-        (if self.length.enabled() { 0b0100_0000 } else { 0 }) |
-        (self.frequency >> 8) as u8
+        0b1011_1111 |
+        (if self.length.enabled() { 0b0100_0000 } else { 0 })
     }
 }
 
@@ -120,14 +132,15 @@ impl Sweep {
 
     pub fn write(&mut self, value: u8) {
         self.shifts_number = value & 0b0000_0111;
-        self.rising = value & (1 << 3) != 0;
+        self.rising = value & (0b1000) != 0;
         self.time = (value & 0b0111_0000) >> 4 ;
     }
 
     pub fn read(&self) -> u8 {
+        0b1000_0000 |
         (self.time << 4) |
-            (if self.rising {4} else {0}) |
-            self.shifts_number
+        (if self.rising {0b1000} else {0}) |
+        self.shifts_number
     }
 
     pub fn tick(&self) {
@@ -143,7 +156,7 @@ mod tests {
     #[test]
     fn test_sweep_read_write() {
         let mut sweep: Sweep = Sweep::new();
-        assert_eq!(sweep.read(), 0);
+        assert_eq!(sweep.read(), 0b1000_0000);
 
         sweep.write(0b0010_1011);
         assert_eq!(sweep.shifts_number, 0b011);
@@ -154,7 +167,7 @@ mod tests {
         sweep.rising = false;
         sweep.time = 0b100;
 
-        assert_eq!(sweep.read(), 0b0100_0010);
+        assert_eq!(sweep.read(), 0b1100_0010);
     }
 
     #[test]
