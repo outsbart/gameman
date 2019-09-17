@@ -3,9 +3,9 @@ use sound::envelope::Envelope;
 use sound::Sample;
 
 pub struct NoiseChannel {
-    pub length: Length,
-    pub trigger_envelope: Envelope,
-    pub envelope: Envelope,
+    length: Length,
+    trigger_envelope: Envelope,
+    envelope: Envelope,
 
     clock_shift: u8,
     lfsr_width_mode: u8,
@@ -35,6 +35,17 @@ impl NoiseChannel {
 
     pub fn sample(&mut self) -> Sample {
         0
+    }
+
+    pub fn tick_length(&mut self) {
+        // if length runs out, turn off this channel
+        if self.length.tick() {
+            self.running = false;
+        }
+    }
+
+    pub fn tick_envelope(&mut self) {
+        self.envelope.tick();
     }
 
     pub fn is_running(&self) -> bool {

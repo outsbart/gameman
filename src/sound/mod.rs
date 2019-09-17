@@ -178,17 +178,17 @@ impl Sound {
 
                 // every 2 steps we tick the channel length counters
                 if self.frame_sequencer.step % 2 == 0 {
-                    self.square_1.length.tick();
-                    self.square_2.length.tick();
-                    self.wave.length.tick();
-                    self.noise.length.tick();
+                    self.square_1.tick_length();
+                    self.square_2.tick_length();
+                    self.wave.tick_length();
+                    self.noise.tick_length();
                 }
 
                 // at step 7, tick the channel envelopes
                 if self.frame_sequencer.step == 7 {
-                    self.square_1.envelope.tick();
-                    self.square_2.envelope.tick();
-                    self.noise.envelope.tick();
+                    self.square_1.tick_envelope();
+                    self.square_2.tick_envelope();
+                    self.noise.tick_envelope();
                 }
 
                 // at step 2 and 6 tick the sweep
@@ -392,7 +392,7 @@ impl Sound {
             return
         }
 
-        self.wave.length.set_value(value)
+        self.wave.write_length_value(value)
     }
 
     pub fn get_nr31(&self) -> u8 {
@@ -447,7 +447,7 @@ impl Sound {
             return
         }
 
-        self.noise.length.set_value(value);
+        self.noise.write_length_value(value);
     }
 
     pub fn get_nr41(&self) -> u8 {

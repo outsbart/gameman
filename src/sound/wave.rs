@@ -4,7 +4,7 @@ use sound::Sample;
 pub struct WaveChannel {
     dac_power: bool,
     frequency: u16,
-    pub length: Length,
+    length: Length,
 
     samples: [Sample; 32],
     volume: Volume,
@@ -75,6 +75,13 @@ impl WaveChannel {
 
     pub fn is_running(&self) -> bool {
         self.running
+    }
+
+    pub fn tick_length(&mut self) {
+        // if length runs out, turn off this channel
+        if self.length.tick() {
+            self.running = false;
+        }
     }
 
     pub fn trigger(&mut self) {

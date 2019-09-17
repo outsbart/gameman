@@ -3,40 +3,40 @@ use sound::Timer;
 // used to shut off a channel after a period of time
 pub struct Length {
     timer: Timer,
-    value: u8,
     enable: bool,
 }
 
 impl Length {
     pub fn new() -> Self {
         Length {
-            timer: Timer::new(64),
-            value: 0,
+            timer: Timer::new(64 * 0x4000),
             enable: false,
         }
     }
 
-    pub fn tick(&mut self) {
+    pub fn tick(&mut self) -> bool {
         if !self.enable {
-            return;
+            return false;
         }
 
         // if timer has run out
         if self.timer.tick() {
-            self.enable = false;
+            return true;
         }
+
+        false
     }
 
     pub fn set_value(&mut self, value: u8) {
-        self.value = value;
+        self.timer.curr = value as usize;
     }
 
     pub fn get_value(&self) -> u8 {
-        self.value
+        self.timer.curr as u8
     }
 
-    pub fn set_enable(&mut self, value: bool) {
-        self.enable = value;
+    pub fn set_enable(&mut self, byte: bool) {
+        self.enable = byte;
     }
 
     pub fn enabled(&self) -> bool {

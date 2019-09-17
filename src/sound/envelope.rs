@@ -32,7 +32,7 @@ impl Envelope {
     }
 
     pub fn write(&mut self, byte: u8) {
-        self.period = byte & 0b111;
+        self.period = byte & 0b111;  // todo: restart timer?
         self.add_mode = byte & 0b1000 != 0;
         self.volume = byte >> 4;
 

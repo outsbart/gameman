@@ -7,7 +7,7 @@ pub struct SquareChannel {
     pub envelope: Envelope,
     pub trigger_envelope: Envelope,
     pub length: Length,
-    pub timer: Timer,  // it resets when it runs out, and the position in the duty pattern moves forward
+    pub duty_timer: Timer,  // it resets when it runs out, and the position in the duty pattern moves forward
 
     duty_index: usize,  // in which position in the duty cycle we are. From 0 to 7
 
@@ -30,7 +30,7 @@ impl SquareChannel {
             envelope: Envelope::new(),  // currently used envelope
             trigger_envelope: Envelope::new(),  // envelope to use on next trigger
             length: Length::new(),
-            timer: Timer::new(0),
+            duty_timer: Timer::new(0),
 
             duty_index: 0,
             duty: 0,
@@ -40,11 +40,26 @@ impl SquareChannel {
         }
     }
 
+    pub fn tick_length(&mut self) {
+        // if length runs out, turn off this channel
+        if self.length.tick() {
+            self.running = false;
+        }
+    }
+
+    pub fn tick_envelope(&mut self) {
+        self.envelope.tick();
+    }
+
     pub fn tick(&mut self) {
+        if !self.running {
+            return;
+        }
+
         // if timer runs out
-        if self.timer.tick() {
+        if self.duty_timer.tick() {
             self.duty_index = (self.duty_index + 1) % 8;
-            self.timer.curr = ((2048 - self.frequency) * 4) as usize;
+            self.duty_timer.curr = ((2048 - self.frequency) * 4) as usize;
         }
     }
 
