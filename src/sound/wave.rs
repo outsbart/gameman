@@ -9,7 +9,7 @@ pub struct WaveChannel {
     samples: [Sample; 32],
     volume: Volume,
 
-    enabled: bool,
+    running: bool,
 }
 
 
@@ -54,7 +54,7 @@ impl WaveChannel {
             samples: [0; 32],
             volume: Volume::Silent,
 
-            enabled: false,
+            running: false,
         }
     }
 
@@ -71,6 +71,10 @@ impl WaveChannel {
 
     pub fn sample(&mut self) -> Sample {
         0
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.running
     }
 
     pub fn trigger(&mut self) {

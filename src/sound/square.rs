@@ -19,7 +19,7 @@ pub struct SquareChannel {
     duty: u8,
     frequency: u16,
 
-    enabled: bool,
+    running: bool,
 }
 
 
@@ -36,7 +36,7 @@ impl SquareChannel {
             duty: 0,
             frequency: 0,
 
-            enabled: false,
+            running: false,
         }
     }
 
@@ -48,12 +48,12 @@ impl SquareChannel {
         }
     }
 
-    fn enabled(&self) -> bool {
-        self.length.enabled() && self.envelope.dac_enabled()
+    pub fn is_running(&self) -> bool {
+        self.running
     }
 
     pub fn sample(&mut self) -> Sample {
-        if !self.enabled() {
+        if !self.is_running() {
             return 0;
         }
 
@@ -67,7 +67,8 @@ impl SquareChannel {
     }
 
     pub fn trigger(&mut self) {
-
+        self.envelope = self.trigger_envelope;
+        self.running = self.envelope.dac_enabled();
     }
 
     fn get_duty_pattern(&self) -> u8 {

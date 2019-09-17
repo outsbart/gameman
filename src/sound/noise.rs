@@ -3,15 +3,15 @@ use sound::envelope::Envelope;
 use sound::Sample;
 
 pub struct NoiseChannel {
-    length: Length,
-    trigger_envelope: Envelope,
-    envelope: Envelope,
+    pub length: Length,
+    pub trigger_envelope: Envelope,
+    pub envelope: Envelope,
 
     clock_shift: u8,
     lfsr_width_mode: u8,
     divisor_code: u8,
 
-    enabled: bool,
+    running: bool,
 }
 
 impl NoiseChannel {
@@ -25,7 +25,7 @@ impl NoiseChannel {
             lfsr_width_mode: 0,
             divisor_code: 0,
 
-            enabled: false,
+            running: false,
         }
     }
 
@@ -37,8 +37,13 @@ impl NoiseChannel {
         0
     }
 
-    pub fn trigger(&mut self) {
+    pub fn is_running(&self) -> bool {
+        self.running
+    }
 
+    pub fn trigger(&mut self) {
+        self.envelope = self.trigger_envelope;
+        self.running = self.envelope.dac_enabled();
     }
 
     // sets the envelope to be used on the next trigger

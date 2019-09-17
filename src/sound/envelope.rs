@@ -5,6 +5,7 @@ const VOLUME_MIN: Sample = 0;
 
 
 // every tick, increases or decreases volume
+#[derive(Clone,Copy)]
 pub struct Envelope {
     timer: Timer,
     add_mode: bool,

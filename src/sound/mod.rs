@@ -10,6 +10,7 @@ use sound::envelope::Envelope;
 use sound::square::SquareChannel;
 use sound::length::Length;
 use sound::wave::WaveChannel;
+use sound::noise::NoiseChannel;
 
 const WAVE_TABLE_START: u16 = 0xFF30;
 const SAMPLE_RATE: usize = 96000;
@@ -34,7 +35,6 @@ pub struct Sound {
 
     left_enables: ChannelsFlag,
     right_enables: ChannelsFlag,
-    length_statuses: ChannelsFlag,
 
     // output buffer
     buffer_index: usize,
@@ -158,7 +158,6 @@ impl Sound {
 
             left_enables: ChannelsFlag::new(),
             right_enables: ChannelsFlag::new(),
-            length_statuses: ChannelsFlag::new(),
 
             buffer_index: 0,
             buffer: [0; BUFFER_SIZE],
@@ -536,7 +535,6 @@ impl Sound {
     // NR52 FF26 P--- NW21 Power control/status, Channel length statuses
     pub fn set_nr52(&mut self, byte: u8) {
         self.power = byte & 0b1000_0000 != 0;
-        self.length_statuses.write(byte & 0xF);
 
         if !self.power {
             self.reset();
@@ -545,7 +543,11 @@ impl Sound {
 
     pub fn get_nr52(&self) -> u8 {
         0b0111_0000 |
-        (if self.power { 0b1000_0000 } else { 0 })
+        (if self.power { 0b1000_0000 } else { 0 }) |
+        (if self.noise.is_running() { 0b_1000 } else { 0 }) |
+        (if self.wave.is_running() { 0b_100 } else { 0 }) |
+        (if self.square_2.is_running() { 0b_10 } else { 0 }) |
+        (if self.square_1.is_running() { 1 } else { 0 })
     }
 
     // called when power is set to off, through register nr52
@@ -600,6 +602,7 @@ impl FrameSequencer {
 }
 
 
+#[derive(Clone,Copy)]
 pub struct Timer {
     period: usize, // initial and max value of curr
     curr: usize,   // goes down by 1 every tick and wraps back to period
@@ -623,88 +626,6 @@ impl Timer {
 
         self.curr = self.curr.wrapping_sub(1);
         false
-    }
-}
-
-
-pub struct NoiseChannel {
-    length: Length,
-    trigger_envelope: Envelope,
-    envelope: Envelope,
-
-    clock_shift: u8,
-    lfsr_width_mode: u8,
-    divisor_code: u8,
-
-    enabled: bool,
-}
-
-impl NoiseChannel {
-    pub fn new() -> Self {
-        NoiseChannel {
-            length: Length::new(),
-            trigger_envelope: Envelope::new(),
-            envelope: Envelope::new(),
-
-            clock_shift: 0,
-            lfsr_width_mode: 0,
-            divisor_code: 0,
-
-            enabled: false,
-        }
-    }
-
-    pub fn tick(&mut self) {
-
-    }
-
-    pub fn sample(&mut self) -> Sample {
-        0
-    }
-
-    pub fn trigger(&mut self) {
-
-    }
-
-    // sets the envelope to be used on the next trigger
-    pub fn set_envelope(&mut self, envelope: Envelope) {
-        self.trigger_envelope = envelope;
-        // todo: enable or disable this channel
-    }
-
-    pub fn get_envelope(&self) -> &Envelope {
-        &self.trigger_envelope
-    }
-
-    pub fn write_register_3(&mut self, byte: u8) {
-        self.clock_shift = (byte & 0xF0) >> 4;
-        self.lfsr_width_mode = (byte & 0x08) >> 3;
-        self.divisor_code = byte & 0b111;
-    }
-
-    pub fn read_register_3(&self) -> u8 {
-        self.clock_shift << 4 | self.lfsr_width_mode << 3 | self.divisor_code
-    }
-
-    pub fn write_length_value(&mut self, byte: u8) {
-        self.length.set_value(byte);
-    }
-
-    pub fn read_length_value(&self) -> u8 {
-        self.length.get_value()
-    }
-
-    pub fn write_register_4(&mut self, byte: u8) {
-        self.length.set_enable(byte & 0b0100_0000 != 0);
-
-        if byte & 0b1000_0000 != 0 {
-            self.trigger()
-        }
-    }
-
-    pub fn read_register_4(&self) -> u8 {
-        0b1011_1111 |
-        (if self.length.enabled() { 0b0100_0000 } else { 0 })
     }
 }
 
@@ -775,17 +696,8 @@ mod tests {
 
         sound.set_nr52(0b1000_1010);
         assert_eq!(sound.power, true);
-        assert_eq!(sound.length_statuses.noise, true);
-        assert_eq!(sound.length_statuses.wave, false);
-        assert_eq!(sound.length_statuses.square_2, true);
-        assert_eq!(sound.length_statuses.square_1, false);
 
         sound.power = false;
-        sound.length_statuses.noise = false;
-        sound.length_statuses.wave = true;
-        sound.length_statuses.square_2 = false;
-        sound.length_statuses.square_1 = true;
-
         assert_eq!(sound.get_nr52(), 0b0111_0000);
     }
 }
