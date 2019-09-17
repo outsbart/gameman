@@ -8,7 +8,8 @@ pub struct WaveChannel {
 
     samples: [Sample; 32],
     volume: Volume,
-    trigger: bool,
+
+    enabled: bool,
 }
 
 
@@ -52,7 +53,8 @@ impl WaveChannel {
 
             samples: [0; 32],
             volume: Volume::Silent,
-            trigger: false,
+
+            enabled: false,
         }
     }
 
@@ -61,7 +63,6 @@ impl WaveChannel {
         self.frequency = 0;
         self.length = Length::new();
         self.volume = Volume::Silent;
-        self.trigger = false;
     }
 
     pub fn tick(&mut self) {
@@ -70,6 +71,10 @@ impl WaveChannel {
 
     pub fn sample(&mut self) -> Sample {
         0
+    }
+
+    pub fn trigger(&mut self) {
+        
     }
 
     pub fn write_ram_sample(&mut self, pos: u8, value: u8) {
@@ -125,11 +130,14 @@ impl WaveChannel {
     }
 
     pub fn write_register_4(&mut self, byte: u8) {
-        self.trigger = byte & 0b1000_0000 != 0;
         self.length.set_enable(byte & 0b0100_0000 != 0);
 
         // set frequency most significative bits
         self.set_frequency_msb(byte);
+
+        if byte & 0b1000_0000 != 0 {
+            self.trigger();
+        }
     }
 
     pub fn read_register_4(&self) -> u8 {
@@ -194,11 +202,9 @@ mod tests {
         assert_eq!(channel.read_register_4(), 0b1011_1111);
 
         channel.write_register_4(0b1000_1110);
-        assert_eq!(channel.trigger, true);
         assert_eq!(channel.length.enabled(), false);
         assert_eq!(channel.frequency, 0b110_0000_0000);
 
-        channel.trigger = false;
         channel.length.set_enable(true);
         channel.frequency = 0b001_0000_0000;
 

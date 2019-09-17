@@ -46,7 +46,7 @@ pub struct Sound {
 
 impl Memory for Sound {
     fn read_byte(&mut self, addr: u16) -> u8 {
-        let ret = match addr & 0xff {
+        match addr & 0xff {
             0x10 => self.get_nr10(),
             0x11 => self.get_nr11(),
             0x12 => self.get_nr12(),
@@ -72,13 +72,10 @@ impl Memory for Sound {
                 self.wave.read_ram_sample((addr - WAVE_TABLE_START) as u8)
             },
             _ => 0xFF,
-        };
-        println!("reading {:x} from {:x}", ret, addr);
-        ret
+        }
     }
 
     fn write_byte(&mut self, addr: u16, byte: u8) {
-        println!("writing {:x} into {:x}", byte, addr);
         match addr & 0xff {
             0x10 => self.set_nr10(byte),
             0x11 => self.set_nr11(byte),
@@ -169,8 +166,8 @@ impl Sound {
         }
     }
 
-    pub fn tick(&mut self) {
-        for _i in 0u8..4 {
+    pub fn tick(&mut self, t: u8) {
+        for _i in 0..t {
             self.square_1.tick();
             self.square_2.tick();
             self.wave.tick();
@@ -201,34 +198,34 @@ impl Sound {
             }
 
             // fetch the samples!
-            if self.sample_timer.tick() {
-                let mut left: Sample = 0;
-                let mut right: Sample = 0;
-
-                if self.power {
-                    let s1 = self.square_1.sample();
-                    let s2 = self.square_2.sample();
-                    let s3 = self.wave.sample();
-                    let s4 = self.noise.sample();
-
-                    // mixer
-                    if self.left_enables.square_1 { left += s1 }
-                    if self.left_enables.square_2 { left += s2 }
-                    if self.left_enables.wave { left += s3 }
-                    if self.left_enables.noise { left += s4 }
-
-                    if self.right_enables.square_1 { right += s1 }
-                    if self.right_enables.square_2 { right += s2 }
-                    if self.right_enables.wave { right += s3 }
-                    if self.right_enables.noise { right += s4 }
-                }
-
-                // volume
-                left *= self.left_volume * 8;
-                right *= self.right_volume * 8;
-
-                self.output_sample(left);
-            }
+//            if self.sample_timer.tick() {
+//                let mut left: Sample = 0;
+//                let mut right: Sample = 0;
+//
+//                if self.power {
+//                    let s1 = self.square_1.sample();
+//                    let s2 = self.square_2.sample();
+//                    let s3 = self.wave.sample();
+//                    let s4 = self.noise.sample();
+//
+//                    // mixer
+//                    if self.left_enables.square_1 { left += s1 }
+//                    if self.left_enables.square_2 { left += s2 }
+//                    if self.left_enables.wave { left += s3 }
+//                    if self.left_enables.noise { left += s4 }
+//
+//                    if self.right_enables.square_1 { right += s1 }
+//                    if self.right_enables.square_2 { right += s2 }
+//                    if self.right_enables.wave { right += s3 }
+//                    if self.right_enables.noise { right += s4 }
+//                }
+//
+//                // volume
+//                left *= self.left_volume * 8;
+//                right *= self.right_volume * 8;
+//
+//                self.output_sample(left);
+//            }
 
         }
 
@@ -280,12 +277,14 @@ impl Sound {
         if !self.power {
             return
         }
+        let mut envelope = Envelope::new();
+        envelope.write(value);
 
-        self.square_1.envelope.write(value);
+        self.square_1.set_envelope(envelope);
     }
 
     pub fn get_nr12(&self) -> u8 {
-        self.square_1.envelope.read()
+        self.square_1.get_envelope().read()
     }
 
     // Square channel 1 frequency LSB
@@ -334,12 +333,14 @@ impl Sound {
         if !self.power {
             return
         }
+        let mut envelope = Envelope::new();
+        envelope.write(value);
 
-        self.square_2.envelope.write(value);
+        self.square_2.set_envelope(envelope);
     }
 
     pub fn get_nr22(&self) -> u8 {
-        self.square_2.envelope.read()
+        self.square_2.get_envelope().read()
     }
 
     // Square channel 2 frequency lsb
@@ -459,11 +460,15 @@ impl Sound {
         if !self.power {
             return
         }
-        self.noise.envelope.write(value);
+
+        let mut envelope = Envelope::new();
+        envelope.write(value);
+
+        self.noise.set_envelope(envelope);
     }
 
     pub fn get_nr42(&self) -> u8 {
-        self.noise.envelope.read()
+        self.noise.get_envelope().read()
     }
 
     // Noise channel clock shift, lsfr, divisor
@@ -623,27 +628,28 @@ impl Timer {
 
 pub struct NoiseChannel {
     length: Length,
+    trigger_envelope: Envelope,
     envelope: Envelope,
 
     clock_shift: u8,
     lfsr_width_mode: u8,
     divisor_code: u8,
 
-    trigger: bool,
-
+    enabled: bool,
 }
 
 impl NoiseChannel {
     pub fn new() -> Self {
         NoiseChannel {
             length: Length::new(),
+            trigger_envelope: Envelope::new(),
             envelope: Envelope::new(),
 
             clock_shift: 0,
             lfsr_width_mode: 0,
             divisor_code: 0,
 
-            trigger: false,
+            enabled: false,
         }
     }
 
@@ -653,6 +659,20 @@ impl NoiseChannel {
 
     pub fn sample(&mut self) -> Sample {
         0
+    }
+
+    pub fn trigger(&mut self) {
+
+    }
+
+    // sets the envelope to be used on the next trigger
+    pub fn set_envelope(&mut self, envelope: Envelope) {
+        self.trigger_envelope = envelope;
+        // todo: enable or disable this channel
+    }
+
+    pub fn get_envelope(&self) -> &Envelope {
+        &self.trigger_envelope
     }
 
     pub fn write_register_3(&mut self, byte: u8) {
@@ -674,8 +694,11 @@ impl NoiseChannel {
     }
 
     pub fn write_register_4(&mut self, byte: u8) {
-        self.trigger = byte & 0b1000_0000 != 0;
         self.length.set_enable(byte & 0b0100_0000 != 0);
+
+        if byte & 0b1000_0000 != 0 {
+            self.trigger()
+        }
     }
 
     pub fn read_register_4(&self) -> u8 {
@@ -696,10 +719,8 @@ mod tests {
         assert_eq!(channel.read_register_4(), 0b1011_1111);
 
         channel.write_register_4(0b1000_1110);
-        assert_eq!(channel.trigger, true);
         assert_eq!(channel.length.enabled(), false);
 
-        channel.trigger = false;
         channel.length.set_enable(true);
 
         assert_eq!(channel.read_register_4(), 0xFF);

@@ -5,6 +5,7 @@ use cpu::is_bit_set;
 pub struct SquareChannel {
     pub sweep: Sweep,
     pub envelope: Envelope,
+    pub trigger_envelope: Envelope,
     pub length: Length,
     pub timer: Timer,  // it resets when it runs out, and the position in the duty pattern moves forward
 
@@ -18,8 +19,7 @@ pub struct SquareChannel {
     duty: u8,
     frequency: u16,
 
-    // register 4
-    trigger: bool,
+    enabled: bool,
 }
 
 
@@ -27,7 +27,8 @@ impl SquareChannel {
     pub fn new() -> Self {
         SquareChannel {
             sweep: Sweep::new(),
-            envelope: Envelope::new(),
+            envelope: Envelope::new(),  // currently used envelope
+            trigger_envelope: Envelope::new(),  // envelope to use on next trigger
             length: Length::new(),
             timer: Timer::new(0),
 
@@ -35,7 +36,7 @@ impl SquareChannel {
             duty: 0,
             frequency: 0,
 
-            trigger: false,
+            enabled: false,
         }
     }
 
@@ -65,6 +66,10 @@ impl SquareChannel {
         0
     }
 
+    pub fn trigger(&mut self) {
+
+    }
+
     fn get_duty_pattern(&self) -> u8 {
         match self.duty {
             0 => 0b0000_0001,
@@ -72,6 +77,16 @@ impl SquareChannel {
             2 => 0b1000_0111,
             _ => 0b1111_1110,
         }
+    }
+
+    // sets the envelope for the next trigger
+    pub fn set_envelope(&mut self, envelope: Envelope) {
+        self.trigger_envelope = envelope;
+        // todo: enable or disable this channel
+    }
+
+    pub fn get_envelope(&self) -> &Envelope {
+        &self.trigger_envelope
     }
 
     // sets frequency least significate bits
@@ -105,7 +120,9 @@ impl SquareChannel {
         self.length.set_enable(byte & 0b0100_0000 != 0);
         self.set_frequency_msb(byte);
 
-        self.trigger = byte & 0b1000_0000 != 0;  // todo: trigger should call a function
+        if byte & 0b1000_0000 != 0 {
+            self.trigger()
+        }
     }
 
     pub fn read_register_4(&self) -> u8 {
@@ -193,11 +210,9 @@ mod tests {
         assert_eq!(channel.read_register_4(), 0b1011_1111);
 
         channel.write_register_4(0b1000_1110);
-        assert_eq!(channel.trigger, true);
         assert_eq!(channel.length.enabled(), false);
         assert_eq!(channel.frequency, 0b110_0000_0000);
 
-        channel.trigger = false;
         channel.length.set_enable(true);
         channel.frequency = 0b001_0000_0000;
 
