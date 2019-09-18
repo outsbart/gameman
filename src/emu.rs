@@ -9,6 +9,7 @@ use crate::cpu::is_bit_set;
 use crate::gpu::GPU;
 use crate::mem::{Memory, MMU};
 use crate::cartridge::load_rom;
+use crate::sound::AUDIO_BUFFER_SIZE;
 
 use crate::utils::{load_boot_rom};
 use self::sdl2::event::Event;
@@ -16,6 +17,7 @@ use self::sdl2::keyboard::Keycode;
 use self::sdl2::pixels::Color;
 use self::sdl2::pixels::PixelFormatEnum;
 use self::sdl2::rect::Rect;
+use self::sdl2::audio::AudioSpecDesired;
 
 const SCREEN_WIDTH: u32 = 800;
 const SCREEN_HEIGHT: u32 = 600;
@@ -55,6 +57,8 @@ impl Emulator {
             if stat_interrupt {
                 self.request_stat_interrupt();
             }
+            self.cpu.mmu.sound.tick(t);
+
             if self.cpu.clks.t >= self.stop_clock {
                 break;
             }
@@ -103,6 +107,16 @@ impl Emulator {
     pub fn run(&mut self) {
         let sdl = sdl2::init().unwrap();
         let video_subsystem = sdl.video().unwrap();
+        let audio_subsystem = sdl.audio().unwrap();
+
+        let desired_spec = AudioSpecDesired {
+            freq: Some(48_000),
+            channels: Some(1),
+            samples: Some(AUDIO_BUFFER_SIZE as u16)       // default sample size
+        };
+
+        let device = audio_subsystem.open_queue::<i16, _>(None, &desired_spec).unwrap();
+
         let mut timer_subsystem = sdl.timer().unwrap();
 
         let window = video_subsystem
@@ -382,6 +396,15 @@ impl Emulator {
                 .unwrap();
 
             canvas.present();
+
+            // audio
+            if self.cpu.mmu.sound.is_audio_buffer_ready() {
+                let audio_buffer = self.cpu.mmu.sound.get_audio_buffer();
+
+                device.queue(&audio_buffer[0..]);
+
+                device.resume();
+            }
 
             //todo: user rust's std timer
             let ticks = timer_subsystem.ticks();

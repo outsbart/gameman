@@ -14,7 +14,7 @@ use sound::noise::NoiseChannel;
 
 const WAVE_TABLE_START: u16 = 0xFF30;
 const SAMPLE_RATE: usize = 96000;
-const BUFFER_SIZE: usize = 512;
+pub const AUDIO_BUFFER_SIZE: usize = 512;
 
 pub type Sample = u8;
 
@@ -38,7 +38,10 @@ pub struct Sound {
 
     // output buffer
     buffer_index: usize,
-    buffer: [u8; BUFFER_SIZE],
+    buffer: [u8; AUDIO_BUFFER_SIZE],
+
+    audio_available: bool,
+    buffer_2: [i16; AUDIO_BUFFER_SIZE],
 
     // sound circuit enabled?
     power: bool,
@@ -160,7 +163,10 @@ impl Sound {
             right_enables: ChannelsFlag::new(),
 
             buffer_index: 0,
-            buffer: [0; BUFFER_SIZE],
+            buffer: [0; AUDIO_BUFFER_SIZE],
+
+            audio_available: false,
+            buffer_2: [0; AUDIO_BUFFER_SIZE],  // this is the buffer that will
 
             power: false,
         }
@@ -198,17 +204,18 @@ impl Sound {
             }
 
             // fetch the samples!
-//            if self.sample_timer.tick() {
-//                let mut left: Sample = 0;
-//                let mut right: Sample = 0;
-//
-//                if self.power {
-//                    let s1 = self.square_1.sample();
-//                    let s2 = self.square_2.sample();
+            if self.sample_timer.tick() {
+                let mut s: Sample = 0;
+
+                if self.power {
+                    let s1 = self.square_1.sample();
+                    let s2 = self.square_2.sample();
+
+                    s+= s1 + s2;
 //                    let s3 = self.wave.sample();
 //                    let s4 = self.noise.sample();
-//
-//                    // mixer
+
+                    // mixer
 //                    if self.left_enables.square_1 { left += s1 }
 //                    if self.left_enables.square_2 { left += s2 }
 //                    if self.left_enables.wave { left += s3 }
@@ -218,14 +225,12 @@ impl Sound {
 //                    if self.right_enables.square_2 { right += s2 }
 //                    if self.right_enables.wave { right += s3 }
 //                    if self.right_enables.noise { right += s4 }
-//                }
-//
-//                // volume
-//                left *= self.left_volume * 8;
+                }
+                s = s * self.left_volume;
 //                right *= self.right_volume * 8;
-//
-//                self.output_sample(left);
-//            }
+
+                self.output_sample(s);
+            }
 
         }
 
@@ -237,10 +242,23 @@ impl Sound {
         self.buffer_index += 1;
 
         if self.buffer_index == self.buffer.len() {
-            // todo: send it to sdl2
+            self.audio_available = true;
+
+            for i in 0..AUDIO_BUFFER_SIZE {
+                self.buffer_2[i] = (self.buffer[i] as i16)*8;
+            }
 
             self.buffer_index = 0;
         }
+    }
+
+    pub fn is_audio_buffer_ready(&self) -> bool {
+        self.audio_available
+    }
+
+    pub fn get_audio_buffer(&mut self) -> &[i16; AUDIO_BUFFER_SIZE] {
+        self.audio_available = false;
+        &self.buffer_2
     }
 
     // Square channel 1 sweep

@@ -75,7 +75,7 @@ impl SquareChannel {
         let duty_pattern = self.get_duty_pattern();
 
         if is_bit_set((7 - self.duty_index) as u8, duty_pattern as u16) {
-            self.envelope.get_volume();
+            return self.envelope.get_volume();
         }
 
         0
@@ -165,7 +165,7 @@ impl Sweep {
 
     pub fn write(&mut self, value: u8) {
         self.shifts_number = value & 0b0000_0111;
-        self.rising = value & (0b1000) != 0;
+        self.rising = value & 0b1000 != 0;
         self.time = (value & 0b0111_0000) >> 4 ;
     }
 
