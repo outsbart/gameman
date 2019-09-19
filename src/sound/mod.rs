@@ -199,7 +199,7 @@ impl Sound {
 
                 // at step 2 and 6 tick the sweep
                 if self.frame_sequencer.step == 2 || self.frame_sequencer.step == 6 {
-                     self.square_1.sweep.tick();
+                     self.square_1.tick_sweep();
                 }
             }
 
@@ -638,12 +638,16 @@ impl Timer {
     // returns true when the timer hits 0
     pub fn tick(&mut self) -> bool {
         if self.curr == 0 {
-            self.curr = self.period;
+            self.restart();
             return true;
         }
 
         self.curr = self.curr.wrapping_sub(1);
         false
+    }
+
+    pub fn restart(&mut self) {
+        self.curr = self.period;
     }
 }
 

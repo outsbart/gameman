@@ -51,6 +51,44 @@ impl SquareChannel {
         self.envelope.tick();
     }
 
+    // the first square channel has a sweep
+    pub fn tick_sweep(&mut self) {
+        if !self.sweep.enabled() {
+            return
+        }
+
+        // timer has not run out yet
+        if !self.sweep.timer.tick() {
+            return
+        }
+
+        // turns off the channel on overflow
+        let (new_freq, overflow) = self.calculate_sweep();
+
+        if overflow || self.sweep.shift == 0 {
+            return
+        }
+
+        self.sweep.set_shadow_frequency(new_freq);
+        self.frequency = new_freq;
+
+        // run the freq calculation and overflows check again
+        // but this time dont update the freq, just disable the channel on overflow
+        self.calculate_sweep();
+    }
+
+    // calls sweep.calculate and performs the overflow check, disabling the channel if necessary
+    pub fn calculate_sweep(&mut self) -> (u16, bool) {
+        let (new_freq, overflow) = self.sweep.calculate();
+
+        // overflow check
+        if overflow {
+            self.running = false;
+        }
+
+        (new_freq, overflow)
+    }
+
     pub fn tick(&mut self) {
         if !self.running {
             return;
@@ -84,6 +122,11 @@ impl SquareChannel {
     pub fn trigger(&mut self) {
         self.envelope = self.trigger_envelope;
         self.running = self.envelope.dac_enabled();
+
+        // trigger the sweep and disable the channel if it overflows
+        if self.sweep.trigger(self.frequency) {
+            self.calculate_sweep();
+        }
     }
 
     fn get_duty_pattern(&self) -> u8 {
@@ -149,35 +192,65 @@ impl SquareChannel {
 
 
 pub struct Sweep {
-    shifts_number: u8,
+    shift: u8,
     rising: bool, // true if should be increasing, false if decreasing
-    time: u8,
+    timer: Timer,
+    shadow_frequency: u16,
+    enabled: bool,
 }
 
 impl Sweep {
     pub fn new() -> Self {
         Sweep {
-            shifts_number: 0,
+            shift: 0,
             rising: false,
-            time: 0
+            timer: Timer::new(0),
+            shadow_frequency: 0,
+            enabled: false,
         }
     }
 
     pub fn write(&mut self, value: u8) {
-        self.shifts_number = value & 0b0000_0111;
+        self.shift = value & 0b0000_0111;
         self.rising = value & 0b1000 != 0;
-        self.time = (value & 0b0111_0000) >> 4 ;
+        self.timer.period = ((value & 0b0111_0000) >> 4) as usize;
     }
 
     pub fn read(&self) -> u8 {
         0b1000_0000 |
-        (self.time << 4) |
+        ((self.timer.period as u8) << 4) |
         (if self.rising {0b1000} else {0}) |
-        self.shifts_number
+        self.shift
     }
 
-    pub fn tick(&self) {
+    // return true if frequency calculations should be performed immediately
+    pub fn trigger(&mut self, freq: u16) -> bool {
+        self.shadow_frequency = freq;
+        self.enabled = (self.timer.period > 0) || (self.shift > 0);
+        self.timer.restart();
 
+        self.shift > 0
+    }
+
+    // calculates the sweep, returns the new freq value and whether there was an overflow
+    pub fn calculate(&mut self) -> (u16, bool) {
+        let shifted = self.shadow_frequency >> self.shift as u16;
+
+        let result = if self.rising {
+            self.shadow_frequency.wrapping_add(shifted)
+        } else {
+            self.shadow_frequency.wrapping_sub(shifted)
+        };
+
+        (result, result > 2047)
+    }
+
+    pub fn set_shadow_frequency(&mut self, freq: u16) {
+        self.shadow_frequency = freq;
+    }
+
+    pub fn enabled(&self) -> bool {
+        self.enabled
     }
 }
 
@@ -192,13 +265,13 @@ mod tests {
         assert_eq!(sweep.read(), 0b1000_0000);
 
         sweep.write(0b0010_1011);
-        assert_eq!(sweep.shifts_number, 0b011);
+        assert_eq!(sweep.shift, 0b011);
         assert_eq!(sweep.rising, true);
-        assert_eq!(sweep.time, 0b010);
+        assert_eq!(sweep.period, 0b010);
 
-        sweep.shifts_number = 0b010;
+        sweep.shift = 0b010;
         sweep.rising = false;
-        sweep.time = 0b100;
+        sweep.period = 0b100;
 
         assert_eq!(sweep.read(), 0b1100_0010);
     }
