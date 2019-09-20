@@ -85,10 +85,7 @@ impl WaveChannel {
     }
 
     pub fn tick(&mut self) {
-        if !self.running {
-            return;
-        }
-
+        // ticks even if channel disabled
         if self.timer.tick() {
             self.position = self.position.wrapping_add(1) % WAVE_RAM_SAMPLES_NUM;
 
@@ -99,6 +96,8 @@ impl WaveChannel {
     }
 
     pub fn sample(&mut self) -> Sample {
+        if !self.running || !self.dac_power { return 0 }
+
         let sample_byte = self.read_ram_sample(self.position / 2);
 
         // take first nibble if even, second if odd
@@ -125,8 +124,9 @@ impl WaveChannel {
         self.running = true;
         self.position = 0;
 
-        self.timer.period = 256;
-        self.timer.restart();
+        if self.length.get_value() == 0 {
+            self.length.set_value(255);
+        }
 
         self.timer.period = (2048 - self.frequency) as usize * 2;
         self.timer.restart();

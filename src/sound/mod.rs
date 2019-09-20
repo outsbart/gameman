@@ -644,12 +644,18 @@ impl Timer {
 
     // returns true when the timer hits 0
     pub fn tick(&mut self) -> bool {
+        // the timer is not initialized yet
+        if self.period == 0 {
+            return false;
+        }
+
+        self.curr = self.curr.wrapping_sub(1);
+
         if self.curr == 0 {
             self.restart();
             return true;
         }
 
-        self.curr = self.curr.wrapping_sub(1);
         false
     }
 

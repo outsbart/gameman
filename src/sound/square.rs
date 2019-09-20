@@ -5,7 +5,6 @@ use cpu::is_bit_set;
 pub struct SquareChannel {
     pub sweep: Sweep,
     pub envelope: Envelope,
-    pub trigger_envelope: Envelope,
     pub length: Length,
     pub duty_timer: Timer,  // it resets when it runs out, and the position in the duty pattern moves forward
 
@@ -27,8 +26,7 @@ impl SquareChannel {
     pub fn new() -> Self {
         SquareChannel {
             sweep: Sweep::new(),
-            envelope: Envelope::new(),  // currently used envelope
-            trigger_envelope: Envelope::new(),  // envelope to use on next trigger
+            envelope: Envelope::new(),  // holds the volume
             length: Length::new(),
             duty_timer: Timer::new(0),
 
@@ -41,8 +39,8 @@ impl SquareChannel {
     }
 
     pub fn tick_length(&mut self) {
-        // if length runs out, turn off this channel
-        if self.length.tick() {
+        // if length runs out and it is enabled, turn off this channel
+        if self.length.tick() && self.length.enabled() {
             self.running = false;
         }
     }
@@ -90,11 +88,9 @@ impl SquareChannel {
     }
 
     pub fn tick(&mut self) {
-        if !self.running {
-            return;
-        }
+        // ticks even if channel disabled
 
-        // if timer runs out
+        // when timer runs out
         if self.duty_timer.tick() {
             self.duty_index = (self.duty_index + 1) % DUTY_PATTERNS_LENGTH as usize;
             self.duty_timer.curr = ((2048 - self.frequency) * 4) as usize;
@@ -120,12 +116,29 @@ impl SquareChannel {
     }
 
     pub fn trigger(&mut self) {
-        self.envelope = self.trigger_envelope;
-        self.running = self.envelope.dac_enabled();
+        self.running = true;
+        self.duty_index = 0;
+
+        if self.length.get_value() == 0 {
+            self.length.set_value(64);
+        }
+
+        self.duty_timer.period = ((2048 - self.frequency) * 4) as usize;
+        self.duty_timer.restart();
+
+        // restart volume initial value and timer
+        self.envelope.trigger();
+
 
         // trigger the sweep and disable the channel if it overflows
         if self.sweep.trigger(self.frequency) {
             self.calculate_sweep();
+        }
+
+        // Note that if the channel's DAC is off, after the above actions occur the
+        // channel will be immediately disabled again.
+        if !self.envelope.dac_enabled() {
+            self.running = false;
         }
     }
 
@@ -140,12 +153,11 @@ impl SquareChannel {
 
     // sets the envelope for the next trigger
     pub fn set_envelope(&mut self, envelope: Envelope) {
-        self.trigger_envelope = envelope;
-        // todo: enable or disable this channel
+        self.envelope = envelope;
     }
 
     pub fn get_envelope(&self) -> &Envelope {
-        &self.trigger_envelope
+        &self.envelope
     }
 
     // sets frequency least significate bits

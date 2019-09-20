@@ -9,8 +9,8 @@ const VOLUME_MIN: Sample = 0;
 pub struct Envelope {
     timer: Timer,
     add_mode: bool,
-    period: u8,
     volume: u8,
+    volume_initial: u8,
 }
 
 impl Envelope {
@@ -18,8 +18,8 @@ impl Envelope {
         Envelope {
             timer: Timer::new(0),
             add_mode: false,
-            period: 0,
             volume: 0,
+            volume_initial: 0
         }
     }
 
@@ -31,20 +31,27 @@ impl Envelope {
         self.add_mode != false || self.volume != 0
     }
 
-    pub fn write(&mut self, byte: u8) {
-        self.period = byte & 0b111;  // todo: restart timer?
-        self.add_mode = byte & 0b1000 != 0;
-        self.volume = byte >> 4;
+    pub fn trigger(&mut self) {
+        self.timer.restart();
+        self.volume = self.volume_initial;
+    }
 
-        self.timer = Timer::new(self.period as usize);
+    pub fn write(&mut self, byte: u8) {
+        self.timer.period = (byte & 0b111) as usize;
+        self.timer.restart();
+
+        self.add_mode = byte & 0b1000 != 0;
+        self.volume_initial = byte >> 4;
+
+        self.volume = self.volume_initial;
     }
 
     pub fn read(&self) -> u8 {
-        self.period | (if self.add_mode == true { 0b1000 } else { 0 }) | (self.volume << 4)
+        self.timer.period as u8 | (if self.add_mode == true { 0b1000 } else { 0 }) | (self.volume_initial << 4)
     }
 
     pub fn tick(&mut self) {
-        if self.period == 0 {
+        if self.timer.period == 0 {
             return
         }
 

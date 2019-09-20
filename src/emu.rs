@@ -23,12 +23,13 @@ use std::{thread, time};
 
 const SCREEN_WIDTH: u32 = 800;
 const SCREEN_HEIGHT: u32 = 600;
-const CLOCKS_IN_A_FRAME: u32 = 70224;
 const FPS: u32 = 60;
+const CLOCKS_IN_A_FRAME: u32 = 70224;
+const DELAY_EVERY_FRAME: u32 = 1000 / FPS;
+
 
 pub struct Emulator {
     cpu: CPU<MMU<GPU>>,
-    stop_clock: u32,
 }
 
 impl Emulator {
@@ -38,8 +39,7 @@ impl Emulator {
         let cpu = CPU::new(mmu);
 
         Emulator {
-            cpu,
-            stop_clock: 0,
+            cpu
         }
     }
 
@@ -49,9 +49,14 @@ impl Emulator {
     }
 
     fn step(&mut self) {
+        let mut clocks_this_frame = 0u32;
+
         // step a frame forward!
         loop {
             let (_line, t) = self.cpu.step();
+
+            clocks_this_frame += t as u32;
+
             let (vblank_interrupt, stat_interrupt) = self.cpu.mmu.gpu.step(t);
             if vblank_interrupt {
                 self.request_vblank_interrupt();
@@ -61,7 +66,7 @@ impl Emulator {
             }
             self.cpu.mmu.sound.tick(t);
 
-            if self.cpu.clks.t >= self.stop_clock {
+            if clocks_this_frame >= CLOCKS_IN_A_FRAME {
                 break;
             }
         }
@@ -69,8 +74,6 @@ impl Emulator {
 
     pub fn passes_test_rom(&mut self) -> bool {
         loop {
-            self.stop_clock = self.cpu.clks.t + CLOCKS_IN_A_FRAME;
-
             self.step();
 
             let outbuffer = self.cpu.mmu.link.get_buffer();
@@ -118,8 +121,6 @@ impl Emulator {
         };
 
         let device = audio_subsystem.open_queue::<i16, _>(None, &desired_spec).unwrap();
-
-        let mut timer_subsystem = sdl.timer().unwrap();
 
         let window = video_subsystem
             .window("gameman", 600, 512)
@@ -281,8 +282,6 @@ impl Emulator {
                 continue;
             }
 
-            self.stop_clock = self.cpu.clks.t + CLOCKS_IN_A_FRAME;
-
             self.step();
 
             canvas.clear();
@@ -408,13 +407,13 @@ impl Emulator {
                 device.resume();
             }
 
-            //todo: user rust's std timer
             let ticks = time::Instant::now();
-            let adjusted_ticks = (ticks - last_ticks).as_millis() as u32;
-            if adjusted_ticks < 1000 / FPS {
-                thread::sleep(time::Duration::from_millis(((1000 / FPS) - adjusted_ticks) as u64));
-//                timer_subsystem.delay((1000 / FPS) - adjusted_ticks);
+            let time_passed = (ticks - last_ticks).as_millis() as u32;
+
+            if time_passed < DELAY_EVERY_FRAME {
+                thread::sleep(time::Duration::from_millis((DELAY_EVERY_FRAME - time_passed) as u64));
             }
+
             last_ticks = ticks;
         }
     }

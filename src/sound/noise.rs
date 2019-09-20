@@ -1,12 +1,14 @@
 use sound::length::Length;
 use sound::envelope::Envelope;
-use sound::Sample;
+use sound::{Sample, Timer};
 
 pub struct NoiseChannel {
     length: Length,
     trigger_envelope: Envelope,
     envelope: Envelope,
 
+    timer: Timer,
+    lsfr: u16, // linear feedback shift register, 15 bits
     clock_shift: u8,
     lfsr_width_mode: u8,
     divisor_code: u8,
@@ -21,6 +23,8 @@ impl NoiseChannel {
             trigger_envelope: Envelope::new(),
             envelope: Envelope::new(),
 
+            timer: Timer::new(0),
+            lsfr: 0,
             clock_shift: 0,
             lfsr_width_mode: 0,
             divisor_code: 0,
@@ -30,6 +34,7 @@ impl NoiseChannel {
     }
 
     pub fn tick(&mut self) {
+
     }
 
     pub fn sample(&mut self) -> Sample {
@@ -54,12 +59,17 @@ impl NoiseChannel {
     pub fn trigger(&mut self) {
         self.envelope = self.trigger_envelope;
         self.running = self.envelope.dac_enabled();
+
+        // self.timer.period =
+
+        self.envelope.trigger();
+        self.lsfr = 0x7FFF;
+
     }
 
     // sets the envelope to be used on the next trigger
     pub fn set_envelope(&mut self, envelope: Envelope) {
         self.trigger_envelope = envelope;
-        // todo: enable or disable this channel
     }
 
     pub fn get_envelope(&self) -> &Envelope {
