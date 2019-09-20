@@ -100,7 +100,8 @@ impl SquareChannel {
         // when timer runs out
         if self.duty_timer.tick() {
             self.duty_index = (self.duty_index + 1) % DUTY_PATTERNS_LENGTH as usize;
-            self.duty_timer.curr = ((2048 - self.frequency) * 4) as usize;
+            self.duty_timer.period = ((2048 - self.frequency) * 4) as usize;
+            self.duty_timer.restart();
         }
     }
 

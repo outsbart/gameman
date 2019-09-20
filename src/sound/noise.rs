@@ -7,8 +7,8 @@ pub struct NoiseChannel {
     envelope: Envelope,
 
     timer: Timer,
-    lsfr: u16, // linear feedback shift register, 15 bits
-    clock_shift: u8,
+    lfsr: u16, // linear feedback shift register, 15 bits
+    clock_shift: u8,  // used to shift the divisor when restarting the clock/timer
     lfsr_width_mode: u8,
     divisor_code: u8,
 
@@ -22,7 +22,7 @@ impl NoiseChannel {
             envelope: Envelope::new(),
 
             timer: Timer::new(0),
-            lsfr: 0,
+            lfsr: 0,
             clock_shift: 0,
             lfsr_width_mode: 0,
             divisor_code: 0,
@@ -32,11 +32,41 @@ impl NoiseChannel {
     }
 
     pub fn tick(&mut self) {
+        if !self.timer.tick() {
+            return
+        }
+        // When clocked by the frequency timer, the low two bits (0 and 1) are XORed, all bits are
+        // shifted right by one, and the result of the XOR is put into the
+        // now-empty high bit. If width mode is 1 (NR43), the XOR result is ALSO
+        // put into bit 6 AFTER the shift, resulting in a 7-bit LFSR.
+        let xor = (self.lfsr & 1) ^ ((self.lfsr & 0b10) >> 1);
 
+        self.lfsr >>= 1;
+
+        if xor != 0 {
+            self.lfsr |= 0b100_0000_0000;
+
+            if self.lfsr_width_mode != 0 {
+                // todo: drop bits 15-8 or not? 7-bit LFSR or not?
+                self.lfsr |= 0b100_0000
+            }
+        }
+
+        self.timer.period = ((self.get_divisor() as u16) << (self.clock_shift as u16)) as usize;
+        self.timer.restart();
     }
 
     pub fn sample(&mut self) -> Sample {
-        0
+        if !self.is_running() {
+            return 0;
+        }
+
+        // The waveform output is bit 0 of the LFSR, INVERTED
+        if self.lfsr & 1 != 0 {
+            0
+        } else {
+            self.envelope.get_volume()
+        }
     }
 
     pub fn tick_length(&mut self) {
@@ -57,13 +87,31 @@ impl NoiseChannel {
     pub fn trigger(&mut self) {
         self.running = true;
 
-        // self.timer.period =
+        if self.length.get_value() == 0 {
+            self.length.set_value(64);
+        }
+
+        self.timer.period = ((self.get_divisor() as u16) << (self.clock_shift as u16)) as usize;
+        self.timer.restart();
 
         self.envelope.trigger();
-        self.lsfr = 0x7FFF;
+        self.lfsr = 0x7FFF;
 
         if !self.dac_enabled() {
             self.running = false;
+        }
+    }
+
+    fn get_divisor(&self) -> u8 {
+        match self.divisor_code {
+            1 => { 16 },
+            2 => { 32 },
+            3 => { 48 },
+            4 => { 64 },
+            5 => { 80 },
+            6 => { 96 },
+            7 => { 112 },
+            _ => { 8 }
         }
     }
 
@@ -77,6 +125,10 @@ impl NoiseChannel {
     // sets the envelope to be used on the next trigger
     pub fn set_envelope(&mut self, envelope: Envelope) {
         self.envelope = envelope;
+
+        if !self.dac_enabled() {
+            self.running = false;
+        }
     }
 
     pub fn get_envelope(&self) -> &Envelope {
