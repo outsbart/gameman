@@ -1,7 +1,7 @@
 use sound::length::Length;
 use sound::{Sample, Timer};
 
-const WAVE_RAM_SAMPLES_NUM: u8 = 16;
+const WAVE_RAM_SAMPLES: u8 = 32;
 
 pub struct WaveChannel {
     dac_power: bool,
@@ -10,7 +10,7 @@ pub struct WaveChannel {
     timer: Timer,
 
     position: u8,
-    samples: [Sample; WAVE_RAM_SAMPLES_NUM as usize],
+    samples: [Sample; WAVE_RAM_SAMPLES as usize / 2],
     volume: Volume,
 
     // Becomes true during a trigger
@@ -94,7 +94,7 @@ impl WaveChannel {
     pub fn tick(&mut self) {
         // ticks even if channel disabled
         if self.timer.tick() {
-            self.position = self.position.wrapping_add(1) % WAVE_RAM_SAMPLES_NUM;
+            self.position = self.position.wrapping_add(1) % WAVE_RAM_SAMPLES;
 
             // reload the timer
             self.timer.period = (2048 - self.frequency) as usize * 2;
