@@ -8,9 +8,9 @@ const VOLUME_MIN: Sample = 0;
 #[derive(Clone,Copy)]
 pub struct Envelope {
     timer: Timer,
-    add_mode: bool,
+    pub add_mode: bool,
     volume: u8,
-    volume_initial: u8,
+    pub volume_initial: u8,
 }
 
 impl Envelope {
@@ -27,12 +27,11 @@ impl Envelope {
         self.volume
     }
 
-    pub fn dac_enabled(&self) -> bool {
-        self.add_mode != false || self.volume != 0
-    }
-
     pub fn trigger(&mut self) {
+        // Volume envelope timer is reloaded with period
         self.timer.restart();
+
+        // Channel volume is reloaded from NRx2
         self.volume = self.volume_initial;
     }
 
@@ -42,8 +41,6 @@ impl Envelope {
 
         self.add_mode = byte & 0b1000 != 0;
         self.volume_initial = byte >> 4;
-
-        self.volume = self.volume_initial;
     }
 
     pub fn read(&self) -> u8 {

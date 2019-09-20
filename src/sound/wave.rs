@@ -13,6 +13,13 @@ pub struct WaveChannel {
     samples: [Sample; WAVE_RAM_SAMPLES_NUM as usize],
     volume: Volume,
 
+    // Becomes true during a trigger
+    // (but is set to false if during that trigger dac is disabled or sweep overflows)
+    //
+    // Becomes false when one of these events happen:
+    // - length counter reaches 0 and length is enabled
+    // - sweep overflows
+    // - dac is disabled
     running: bool,
 }
 
@@ -113,15 +120,24 @@ impl WaveChannel {
         self.running
     }
 
+    pub fn dac_enabled(&self) -> bool {
+        // DAC power is controlled by the upper 5 bits of NRx2 (top bit of NR30 for
+        // wave channel). If these bits are not all clear, the DAC is on, otherwise
+        // it's off and outputs 0 volts.
+        self.dac_power
+    }
+
     pub fn tick_length(&mut self) {
         // if length runs out, turn off this channel
-        if self.length.tick() {
+        if self.length.tick() && self.length.enabled() {
             self.running = false;
         }
     }
 
     pub fn trigger(&mut self) {
         self.running = true;
+
+        // Wave channel's position is set to 0 but sample buffer is NOT refilled
         self.position = 0;
 
         if self.length.get_value() == 0 {
@@ -130,6 +146,10 @@ impl WaveChannel {
 
         self.timer.period = (2048 - self.frequency) as usize * 2;
         self.timer.restart();
+
+        if !self.dac_enabled() {
+            self.running = false;
+        }
     }
 
     pub fn write_ram_sample(&mut self, pos: u8, value: u8) {
@@ -160,6 +180,10 @@ impl WaveChannel {
 
     pub fn write_register_0(&mut self, byte: u8) {
         self.dac_power = (byte & 0b1000_0000) != 0;
+
+        if !self.dac_enabled() {
+            self.running = false;
+        }
     }
 
     pub fn read_register_0(&self) -> u8 {

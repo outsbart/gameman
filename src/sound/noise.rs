@@ -4,7 +4,6 @@ use sound::{Sample, Timer};
 
 pub struct NoiseChannel {
     length: Length,
-    trigger_envelope: Envelope,
     envelope: Envelope,
 
     timer: Timer,
@@ -20,7 +19,6 @@ impl NoiseChannel {
     pub fn new() -> Self {
         NoiseChannel {
             length: Length::new(),
-            trigger_envelope: Envelope::new(),
             envelope: Envelope::new(),
 
             timer: Timer::new(0),
@@ -43,7 +41,7 @@ impl NoiseChannel {
 
     pub fn tick_length(&mut self) {
         // if length runs out, turn off this channel
-        if self.length.tick() {
+        if self.length.tick() && self.length.enabled() {
             self.running = false;
         }
     }
@@ -57,23 +55,32 @@ impl NoiseChannel {
     }
 
     pub fn trigger(&mut self) {
-        self.envelope = self.trigger_envelope;
-        self.running = self.envelope.dac_enabled();
+        self.running = true;
 
         // self.timer.period =
 
         self.envelope.trigger();
         self.lsfr = 0x7FFF;
 
+        if !self.dac_enabled() {
+            self.running = false;
+        }
+    }
+
+    pub fn dac_enabled(&self) -> bool {
+        // DAC power is controlled by the upper 5 bits of NRx2 (top bit of NR30 for
+        // wave channel). If these bits are not all clear, the DAC is on, otherwise
+        // it's off and outputs 0 volts.
+        self.envelope.read() >> 3 != 0
     }
 
     // sets the envelope to be used on the next trigger
     pub fn set_envelope(&mut self, envelope: Envelope) {
-        self.trigger_envelope = envelope;
+        self.envelope = envelope;
     }
 
     pub fn get_envelope(&self) -> &Envelope {
-        &self.trigger_envelope
+        &self.envelope
     }
 
     pub fn write_register_3(&mut self, byte: u8) {

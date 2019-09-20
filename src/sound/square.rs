@@ -34,12 +34,19 @@ impl SquareChannel {
             duty: 0,
             frequency: 0,
 
+            // Becomes true during a trigger
+            // (but is set to false if during that trigger dac is disabled or sweep overflows)
+            //
+            // Becomes false when one of these events happen:
+            // - length counter reaches 0 and length is enabled
+            // - sweep overflows
+            // - dac is disabled
             running: false,
         }
     }
 
     pub fn tick_length(&mut self) {
-        // if length runs out and it is enabled, turn off this channel
+        // if length runs out and length is enabled, turn off this channel
         if self.length.tick() && self.length.enabled() {
             self.running = false;
         }
@@ -97,6 +104,13 @@ impl SquareChannel {
         }
     }
 
+    pub fn dac_enabled(&self) -> bool {
+        // DAC power is controlled by the upper 5 bits of NRx2 (top bit of NR30 for
+        // wave channel). If these bits are not all clear, the DAC is on, otherwise
+        // it's off and outputs 0 volts.
+        self.envelope.read() >> 3 != 0
+    }
+
     pub fn is_running(&self) -> bool {
         self.running
     }
@@ -129,7 +143,6 @@ impl SquareChannel {
         // restart volume initial value and timer
         self.envelope.trigger();
 
-
         // trigger the sweep and disable the channel if it overflows
         if self.sweep.trigger(self.frequency) {
             self.calculate_sweep();
@@ -137,7 +150,7 @@ impl SquareChannel {
 
         // Note that if the channel's DAC is off, after the above actions occur the
         // channel will be immediately disabled again.
-        if !self.envelope.dac_enabled() {
+        if !self.dac_enabled() {
             self.running = false;
         }
     }
@@ -154,6 +167,10 @@ impl SquareChannel {
     // sets the envelope for the next trigger
     pub fn set_envelope(&mut self, envelope: Envelope) {
         self.envelope = envelope;
+
+         if !self.dac_enabled() {
+             self.running = false;
+         }
     }
 
     pub fn get_envelope(&self) -> &Envelope {
