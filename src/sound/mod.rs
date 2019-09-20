@@ -13,7 +13,8 @@ use sound::wave::WaveChannel;
 use sound::noise::NoiseChannel;
 
 const WAVE_TABLE_START: u16 = 0xFF30;
-const SAMPLE_RATE: usize = 96000;
+pub const SAMPLE_RATE: usize = 48_000;
+const DUTY_PATTERNS_LENGTH: u8 = 8;
 pub const AUDIO_BUFFER_SIZE: usize = 512;
 
 pub type Sample = u8;
@@ -210,8 +211,10 @@ impl Sound {
                 if self.power {
                     let s1 = self.square_1.sample();
                     let s2 = self.square_2.sample();
+                    let s3 = self.wave.sample();
+                    let s4 = self.noise.sample();
 
-                    s+= s1 + s2;
+                    s+= s1 + s2 + s3 + s4;
 //                    let s3 = self.wave.sample();
 //                    let s4 = self.noise.sample();
 
@@ -245,7 +248,7 @@ impl Sound {
             self.audio_available = true;
 
             for i in 0..AUDIO_BUFFER_SIZE {
-                self.buffer_2[i] = (self.buffer[i] as i16)*8;
+                self.buffer_2[i] = self.buffer[i] as i16;
             }
 
             self.buffer_index = 0;
@@ -570,7 +573,10 @@ impl Sound {
 
     // called when power is set to off, through register nr52
     pub fn reset(&mut self) {
-        // reset all registers
+        self.power = false;
+        self.buffer_index = 0;
+        self.frame_sequencer.reset();
+        self.sample_timer.restart();
 
         // nr 50
         self.vin_l_enable = false;
@@ -588,8 +594,6 @@ impl Sound {
 
         self.wave.reset();  // wave table/ram must be left unchanged
         self.noise = NoiseChannel::new();
-
-        // todo: reset output channels?
     }
 }
 
@@ -597,7 +601,6 @@ impl Sound {
 pub struct FrameSequencer {
     timer: Timer,
     step: u8,      // goes up by 1 everytime the timer hits 0
-    step_max: u8,  // indicates at which value step should go back to 0
 }
 
 impl FrameSequencer {
@@ -605,7 +608,6 @@ impl FrameSequencer {
         FrameSequencer {
             timer: Timer::new(8192),
             step: 0,
-            step_max: 8,
         }
     }
 
@@ -613,9 +615,14 @@ impl FrameSequencer {
     pub fn tick(&mut self) -> bool {
         let timer_up = self.timer.tick();
         if timer_up {
-            self.step = (self.step + 1) % self.step_max;
+            self.step = (self.step + 1) % DUTY_PATTERNS_LENGTH;
         }
         timer_up
+    }
+
+    pub fn reset(&mut self) {
+        self.step = 0;
+        self.timer.restart();
     }
 }
 

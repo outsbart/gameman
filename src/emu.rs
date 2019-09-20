@@ -18,6 +18,8 @@ use self::sdl2::pixels::Color;
 use self::sdl2::pixels::PixelFormatEnum;
 use self::sdl2::rect::Rect;
 use self::sdl2::audio::AudioSpecDesired;
+use sound::SAMPLE_RATE;
+use std::{thread, time};
 
 const SCREEN_WIDTH: u32 = 800;
 const SCREEN_HEIGHT: u32 = 600;
@@ -110,7 +112,7 @@ impl Emulator {
         let audio_subsystem = sdl.audio().unwrap();
 
         let desired_spec = AudioSpecDesired {
-            freq: Some(48_000),
+            freq: Some(SAMPLE_RATE as i32),
             channels: Some(1),
             samples: Some(AUDIO_BUFFER_SIZE as u16)       // default sample size
         };
@@ -138,7 +140,7 @@ impl Emulator {
             .create_texture_streaming(PixelFormatEnum::RGB24, 160, 144)
             .unwrap();
 
-        let mut last_ticks = timer_subsystem.ticks();
+        let mut last_ticks = time::Instant::now();
         let mut pause = false;
 
         let mut event_pump = sdl.event_pump().unwrap();
@@ -407,10 +409,11 @@ impl Emulator {
             }
 
             //todo: user rust's std timer
-            let ticks = timer_subsystem.ticks();
-            let adjusted_ticks = ticks - last_ticks;
+            let ticks = time::Instant::now();
+            let adjusted_ticks = (ticks - last_ticks).as_millis() as u32;
             if adjusted_ticks < 1000 / FPS {
-                timer_subsystem.delay((1000 / FPS) - adjusted_ticks);
+                thread::sleep(time::Duration::from_millis(((1000 / FPS) - adjusted_ticks) as u64));
+//                timer_subsystem.delay((1000 / FPS) - adjusted_ticks);
             }
             last_ticks = ticks;
         }

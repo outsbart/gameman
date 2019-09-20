@@ -1,4 +1,4 @@
-use sound::{Length, Timer, Sample};
+use sound::{Length, Timer, Sample, DUTY_PATTERNS_LENGTH};
 use sound::envelope::Envelope;
 use cpu::is_bit_set;
 
@@ -96,7 +96,7 @@ impl SquareChannel {
 
         // if timer runs out
         if self.duty_timer.tick() {
-            self.duty_index = (self.duty_index + 1) % 8;
+            self.duty_index = (self.duty_index + 1) % DUTY_PATTERNS_LENGTH as usize;
             self.duty_timer.curr = ((2048 - self.frequency) * 4) as usize;
         }
     }
@@ -134,7 +134,7 @@ impl SquareChannel {
             0 => 0b0000_0001,
             1 => 0b1000_0001,
             2 => 0b1000_0111,
-            _ => 0b1111_1110,
+            _ => 0b0111_1110,
         }
     }
 
@@ -194,7 +194,7 @@ impl SquareChannel {
 pub struct Sweep {
     shift: u8,
     rising: bool, // true if should be increasing, false if decreasing
-    timer: Timer,
+    pub timer: Timer,
     shadow_frequency: u16,
     enabled: bool,
 }
@@ -267,11 +267,11 @@ mod tests {
         sweep.write(0b0010_1011);
         assert_eq!(sweep.shift, 0b011);
         assert_eq!(sweep.rising, true);
-        assert_eq!(sweep.period, 0b010);
+        assert_eq!(sweep.timer.period, 0b010);
 
         sweep.shift = 0b010;
         sweep.rising = false;
-        sweep.period = 0b100;
+        sweep.timer.period = 0b100;
 
         assert_eq!(sweep.read(), 0b1100_0010);
     }

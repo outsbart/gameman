@@ -1,12 +1,16 @@
 use sound::length::Length;
-use sound::Sample;
+use sound::{Sample, Timer};
+
+const WAVE_RAM_SAMPLES_NUM: u8 = 16;
 
 pub struct WaveChannel {
     dac_power: bool,
     frequency: u16,
     length: Length,
+    timer: Timer,
 
-    samples: [Sample; 32],
+    position: u8,
+    samples: [Sample; WAVE_RAM_SAMPLES_NUM as usize],
     volume: Volume,
 
     running: bool,
@@ -44,14 +48,28 @@ impl Into<u8> for Volume {
     }
 }
 
+impl Volume {
+    fn apply_to(self, sample: Sample) -> Sample {
+        match self {
+            Volume::Silent => 0,
+            Volume::Max => sample,
+            Volume::Half => sample / 2,
+            Volume::Quarter => sample / 4,
+        }
+    }
+}
+
+
 impl WaveChannel {
     pub fn new() -> Self {
         WaveChannel {
             dac_power: false,
             frequency: 0,
             length: Length::new(),
+            timer: Timer::new(0),
 
-            samples: [0; 32],
+            position: 0,
+            samples: [0x84, 0x40, 0x43, 0xAA, 0x2D, 0x78, 0x92, 0x3C, 0x60, 0x59, 0x59, 0xB0, 0x34, 0xB8, 0x2E, 0xDA],
             volume: Volume::Silent,
 
             running: false,
@@ -63,14 +81,33 @@ impl WaveChannel {
         self.frequency = 0;
         self.length = Length::new();
         self.volume = Volume::Silent;
+        self.position = 0;
     }
 
     pub fn tick(&mut self) {
+        if !self.running {
+            return;
+        }
 
+        if self.timer.tick() {
+            self.position = self.position.wrapping_add(1) % WAVE_RAM_SAMPLES_NUM;
+
+            // reload the timer
+            self.timer.period = (2048 - self.frequency) as usize * 2;
+            self.timer.restart();
+        }
     }
 
     pub fn sample(&mut self) -> Sample {
-        0
+        let sample_byte = self.read_ram_sample(self.position / 2);
+
+        // take first nibble if even, second if odd
+        let sample = match self.position % 2 {
+            0 => { sample_byte >> 4 }
+            _ => { sample_byte & 0xF }
+        };
+
+        self.volume.apply_to(sample)
     }
 
     pub fn is_running(&self) -> bool {
@@ -85,7 +122,14 @@ impl WaveChannel {
     }
 
     pub fn trigger(&mut self) {
-        
+        self.running = true;
+        self.position = 0;
+
+        self.timer.period = 256;
+        self.timer.restart();
+
+        self.timer.period = (2048 - self.frequency) as usize * 2;
+        self.timer.restart();
     }
 
     pub fn write_ram_sample(&mut self, pos: u8, value: u8) {

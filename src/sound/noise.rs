@@ -30,7 +30,6 @@ impl NoiseChannel {
     }
 
     pub fn tick(&mut self) {
-
     }
 
     pub fn sample(&mut self) -> Sample {

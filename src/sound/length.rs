@@ -9,7 +9,7 @@ pub struct Length {
 impl Length {
     pub fn new() -> Self {
         Length {
-            timer: Timer::new(64 * 0x4000),
+            timer: Timer::new(0),
             enable: false,
         }
     }
