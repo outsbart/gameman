@@ -58,12 +58,25 @@ impl SquareChannel {
 
     // the first square channel has a sweep
     pub fn tick_sweep(&mut self) {
+        // The sweep timer is clocked at 128 Hz by the frame sequencer. When it
+        // generates a clock and the sweep's internal enabled flag is set and the
+        // sweep period is not zero, a new frequency is calculated and the overflow
+        // check is performed. If the new frequency is 2047 or less and the sweep
+        // shift is not zero, this new frequency is written back to the shadow
+        // frequency and square 1's frequency in NR13 and NR14, then frequency
+        // calculation and overflow check are run AGAIN immediately using this new
+        // value, but this second new frequency is not written back.
+
+        // timer has not run out yet
+        if !self.sweep.timer.tick() {
+            return
+        }
+
         if !self.sweep.enabled() {
             return
         }
 
-        // timer has not run out yet
-        if !self.sweep.timer.tick() {
+        if self.sweep.timer.period == 0 {
             return
         }
 
@@ -97,12 +110,14 @@ impl SquareChannel {
     pub fn tick(&mut self) {
         // ticks even if channel disabled
 
-        // when timer runs out
-        if self.duty_timer.tick() {
-            self.duty_index = (self.duty_index + 1) % DUTY_PATTERNS_LENGTH as usize;
-            self.duty_timer.period = ((2048 - self.frequency) * 4) as usize;
-            self.duty_timer.restart();
+        // timer didnt run out yet
+        if !self.duty_timer.tick() {
+            return
         }
+
+        self.duty_index = (self.duty_index + 1) % DUTY_PATTERNS_LENGTH as usize;
+        self.duty_timer.period = ((2048 - self.frequency) * 4) as usize;
+        self.duty_timer.restart();
     }
 
     pub fn dac_enabled(&self) -> bool {
@@ -255,9 +270,19 @@ impl Sweep {
 
     // return true if frequency calculations should be performed immediately
     pub fn trigger(&mut self, freq: u16) -> bool {
+        // During a trigger event, several things occur:
+        // - The internal enabled flag is set if either the sweep period or shift
+        //   are non-zero, cleared otherwise.
+        // - If the sweep shift is non-zero, frequency calculation and the overflow
+        //   check are performed immediately.
+
+        // - Square 1's frequency is copied to the shadow register.
         self.shadow_frequency = freq;
-        self.enabled = (self.timer.period > 0) || (self.shift > 0);
+
+        // - The sweep timer is reloaded.
         self.timer.restart();
+
+        self.enabled = (self.timer.period > 0) || (self.shift > 0);
 
         self.shift > 0
     }

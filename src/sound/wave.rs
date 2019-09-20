@@ -141,7 +141,7 @@ impl WaveChannel {
         self.position = 0;
 
         if self.length.get_value() == 0 {
-            self.length.set_value(255);
+            self.length.set_value(255); // todo: make it 256
         }
 
         self.timer.period = (2048 - self.frequency) as usize * 2;
