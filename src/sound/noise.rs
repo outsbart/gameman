@@ -155,7 +155,10 @@ impl NoiseChannel {
     }
 
     pub fn write_register_4(&mut self, byte: u8) {
-        self.length.set_enable(byte & 0b0100_0000 != 0);
+        // enabling the length in some cases makes the length timer go down, which might reach zero
+        if self.length.set_enable(byte & 0b0100_0000 != 0) {
+            self.running = false;
+        }
 
         if byte & 0b1000_0000 != 0 {
             self.trigger()
