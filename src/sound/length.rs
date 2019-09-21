@@ -48,8 +48,7 @@ impl Length {
 
     // if true is returned, channel must be disabled
     fn decrease_timer(&mut self) -> bool {
-        // if frozen
-        if self.timer == 0 {
+        if self.frozen() {
             return false;
         }
 
@@ -85,10 +84,13 @@ impl Length {
         self.timer
     }
 
-    // returns true if succesfully unfrozen
-    fn unfreeze_if_frozen(&mut self) -> bool {
-       // if frozen
-        if self.get_value() == 0 {
+    fn frozen(&self) -> bool {
+        self.get_value() == 0
+    }
+
+    // returns true if an "unfreeze" was performed
+    fn trigger(&mut self) -> bool {
+        if self.frozen() {
             self.timer = self.max_length as u16;
             return true;
         }
@@ -97,21 +99,16 @@ impl Length {
 
     // returns true if channel should be disabled
     pub fn set_enable(&mut self, byte: bool, trigger: bool) -> bool {
-        let was_enabled_already = self.enable;
-        let mut unfrozen = false;
+        let was_disabled = !self.enable;
+        let was_frozen = trigger && self.trigger();
 
         self.enable = byte;
 
-        if trigger {
-            unfrozen = self.unfreeze_if_frozen();
-        }
-
-        if !self.enabled() {
+        if !self.enabled() || self.half_period_passed || self.frozen() {
             return false;
         }
 
-        // enabling in first half of length period, timer should decrease if it's not already 0
-        if (!was_enabled_already || unfrozen) && !self.half_period_passed && self.timer != 0 {
+        if was_disabled || was_frozen {
             return self.decrease_timer();
         }
 
