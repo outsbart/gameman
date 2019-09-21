@@ -129,7 +129,7 @@ impl WaveChannel {
 
     pub fn tick_length(&mut self) {
         // if length runs out, turn off this channel
-        if self.length.tick() && self.length.enabled() {
+        if self.length.enabled() && self.length.tick(){
             self.running = false;
         }
     }

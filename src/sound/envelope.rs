@@ -1,25 +1,58 @@
-use sound::{Timer, Sample};
+use sound::{Sample};
 
 const VOLUME_MAX: Sample = 0xF;
 const VOLUME_MIN: Sample = 0;
 
 
+#[derive(Clone,Copy)]
+pub struct EnvelopeTimer {
+    pub period: usize, // initial and max value of curr
+    curr: usize,       // goes down by 1 every tick and wraps back to period
+}
+
+impl EnvelopeTimer {
+    pub fn new() -> Self {
+        EnvelopeTimer {
+            period: 0,
+            curr: 0,
+        }
+    }
+
+    pub fn tick(&mut self) -> bool {
+        self.curr -= 1;
+
+        if self.curr == 0 {
+            self.restart();
+            return true;
+        }
+
+        return false;
+    }
+
+    pub fn restart(&mut self) {
+        self.curr = if self.period != 0 { self.period } else { 8 }
+    }
+}
+
+
 // every tick, increases or decreases volume
 #[derive(Clone,Copy)]
 pub struct Envelope {
-    timer: Timer,
+    timer: EnvelopeTimer,
     pub add_mode: bool,
     volume: u8,
     pub volume_initial: u8,
+    enabled: bool,
 }
 
 impl Envelope {
     pub fn new() -> Self {
         Envelope {
-            timer: Timer::new(0),
+            timer: EnvelopeTimer::new(),
             add_mode: false,
             volume: 0,
-            volume_initial: 0
+            volume_initial: 0,
+            enabled: false,
         }
     }
 
@@ -33,6 +66,8 @@ impl Envelope {
 
         // Channel volume is reloaded from NRx2
         self.volume = self.volume_initial;
+
+        self.enabled = true;
     }
 
     pub fn write(&mut self, byte: u8) {
@@ -48,18 +83,25 @@ impl Envelope {
     }
 
     pub fn tick(&mut self) {
-        if self.timer.period == 0 {
+        if !self.enabled {
             return
         }
 
         // when timer runs out
         if self.timer.tick() {
-            if self.add_mode && self.volume < VOLUME_MAX {
-                self.volume += 1;
+
+            // must disable on overflow/underflow
+            if (self.add_mode && self.volume == VOLUME_MAX) || (!self.add_mode && self.volume == VOLUME_MIN) {
+                self.enabled = false;
+                return;
             }
-            else if !self.add_mode && self.volume > VOLUME_MIN {
-                self.volume -= 1;
-            }
+
+            // increase or decrease based on add_mode
+            self.volume = if self.add_mode {
+                self.volume + 1
+            } else {
+                self.volume - 1
+            };
         }
     }
 }

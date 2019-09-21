@@ -47,7 +47,7 @@ impl SquareChannel {
 
     pub fn tick_length(&mut self) {
         // if length runs out and length is enabled, turn off this channel
-        if self.length.tick() && self.length.enabled() {
+        if self.length.enabled() && self.length.tick(){
             self.running = false;
         }
     }
