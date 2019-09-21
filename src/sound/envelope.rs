@@ -105,27 +105,3 @@ impl Envelope {
         }
     }
 }
-
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_envelope() {
-        let mut envelope: Envelope = Envelope::new();
-
-        assert_eq!(envelope.read(), 0);
-
-        envelope.write(0b1000_1011);
-        assert_eq!(envelope.period, 0b011);
-        assert_eq!(envelope.add_mode, true);
-        assert_eq!(envelope.volume, 0b1000);
-
-        envelope.volume = 0b1110;
-        envelope.add_mode = false;
-        envelope.period = 0b111;
-
-        assert_eq!(envelope.read(), 0b1110_0111);
-    }
-}

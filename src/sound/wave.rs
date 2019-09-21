@@ -1,4 +1,4 @@
-use sound::length::Length;
+use sound::length::{Length, MaxLength};
 use sound::{Sample, Timer};
 
 const WAVE_RAM_SAMPLES: u8 = 32;
@@ -72,7 +72,7 @@ impl WaveChannel {
         WaveChannel {
             dac_power: false,
             frequency: 0,
-            length: Length::new(),
+            length: Length::new(MaxLength::Wave),
             timer: Timer::new(0),
 
             position: 0,
@@ -86,7 +86,7 @@ impl WaveChannel {
     pub fn reset(&mut self) {
         self.dac_power = false;
         self.frequency = 0;
-        self.length = Length::new();
+        self.length = Length::new(MaxLength::Wave);
         self.volume = Volume::Silent;
         self.position = 0;
     }
@@ -141,7 +141,7 @@ impl WaveChannel {
         self.position = 0;
 
         if self.length.get_value() == 0 {
-            self.length.set_value(255); // todo: make it 256
+            self.length.set_to_max()
         }
 
         self.timer.period = (2048 - self.frequency) as usize * 2;
@@ -195,7 +195,7 @@ impl WaveChannel {
         self.length.set_value(byte);
     }
 
-    pub fn read_length_value(&self) -> u8 {
+    pub fn read_length_value(&self) -> u16 {
         self.length.get_value()
     }
 
@@ -253,10 +253,10 @@ mod tests {
         assert_eq!(channel.length.get_value(), 0);
 
         channel.write_length_value(0b1110_0111);
-        assert_eq!(channel.length.get_value(), 0b1110_0111);
+        assert_eq!(channel.length.get_value(), 256 - 0b1110_0111);
 
         channel.length.set_value(0b1111_1011);
-        assert_eq!(channel.read_length_value(), 0b1111_1011);
+        assert_eq!(channel.read_length_value(), 256 - 0b1111_1011);
     }
 
     #[test]

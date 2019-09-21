@@ -1,4 +1,4 @@
-use sound::length::Length;
+use sound::length::{Length, MaxLength};
 use sound::envelope::Envelope;
 use sound::{Sample, Timer};
 
@@ -18,7 +18,7 @@ pub struct NoiseChannel {
 impl NoiseChannel {
     pub fn new() -> Self {
         NoiseChannel {
-            length: Length::new(),
+            length: Length::new(MaxLength::NotWave),
             envelope: Envelope::new(),
 
             timer: Timer::new(0),
@@ -88,7 +88,7 @@ impl NoiseChannel {
         self.running = true;
 
         if self.length.get_value() == 0 {
-            self.length.set_value(64);
+            self.length.set_to_max();
         }
 
         self.timer.period = ((self.get_divisor() as u16) << (self.clock_shift as u16)) as usize;
@@ -147,10 +147,6 @@ impl NoiseChannel {
 
     pub fn write_length_value(&mut self, byte: u8) {
         self.length.set_value(byte);
-    }
-
-    pub fn read_length_value(&self) -> u8 {
-        self.length.get_value()
     }
 
     pub fn write_register_4(&mut self, byte: u8) {

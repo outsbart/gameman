@@ -15,7 +15,7 @@ use sound::noise::NoiseChannel;
 const WAVE_TABLE_START: u16 = 0xFF30;
 pub const SAMPLE_RATE: usize = 48_000;
 const DUTY_PATTERNS_LENGTH: u8 = 8;
-pub const AUDIO_BUFFER_SIZE: usize = 512;
+pub const AUDIO_BUFFER_SIZE: usize = 1024;
 
 pub type Sample = u8;
 
@@ -248,7 +248,7 @@ impl Sound {
             self.audio_available = true;
 
             for i in 0..AUDIO_BUFFER_SIZE {
-                self.buffer_2[i] = self.buffer[i] as i16;
+                self.buffer_2[i] = self.buffer[i] as i16 * 5;
             }
 
             self.buffer_index = 0;

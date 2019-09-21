@@ -1,6 +1,7 @@
 use sound::{Length, Timer, Sample, DUTY_PATTERNS_LENGTH};
 use sound::envelope::Envelope;
 use cpu::is_bit_set;
+use sound::length::MaxLength;
 
 pub struct SquareChannel {
     pub sweep: Sweep,
@@ -27,7 +28,7 @@ impl SquareChannel {
         SquareChannel {
             sweep: Sweep::new(),
             envelope: Envelope::new(),  // holds the volume
-            length: Length::new(),
+            length: Length::new(MaxLength::NotWave),
             duty_timer: Timer::new(0),
 
             duty_index: 0,
@@ -150,7 +151,7 @@ impl SquareChannel {
         self.duty_index = 0;
 
         if self.length.get_value() == 0 {
-            self.length.set_value(64);
+            self.length.set_to_max();
         }
 
         self.duty_timer.period = ((2048 - self.frequency) * 4) as usize;
@@ -338,7 +339,7 @@ mod tests {
         assert_eq!(channel.read_register_1(), 0b11_1111);
 
         channel.write_register_1(0b1000_1111);
-        assert_eq!(channel.length.get_value(), 0b1111);
+        assert_eq!(channel.length.get_value(), 64 - 0b1111);
         assert_eq!(channel.duty, 0b10);
 
         channel.length.set_value(0b1110);
