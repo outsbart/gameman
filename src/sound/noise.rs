@@ -92,10 +92,6 @@ impl NoiseChannel {
     pub fn trigger(&mut self) {
         self.running = true;
 
-        if self.length.get_value() == 0 {
-            self.length.set_to_max();
-        }
-
         self.timer.period = ((self.get_divisor() as u16) << (self.clock_shift as u16)) as usize;
         self.timer.restart();
 
@@ -155,13 +151,15 @@ impl NoiseChannel {
     }
 
     pub fn write_register_4(&mut self, byte: u8) {
-        // enabling the length in some cases makes the length timer go down, which might reach zero
-        if self.length.set_enable(byte & 0b0100_0000 != 0) {
-            self.running = false;
+        let trigger = byte & 0b1000_0000 != 0;
+
+        if trigger {
+            self.trigger()
         }
 
-        if byte & 0b1000_0000 != 0 {
-            self.trigger()
+        // enabling the length in some cases makes the length timer go down, which might reach zero
+        if self.length.set_enable(byte & 0b0100_0000 != 0, trigger) {
+            self.running = false;
         }
     }
 

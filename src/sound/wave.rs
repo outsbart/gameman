@@ -145,10 +145,6 @@ impl WaveChannel {
         // Wave channel's position is set to 0 but sample buffer is NOT refilled
         self.position = 0;
 
-        if self.length.get_value() == 0 {
-            self.length.set_to_max();
-        }
-
         self.timer.period = (2048 - self.frequency) as usize * 2;
         self.timer.restart();
 
@@ -214,16 +210,18 @@ impl WaveChannel {
     }
 
     pub fn write_register_4(&mut self, byte: u8) {
-        // enabling the length in some cases makes the length timer go down, which might reach zero
-        if self.length.set_enable(byte & 0b0100_0000 != 0) {
-            self.running = false;
-        }
-
         // set frequency most significative bits
         self.set_frequency_msb(byte);
 
-        if byte & 0b1000_0000 != 0 {
-            self.trigger();
+        let trigger = byte & 0b1000_0000 != 0;
+
+        if trigger {
+            self.trigger()
+        }
+
+        // enabling the length in some cases makes the length timer go down, which might reach zero
+        if self.length.set_enable(byte & 0b0100_0000 != 0, trigger) {
+            self.running = false;
         }
     }
 

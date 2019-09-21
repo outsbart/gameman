@@ -18,10 +18,10 @@ impl Into<u16> for MaxLength {
 // used to shut off a channel after a period of time
 pub struct Length {
     max_length: MaxLength, // the max value that the length can have
-    timer: u16,  // decreases every tick and returns true when it reaches 0
-    enable: bool,  // if false, the timer isn't decreased
+    timer: u16, // decreases every tick and returns true when it reaches 0
+    enable: bool, // if false, the timer isn't clocking
 
-    // we are keeping track if we are in the first half of the length clock period or not
+    // keep track if we are in the first half of the length clock period or not
     half_period_passed: bool,
 }
 
@@ -43,12 +43,14 @@ impl Length {
             return false;
         }
 
-        self.drecrease_timer()
+        self.decrease_timer()
     }
 
-    fn drecrease_timer(&mut self) -> bool {
+    // if true is returned, channel must be disabled
+    fn decrease_timer(&mut self) -> bool {
+        // if frozen
         if self.timer == 0 {
-            return true;
+            return false;
         }
 
         self.timer = self.timer.wrapping_sub(1);
@@ -83,20 +85,34 @@ impl Length {
         self.timer
     }
 
-    pub fn set_to_max(&mut self) {
-        self.timer = self.max_length as u16;
-        println!("set_to_max {}", self.timer);
+    // returns true if succesfully unfrozen
+    fn unfreeze_if_frozen(&mut self) -> bool {
+       // if frozen
+        if self.get_value() == 0 {
+            self.timer = self.max_length as u16;
+            return true;
+        }
+        false
     }
 
     // returns true if channel should be disabled
-    pub fn set_enable(&mut self, byte: bool) -> bool {
+    pub fn set_enable(&mut self, byte: bool, trigger: bool) -> bool {
         let was_enabled_already = self.enable;
+        let mut unfrozen = false;
 
         self.enable = byte;
 
+        if trigger {
+            unfrozen = self.unfreeze_if_frozen();
+        }
+
+        if !self.enabled() {
+            return false;
+        }
+
         // enabling in first half of length period, timer should decrease if it's not already 0
-        if self.enabled() && !was_enabled_already && !self.half_period_passed && self.timer != 0 {
-            return self.drecrease_timer();
+        if (!was_enabled_already || unfrozen) && !self.half_period_passed && self.timer != 0 {
+            return self.decrease_timer();
         }
 
         false

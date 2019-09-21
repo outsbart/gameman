@@ -155,10 +155,6 @@ impl SquareChannel {
         self.running = true;
         self.duty_index = 0;
 
-        if self.length.get_value() == 0 {
-            self.length.set_to_max();
-        }
-
         self.duty_timer.period = ((2048 - self.frequency) * 4) as usize;
         self.duty_timer.restart();
 
@@ -227,15 +223,17 @@ impl SquareChannel {
     }
 
     pub fn write_register_4(&mut self, byte: u8) {
-        // enabling the length in some cases makes the length timer go down, which might reach zero
-        if self.length.set_enable(byte & 0b0100_0000 != 0) {
-            self.running = false;
-        }
-
         self.set_frequency_msb(byte);
 
-        if byte & 0b1000_0000 != 0 {
+        let trigger = byte & 0b1000_0000 != 0;
+
+        if trigger {
             self.trigger()
+        }
+
+        // enabling the length in some cases makes the length timer go down, which might reach zero
+        if self.length.set_enable(byte & 0b0100_0000 != 0, trigger) {
+            self.running = false;
         }
     }
 
