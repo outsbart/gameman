@@ -570,10 +570,10 @@ impl Sound {
     pub fn get_nr52(&self) -> u8 {
         0b0111_0000 |
         (if self.power { 0b1000_0000 } else { 0 }) |
-        (if self.noise.is_running() { 0b_1000 } else { 0 }) |
-        (if self.wave.is_running() { 0b_100 } else { 0 }) |
-        (if self.square_2.is_running() { 0b_10 } else { 0 }) |
-        (if self.square_1.is_running() { 1 } else { 0 })
+        (if self.noise.is_length_enabled() { 0b_1000 } else { 0 }) |
+        (if self.wave.is_length_enabled() { 0b_100 } else { 0 }) |
+        (if self.square_2.is_length_enabled() { 0b_10 } else { 0 }) |
+        (if self.square_1.is_length_enabled() { 1 } else { 0 })
     }
 
     // called when power is set to off, through register nr52

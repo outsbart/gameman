@@ -89,6 +89,10 @@ impl NoiseChannel {
         self.running
     }
 
+    pub fn is_length_enabled(&self) -> bool {
+        self.length.enabled()
+    }
+
     pub fn trigger(&mut self) {
         self.running = true;
 

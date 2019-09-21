@@ -17,7 +17,7 @@ pub struct SquareChannel {
     //  2 — 10000111 (50.0%)
     //  3 — 01111110 (75.0%)
     duty: u8,
-    frequency: u16,
+    frequency: u16,  // it's 11 bits
 
     running: bool,
 }
@@ -135,6 +135,10 @@ impl SquareChannel {
 
     pub fn is_running(&self) -> bool {
         self.running
+    }
+
+    pub fn is_length_enabled(&self) -> bool {
+        self.length.enabled()
     }
 
     pub fn sample(&mut self) -> Sample {
@@ -305,7 +309,7 @@ impl Sweep {
             self.shadow_frequency.wrapping_sub(shifted)
         };
 
-        (result, result > 2047)
+        (result & 0b111_1111_1111, (result & 0b1111_1000_0000_0000) != 0)
     }
 
     pub fn set_shadow_frequency(&mut self, freq: u16) {
