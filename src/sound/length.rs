@@ -83,11 +83,13 @@ impl Length {
     }
 
     pub fn set_enable(&mut self, byte: bool) {
+        let was_enabled_already = self.enable;
+
         self.enable = byte;
 
         // enabling in first half of length period, timer should decrease
         // dont ask me why
-        if self.enabled() && !self.half_period_passed {
+        if self.enabled() && !was_enabled_already && !self.half_period_passed {
             self.drecrease_timer();
         }
     }
