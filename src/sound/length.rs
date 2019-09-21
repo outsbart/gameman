@@ -35,6 +35,7 @@ impl Length {
         }
     }
 
+    // if true is returned, channel must be disabled
     pub fn tick(&mut self) -> bool {
         self.half_period_passed = false;
 
@@ -46,6 +47,10 @@ impl Length {
     }
 
     fn drecrease_timer(&mut self) -> bool {
+        if self.timer == 0 {
+            return true;
+        }
+
         self.timer = self.timer.wrapping_sub(1);
 
         // if timer has run out
@@ -80,6 +85,7 @@ impl Length {
 
     pub fn set_to_max(&mut self) {
         self.timer = self.max_length as u16;
+        println!("set_to_max {}", self.timer);
     }
 
     // returns true if channel should be disabled
