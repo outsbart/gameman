@@ -18,8 +18,8 @@ impl Into<u16> for MaxLength {
 // used to shut off a channel after a period of time
 pub struct Length {
     max_length: MaxLength, // the max value that the length can have
-    timer: u16, // decreases every tick and returns true when it reaches 0
-    enable: bool, // if false, the timer isn't clocking
+    enable: bool,          // is length enabled? if not, clocking won't affect length
+    timer: u16,            // decreases every tick if enable = true
 
     // keep track if we are in the first half of the length clock period or not
     half_period_passed: bool,
@@ -46,20 +46,18 @@ impl Length {
         self.decrease_timer()
     }
 
-    // if true is returned, channel must be disabled
+    // returns true if length freezes (aka timer becomes zero)
+    // and therefore channel must be disabled
     fn decrease_timer(&mut self) -> bool {
+        // if already frozen, do nothing
         if self.frozen() {
             return false;
         }
 
+        // clock
         self.timer = self.timer.wrapping_sub(1);
 
-        // if timer has run out
-        if self.timer == 0 {
-            return true;
-        }
-
-        false
+        self.frozen()
     }
 
     pub fn set_value(&mut self, value: u8) {
@@ -97,22 +95,24 @@ impl Length {
         false
     }
 
-    // returns true if channel should be disabled
+    // returns true if length freezes (aka timer becomes zero)
+    // and therefore channel must be disabled
     pub fn set_enable(&mut self, byte: bool, trigger: bool) -> bool {
         let was_disabled = !self.enable;
-        let was_frozen = trigger && self.trigger();
 
         self.enable = byte;
 
-        if !self.enabled() || self.half_period_passed || self.frozen() {
-            return false;
+        if was_disabled && self.enabled() && !self.half_period_passed {
+            self.decrease_timer();
         }
 
-        if was_disabled || was_frozen {
-            return self.decrease_timer();
+        let was_frozen = trigger && self.trigger();
+
+        if was_frozen && self.enabled() && !self.half_period_passed {
+            self.decrease_timer();
         }
 
-        false
+        self.frozen()
     }
 
     pub fn enabled(&self) -> bool {
