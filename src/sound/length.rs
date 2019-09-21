@@ -88,9 +88,8 @@ impl Length {
 
         self.enable = byte;
 
-        // enabling in first half of length period, timer should decrease
-        // dont ask me why
-        if self.enabled() && !was_enabled_already && !self.half_period_passed {
+        // enabling in first half of length period, timer should decrease if it's not already 0
+        if self.enabled() && !was_enabled_already && !self.half_period_passed && self.timer != 0 {
             return self.drecrease_timer();
         }
 
