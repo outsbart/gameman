@@ -71,9 +71,14 @@ impl NoiseChannel {
 
     pub fn tick_length(&mut self) {
         // if length runs out, turn off this channel
-        if self.length.enabled() && self.length.tick(){
+        // doesnt tick if it's not enabled
+        if self.length.tick() {
             self.running = false;
         }
+    }
+
+    pub fn half_tick_length(&mut self) {
+        self.length.half_tick();
     }
 
     pub fn tick_envelope(&mut self) {

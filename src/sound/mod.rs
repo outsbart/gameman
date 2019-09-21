@@ -189,6 +189,11 @@ impl Sound {
                     self.square_2.tick_length();
                     self.wave.tick_length();
                     self.noise.tick_length();
+                } else {
+                    self.square_1.half_tick_length();
+                    self.square_2.half_tick_length();
+                    self.wave.half_tick_length();
+                    self.noise.half_tick_length();
                 }
 
                 // at step 7, tick the channel envelopes
