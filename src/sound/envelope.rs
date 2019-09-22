@@ -1,44 +1,14 @@
-use sound::{Sample};
+use sound::{Sample, TimerDefaultPeriod};
 
 const VOLUME_MAX: Sample = 0xF;
 const VOLUME_MIN: Sample = 0;
 
 
-#[derive(Clone,Copy)]
-pub struct EnvelopeTimer {
-    pub period: usize, // initial and max value of curr
-    curr: usize,       // goes down by 1 every tick and wraps back to period
-}
-
-impl EnvelopeTimer {
-    pub fn new() -> Self {
-        EnvelopeTimer {
-            period: 0,
-            curr: 0,
-        }
-    }
-
-    pub fn tick(&mut self) -> bool {
-        self.curr -= 1;
-
-        if self.curr == 0 {
-            self.restart();
-            return true;
-        }
-
-        return false;
-    }
-
-    pub fn restart(&mut self) {
-        self.curr = if self.period != 0 { self.period } else { 8 }
-    }
-}
-
 
 // every tick, increases or decreases volume
 #[derive(Clone,Copy)]
 pub struct Envelope {
-    timer: EnvelopeTimer,
+    timer: TimerDefaultPeriod,
     pub add_mode: bool,
     volume: u8,
     pub volume_initial: u8,
@@ -48,7 +18,7 @@ pub struct Envelope {
 impl Envelope {
     pub fn new() -> Self {
         Envelope {
-            timer: EnvelopeTimer::new(),
+            timer: TimerDefaultPeriod::new(),
             add_mode: false,
             volume: 0,
             volume_initial: 0,

@@ -1,5 +1,6 @@
 use sound::{Length, Timer, Sample, DUTY_PATTERNS_LENGTH};
 use sound::envelope::Envelope;
+use sound::sweep::Sweep;
 use cpu::is_bit_set;
 use sound::length::MaxLength;
 
@@ -89,12 +90,10 @@ impl SquareChannel {
         // turns off the channel on overflow
         let (new_freq, overflow) = self.calculate_sweep();
 
-        if overflow || self.sweep.shift == 0 {
-            return
+        if !overflow && self.sweep.shift != 0 {
+            self.sweep.set_shadow_frequency(new_freq);
+            self.frequency = new_freq;
         }
-
-        self.sweep.set_shadow_frequency(new_freq);
-        self.frequency = new_freq;
 
         // run the freq calculation and overflows check again
         // but this time dont update the freq, just disable the channel on overflow
@@ -137,10 +136,6 @@ impl SquareChannel {
         self.running
     }
 
-    pub fn is_length_enabled(&self) -> bool {
-        self.length.enabled()
-    }
-
     pub fn sample(&mut self) -> Sample {
         if !self.is_running() {
             return 0;
@@ -166,6 +161,7 @@ impl SquareChannel {
         self.envelope.trigger();
 
         // trigger the sweep and disable the channel if it overflows
+
         if self.sweep.trigger(self.frequency) {
             self.calculate_sweep();
         }
@@ -248,100 +244,9 @@ impl SquareChannel {
 }
 
 
-pub struct Sweep {
-    shift: u8,
-    rising: bool, // true if should be increasing, false if decreasing
-    pub timer: Timer,
-    shadow_frequency: u16,
-    enabled: bool,
-}
-
-impl Sweep {
-    pub fn new() -> Self {
-        Sweep {
-            shift: 0,
-            rising: false,
-            timer: Timer::new(0),
-            shadow_frequency: 0,
-            enabled: false,
-        }
-    }
-
-    pub fn write(&mut self, value: u8) {
-        self.shift = value & 0b0000_0111;
-        self.rising = value & 0b1000 != 0;
-        self.timer.period = ((value & 0b0111_0000) >> 4) as usize;
-    }
-
-    pub fn read(&self) -> u8 {
-        0b1000_0000 |
-        ((self.timer.period as u8) << 4) |
-        (if self.rising {0b1000} else {0}) |
-        self.shift
-    }
-
-    // return true if frequency calculations should be performed immediately
-    pub fn trigger(&mut self, freq: u16) -> bool {
-        // During a trigger event, several things occur:
-        // - The internal enabled flag is set if either the sweep period or shift
-        //   are non-zero, cleared otherwise.
-        // - If the sweep shift is non-zero, frequency calculation and the overflow
-        //   check are performed immediately.
-
-        // - Square 1's frequency is copied to the shadow register.
-        self.shadow_frequency = freq;
-
-        // - The sweep timer is reloaded.
-        self.timer.restart();
-
-        self.enabled = (self.timer.period > 0) || (self.shift > 0);
-
-        self.shift > 0
-    }
-
-    // calculates the sweep, returns the new freq value and whether there was an overflow
-    pub fn calculate(&mut self) -> (u16, bool) {
-        let shifted = self.shadow_frequency >> self.shift as u16;
-
-        let result = if self.rising {
-            self.shadow_frequency.wrapping_add(shifted)
-        } else {
-            self.shadow_frequency.wrapping_sub(shifted)
-        };
-
-        (result & 0b111_1111_1111, (result & 0b1111_1000_0000_0000) != 0)
-    }
-
-    pub fn set_shadow_frequency(&mut self, freq: u16) {
-        self.shadow_frequency = freq;
-    }
-
-    pub fn enabled(&self) -> bool {
-        self.enabled
-    }
-}
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_sweep_read_write() {
-        let mut sweep: Sweep = Sweep::new();
-        assert_eq!(sweep.read(), 0b1000_0000);
-
-        sweep.write(0b0010_1011);
-        assert_eq!(sweep.shift, 0b011);
-        assert_eq!(sweep.rising, true);
-        assert_eq!(sweep.timer.period, 0b010);
-
-        sweep.shift = 0b010;
-        sweep.rising = false;
-        sweep.timer.period = 0b100;
-
-        assert_eq!(sweep.read(), 0b1100_0010);
-    }
 
     #[test]
     fn test_square_register_1() {
