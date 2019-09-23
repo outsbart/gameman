@@ -116,6 +116,15 @@ impl NoiseChannel {
         }
     }
 
+    pub fn reset(&mut self) {
+        self.running = false;
+        self.timer = Timer::new(0);
+        self.lfsr = 0;
+
+        // only on DMG
+        self.length = Length::new(MaxLength::NotWave);
+    }
+
     pub fn dac_enabled(&self) -> bool {
         // DAC power is controlled by the upper 5 bits of NRx2 (top bit of NR30 for
         // wave channel). If these bits are not all clear, the DAC is on, otherwise

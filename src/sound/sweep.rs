@@ -24,7 +24,6 @@ impl Sweep {
     }
 
     // returns true if channel should be disabled
-    // it happens when exiting negate mode after calculation
     pub fn write(&mut self, value: u8) -> bool {
         self.shift = value & 0b0000_0111;
         self.negate = value & 0b1000 != 0;
@@ -35,7 +34,7 @@ impl Sweep {
         // causes the channel to be immediately disabled. This prevents you from
         // having the sweep lower the frequency then raise the frequency without a
         // trigger inbetween.
-        self.enabled && self.negate_mode_used && !self.negate
+        self.enabled() && self.negate_mode_used && !self.negate
     }
 
     pub fn read(&self) -> u8 {

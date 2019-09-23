@@ -558,11 +558,18 @@ impl Sound {
 
     // NR52 FF26 P--- NW21 Power control/status, Channel length statuses
     pub fn set_nr52(&mut self, byte: u8) {
-        self.power = byte & 0b1000_0000 != 0;
+        let old_power = self.power;
+        let new_power = byte & 0b1000_0000 != 0;
 
-        if !self.power {
-            self.reset();
+        // power didn't change
+        if new_power == old_power {
+            return;
         }
+
+        self.frame_sequencer.step = 0;
+        self.reset();
+        self.power = new_power;
+
     }
 
     pub fn get_nr52(&self) -> u8 {
@@ -576,27 +583,42 @@ impl Sound {
 
     // called when power is set to off, through register nr52
     pub fn reset(&mut self) {
-        self.power = false;
+        self.buffer = [0; AUDIO_BUFFER_SIZE];
+        self.buffer_2 = [0; AUDIO_BUFFER_SIZE];
         self.buffer_index = 0;
-        self.frame_sequencer.reset();
-        self.sample_timer.restart();
+        self.audio_available = false;
 
-        // nr 50
-        self.vin_l_enable = false;
-        self.vin_r_enable = false;
-        self.left_volume = 0;
-        self.right_volume = 0;
+        self.set_nr10(0);
+        self.set_nr11(0);
+        self.set_nr12(0);
+        self.set_nr13(0);
+        self.set_nr14(0);
 
-        // nr51
-        self.left_enables.write(0);
-        self.right_enables.write(0);
+        self.set_nr21(0);
+        self.set_nr22(0);
+        self.set_nr23(0);
+        self.set_nr24(0);
 
-        // all the others
-        self.square_1 = SquareChannel::new();
-        self.square_2 = SquareChannel::new();
+        self.set_nr30(0);
+        self.set_nr31(0);
+        self.set_nr32(0);
+        self.set_nr33(0);
+        self.set_nr34(0);
 
-        self.wave.reset();  // wave table/ram must be left unchanged
-        self.noise = NoiseChannel::new();
+        self.set_nr41(0);
+        self.set_nr42(0);
+        self.set_nr43(0);
+        self.set_nr44(0);
+
+        self.set_nr50(0);
+        self.set_nr51(0);
+
+        // reset channels
+        self.square_1.reset();
+        self.square_2.reset();
+
+        self.wave.reset();
+        self.noise.reset();
     }
 }
 

@@ -84,13 +84,13 @@ impl WaveChannel {
     }
 
     pub fn reset(&mut self) {
-        self.dac_power = false;
-        self.frequency = 0;
-        self.length = Length::new(MaxLength::Wave);
-        self.volume = Volume::Silent;
+        // wave table/ram must be left unchanged
         self.position = 0;
         self.timer = Timer::new(0);
         self.running = false;
+
+        // only on DMG
+        self.length = Length::new(MaxLength::Wave);
     }
 
     pub fn tick(&mut self) {

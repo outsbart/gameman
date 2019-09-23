@@ -43,6 +43,7 @@ impl SquareChannel {
             // - length counter reaches 0 and length is enabled
             // - sweep overflows
             // - dac is disabled
+            // - reset
             running: false,
         }
     }
@@ -148,6 +149,15 @@ impl SquareChannel {
         }
 
         0
+    }
+
+    pub fn reset(&mut self) {
+        self.running = false;
+        self.duty_timer = Timer::new(0);
+        self.duty_index = 0;
+
+        // only on DMG
+        self.length = Length::new(MaxLength::NotWave);
     }
 
     pub fn write_sweep(&mut self, byte: u8) {
