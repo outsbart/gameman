@@ -42,7 +42,7 @@ impl Envelope {
 
     pub fn write(&mut self, byte: u8) {
         self.timer.period = (byte & 0b111) as usize;
-        self.timer.restart();
+        self.timer.restart();  // todo: make sure this is necessary
 
         self.add_mode = byte & 0b1000 != 0;
         self.volume_initial = byte >> 4;

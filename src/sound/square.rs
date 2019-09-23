@@ -5,7 +5,7 @@ use cpu::is_bit_set;
 use sound::length::MaxLength;
 
 pub struct SquareChannel {
-    pub sweep: Sweep,
+    sweep: Sweep,
     pub envelope: Envelope,
     pub length: Length,
     pub duty_timer: Timer,  // it resets when it runs out, and the position in the duty pattern moves forward
@@ -49,7 +49,7 @@ impl SquareChannel {
 
     pub fn tick_length(&mut self) {
         // if length runs out, turn off this channel
-        // doesnt tick if it's not enabled
+        // internally, doesnt tick if it's not enabled
         if self.length.tick() {
             self.running = false;
         }
@@ -150,6 +150,16 @@ impl SquareChannel {
         0
     }
 
+    pub fn write_sweep(&mut self, byte: u8) {
+        if self.sweep.write(byte) {
+            self.running = false;
+        }
+    }
+
+    pub fn read_sweep(&self) -> u8 {
+        self.sweep.read()
+    }
+
     pub fn trigger(&mut self) {
         self.running = true;
         self.duty_index = 0;
@@ -161,7 +171,6 @@ impl SquareChannel {
         self.envelope.trigger();
 
         // trigger the sweep and disable the channel if it overflows
-
         if self.sweep.trigger(self.frequency) {
             self.calculate_sweep();
         }

@@ -276,12 +276,11 @@ impl Sound {
         if !self.power {
             return
         }
-
-        self.square_1.sweep.write(value);
+        self.square_1.write_sweep(value);
     }
 
     pub fn get_nr10(&self) -> u8 {
-        self.square_1.sweep.read()
+        self.square_1.read_sweep()
     }
 
     // Square channel 1 duty and length load
@@ -319,7 +318,6 @@ impl Sound {
         if !self.power {
             return
         }
-
         self.square_1.set_frequency_lsb(value);
     }
 
@@ -332,7 +330,6 @@ impl Sound {
         if !self.power {
             return
         }
-
         self.square_1.write_register_4(value);
     }
 
@@ -636,8 +633,8 @@ impl FrameSequencer {
 #[derive(Clone,Copy)]
 // a timer with a default period of 8
 pub struct TimerDefaultPeriod {
-    pub period: usize, // initial and max value of curr
-    curr: usize,       // goes down by 1 every tick and wraps back to period
+    period: usize, // initial and max value of curr
+    curr: usize,   // goes down by 1 every tick and wraps back to period
 }
 
 impl TimerDefaultPeriod {
@@ -659,8 +656,16 @@ impl TimerDefaultPeriod {
         return false;
     }
 
+    pub fn get_period(&self) -> usize {
+        if self.period != 0 { self.period } else { 8 }
+    }
+
+    pub fn set_period(&mut self, period: usize) {
+        self.period = period;
+    }
+
     pub fn restart(&mut self) {
-        self.curr = if self.period != 0 { self.period } else { 8 }
+        self.curr = self.get_period()
     }
 }
 

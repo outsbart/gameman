@@ -89,6 +89,8 @@ impl WaveChannel {
         self.length = Length::new(MaxLength::Wave);
         self.volume = Volume::Silent;
         self.position = 0;
+        self.timer = Timer::new(0);
+        self.running = false;
     }
 
     pub fn tick(&mut self) {
