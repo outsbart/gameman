@@ -120,9 +120,6 @@ impl NoiseChannel {
         self.running = false;
         self.timer = Timer::new(0);
         self.lfsr = 0;
-
-        // only on DMG
-        self.length = Length::new(MaxLength::NotWave);
     }
 
     pub fn dac_enabled(&self) -> bool {
@@ -191,7 +188,7 @@ mod tests {
         channel.write_register_4(0b1000_1110);
         assert_eq!(channel.length.enabled(), false);
 
-        channel.length.set_enable(true);
+        channel.length.set_enable(true, false);
 
         assert_eq!(channel.read_register_4(), 0xFF);
     }

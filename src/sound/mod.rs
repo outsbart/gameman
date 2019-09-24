@@ -467,10 +467,7 @@ impl Sound {
     // Noise channel length load
     // NR41 FF20 --LL LLLL Length load (64-L)
     pub fn set_nr41(&mut self, value: u8) {
-        if !self.power {
-            return
-        }
-
+        // Oddity: While powered off, writes to NR41 are NOT ignored
         self.noise.write_length_value(value);
     }
 
@@ -605,7 +602,7 @@ impl Sound {
         self.set_nr33(0);
         self.set_nr34(0);
 
-        self.set_nr41(0);
+        // powering off shouldn't affect NR41
         self.set_nr42(0);
         self.set_nr43(0);
         self.set_nr44(0);

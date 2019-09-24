@@ -155,9 +155,6 @@ impl SquareChannel {
         self.running = false;
         self.duty_timer = Timer::new(0);
         self.duty_index = 0;
-
-        // only on DMG
-        self.length = Length::new(MaxLength::NotWave);
     }
 
     pub fn write_sweep(&mut self, byte: u8) {
@@ -293,7 +290,7 @@ mod tests {
         assert_eq!(channel.length.enabled(), false);
         assert_eq!(channel.frequency, 0b110_0000_0000);
 
-        channel.length.set_enable(true);
+        channel.length.set_enable(true, false);
         channel.frequency = 0b001_0000_0000;
 
         assert_eq!(channel.read_register_4(), 0xFF);
