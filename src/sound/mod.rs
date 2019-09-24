@@ -104,7 +104,7 @@ impl Memory for Sound {
             0x24 => self.set_nr50(byte),
             0x25 => self.set_nr51(byte),
             0x26 => self.set_nr52(byte),
-            0x30...0x3f => {
+            0x30...0x3F => {
                 self.wave.write_ram_sample((addr - WAVE_TABLE_START) as u8, byte);
             },
             _ => (),
@@ -286,11 +286,12 @@ impl Sound {
     // Square channel 1 duty and length load
     // NR11 FF11 DDLL LLLL Duty, Length load (64-L)
     pub fn set_nr11(&mut self, value: u8) {
-        if !self.power {
-            return
+        // on the DMG length counters are unaffected by power
+        // and can still be written while power off
+        if self.power {
+            self.square_1.write_register_1(value);
         }
-
-        self.square_1.write_register_1(value);
+        self.square_1.length.set_value(value & 0b0011_1111);
     }
 
     pub fn get_nr11(&self) -> u8 {
@@ -340,11 +341,12 @@ impl Sound {
     // Square channel 2 duty and length load
     // NR21 FF16 DDLL LLLL Duty, Length load (64-L)
     pub fn set_nr21(&mut self, value: u8) {
-        if !self.power {
-            return
+        // on the DMG length counters are unaffected by power
+        // and can still be written while power off
+        if self.power {
+            self.square_2.write_register_1(value);
         }
-
-        self.square_2.write_register_1(value);
+        self.square_2.length.set_value(value & 0b0011_1111);
     }
 
     pub fn get_nr21(&self) -> u8 {
@@ -412,10 +414,8 @@ impl Sound {
     // Wave channel length load
     // NR31 FF1B LLLL LLLL Length load (256-L)
     pub fn set_nr31(&mut self, value: u8) {
-        if !self.power {
-            return
-        }
-
+        // on the DMG length counters are unaffected by power
+        // and can still be written while power off
         self.wave.write_length_value(value)
     }
 
@@ -563,8 +563,24 @@ impl Sound {
             return;
         }
 
-        self.frame_sequencer.step = 0;
-        self.reset();
+        if new_power {
+            // When powered on, the frame sequencer is reset so that the
+            // next step will be 0, the square duty units are reset to the first step
+            // of the waveform, and the wave channel's sample buffer is reset to 0.
+            self.frame_sequencer.step = 7;
+            self.square_1.duty_index = 0;
+            self.square_2.duty_index = 0;
+            self.wave.position = 0; // todo: use a buffer for the sample
+        }
+        else {
+            // When powered off, all
+            // registers (NR10-NR51) are instantly written with zero and any writes to
+            // those registers are ignored while power remains off (except on the DMG,
+            // where length counters are unaffected by power and can still be written
+            // while off)
+            self.reset();
+        }
+
         self.power = new_power;
 
     }

@@ -9,7 +9,7 @@ pub struct WaveChannel {
     length: Length,
     timer: Timer,
 
-    position: u8,
+    pub position: u8,
     samples: [Sample; WAVE_RAM_SAMPLES as usize / 2],
     volume: Volume,
 

@@ -10,7 +10,7 @@ pub struct SquareChannel {
     pub length: Length,
     pub duty_timer: Timer,  // it resets when it runs out, and the position in the duty pattern moves forward
 
-    duty_index: usize,  // in which position in the duty cycle we are. From 0 to 7
+    pub duty_index: usize,  // in which position in the duty cycle we are. From 0 to 7
 
     // Duty Pattern
     //  0 — 00000001 (12.5%)
@@ -230,7 +230,6 @@ impl SquareChannel {
     }
 
     pub fn write_register_1(&mut self, byte: u8) {
-        self.length.set_value(byte & 0b0011_1111);
         self.duty = (byte & 0b1100_0000) >> 6;
     }
 
