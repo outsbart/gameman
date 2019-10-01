@@ -9,6 +9,8 @@ pub struct WaveChannel {
     length: Length,
     timer: Timer,
 
+    wave_ram_accessible: bool,  // can be accessed from outside only when accessed internally recently
+    pub buffer: u8,
     pub position: u8,
     samples: [Sample; WAVE_RAM_SAMPLES as usize / 2],
     volume: Volume,
@@ -75,6 +77,8 @@ impl WaveChannel {
             length: Length::new(MaxLength::Wave),
             timer: Timer::new(0),
 
+            wave_ram_accessible: false,
+            buffer: 0,
             position: 0,
             samples: [0x84, 0x40, 0x43, 0xAA, 0x2D, 0x78, 0x92, 0x3C, 0x60, 0x59, 0x59, 0xB0, 0x34, 0xB8, 0x2E, 0xDA],
             volume: Volume::Silent,
@@ -88,6 +92,8 @@ impl WaveChannel {
         self.position = 0;
         self.timer = Timer::new(0);
         self.running = false;
+        self.wave_ram_accessible = false;
+
     }
 
     pub fn tick(&mut self) {
@@ -95,21 +101,24 @@ impl WaveChannel {
         if self.timer.tick() {
             self.position = self.position.wrapping_add(1) % WAVE_RAM_SAMPLES;
 
+            self.buffer = self.samples[self.position as usize / 2];
+            self.wave_ram_accessible = true;
+
             // reload the timer
             self.timer.period = (2048 - self.frequency) as usize * 2;
             self.timer.restart();
+        } else {
+            self.wave_ram_accessible = false;
         }
     }
 
     pub fn sample(&mut self) -> Sample {
         if !self.running || !self.dac_power { return 0 }
 
-        let sample_byte = self.read_ram_sample(self.position / 2);
-
         // take first nibble if even, second if odd
         let sample = match self.position % 2 {
-            0 => { sample_byte >> 4 }
-            _ => { sample_byte & 0xF }
+            0 => { self.buffer >> 4 }
+            _ => { self.buffer & 0xF }
         };
 
         self.volume.apply_to(sample)
@@ -139,25 +148,46 @@ impl WaveChannel {
     }
 
     pub fn trigger(&mut self) {
+        let was_enabled = self.running;
+
         self.running = true;
 
         // Wave channel's position is set to 0 but sample buffer is NOT refilled
         self.position = 0;
 
-        self.timer.period = (2048 - self.frequency) as usize * 2;
+        self.timer.period = (2048 - self.frequency) as usize * 2 + 6;
         self.timer.restart();
 
         if !self.dac_enabled() {
             self.running = false;
+        } else if was_enabled && self.wave_ram_accessible  {  // only on dmg
+            println!("corruption but should occur");
         }
     }
 
     pub fn write_ram_sample(&mut self, pos: u8, value: u8) {
-        self.samples[pos as usize] = value;
+        if !self.running {
+            self.samples[pos as usize] = value;
+            return;
+        }
+        if self.wave_ram_accessible {
+            self.samples[self.position as usize / 2] = value;
+        }
     }
 
     pub fn read_ram_sample(&self, pos: u8) -> Sample {
-        self.samples[pos as usize]
+        // If the wave channel is enabled, accessing any byte from $FF30-$FF3F is
+        // equivalent to accessing the current byte selected by the waveform
+        // position. Further, on the DMG accesses will only work in this manner if
+        // made within a couple of clocks of the wave channel accessing wave RAM;
+        // if made at any other time, reads return $FF and writes have no effect.
+        if !self.running {
+            return self.samples[pos as usize]
+        }
+        if self.wave_ram_accessible {
+            return self.samples[self.position as usize / 2];
+        }
+        0xFF
     }
 
     // sets frequency least significate bits

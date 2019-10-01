@@ -13,10 +13,11 @@ use sound::length::Length;
 use sound::wave::WaveChannel;
 use sound::noise::NoiseChannel;
 
+pub const APU_CLOCK_MULTIPLIER: f32 = 1.0;
 const WAVE_TABLE_START: u16 = 0xFF30;
-pub const SAMPLE_RATE: usize = 48_000;
+pub const SAMPLE_RATE: usize = 24_000;
 const DUTY_PATTERNS_LENGTH: u8 = 8;
-pub const AUDIO_BUFFER_SIZE: usize = 1024;
+pub const AUDIO_BUFFER_SIZE: usize = 512;
 
 pub type Sample = u8;
 
@@ -555,11 +556,10 @@ impl Sound {
 
     // NR52 FF26 P--- NW21 Power control/status, Channel length statuses
     pub fn set_nr52(&mut self, byte: u8) {
-        let old_power = self.power;
         let new_power = byte & 0b1000_0000 != 0;
 
         // power didn't change
-        if new_power == old_power {
+        if new_power == self.power {
             return;
         }
 
@@ -570,7 +570,7 @@ impl Sound {
             self.frame_sequencer.step = 7;
             self.square_1.duty_index = 0;
             self.square_2.duty_index = 0;
-            self.wave.position = 0; // todo: use a buffer for the sample
+            self.wave.buffer = 0;
         }
         else {
             // When powered off, all
@@ -644,6 +644,7 @@ pub struct FrameSequencer {
 impl FrameSequencer {
     pub fn new() -> Self {
         FrameSequencer {
+            // it runs at 512hz, CPU runs at 4194304hz, 4194304/512=8192
             timer: Timer::new(8192),
             step: 0,
         }
