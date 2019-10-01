@@ -1,31 +1,31 @@
 use sound::{Sample, TimerDefaultPeriod};
 use std::ops::{Add, Sub};
 
-const VOLUME_MAX: Sample = 0xF;
-const VOLUME_MIN: Sample = 0;
-
+const VOLUME_MAX: Sample = Sample(0xF);
+const VOLUME_MIN: Sample = Sample(0);
 
 
 // every tick, increases or decreases volume
-#[derive(Clone,Copy)]
+#[derive(Clone, Copy)]
 pub struct Envelope {
     timer: TimerDefaultPeriod,
     pub add_mode: bool,
-    volume: u8,
-    pub volume_initial: u8,
+    volume: Sample,
+    pub volume_initial: Sample,
 }
+
 
 impl Envelope {
     pub fn new() -> Self {
         Envelope {
             timer: TimerDefaultPeriod::new(),
             add_mode: false,
-            volume: 0,
-            volume_initial: 0,
+            volume: Sample(0),
+            volume_initial: Sample(0),
         }
     }
 
-    pub fn get_volume(&self) -> u8 {
+    pub fn get_volume(&self) -> Sample {
         self.volume
     }
 
@@ -41,11 +41,11 @@ impl Envelope {
         self.timer.period = (byte & 0b111) as usize;
 
         self.add_mode = byte & 0b1000 != 0;
-        self.volume_initial = byte >> 4;
+        self.volume_initial = Sample(byte >> 4);
     }
 
     pub fn read(&self) -> u8 {
-        self.timer.period as u8 | (if self.add_mode == true { 0b1000 } else { 0 }) | (self.volume_initial << 4)
+        self.timer.period as u8 | (if self.add_mode == true { 0b1000 } else { 0 }) | (u8::from(self.volume_initial) << 4)
     }
 
     pub fn tick(&mut self) {
@@ -62,9 +62,9 @@ impl Envelope {
             }
 
             // increase or decrease based on add_mode
-            let operation = if self.add_mode { u8::add } else { u8::sub };
+            let operation = if self.add_mode { Sample::add } else { Sample::sub };
 
-            self.volume = operation(self.volume, 1);
+            self.volume = operation(self.volume, Sample(1));
         }
     }
 }

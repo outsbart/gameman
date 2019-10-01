@@ -142,7 +142,7 @@ impl SquareChannel {
     }
 
     pub fn sample(&mut self) -> Sample {
-        if !self.is_running() || !self.dac_enabled() { return 0 }
+        if !self.is_running() || !self.dac_enabled() { return Sample(0) }
 
         let duty_pattern = self.get_duty_pattern();
 
@@ -150,7 +150,7 @@ impl SquareChannel {
             return self.envelope.get_volume();
         }
 
-        0
+        Sample(0)
     }
 
     pub fn reset(&mut self) {

@@ -47,7 +47,6 @@ impl NoiseChannel {
             self.lfsr |= 0b100_0000_0000;
 
             if self.lfsr_width_mode != 0 {
-                // todo: drop bits 15-8 or not? 7-bit LFSR or not?
                 self.lfsr |= 0b100_0000
             }
         }
@@ -57,12 +56,11 @@ impl NoiseChannel {
     }
 
     pub fn sample(&mut self) -> Sample {
-        if !self.is_running() || !self.dac_enabled() { return 0 }
-
+        if !self.is_running() || !self.dac_enabled() { return Sample(0) }
 
         // The waveform output is bit 0 of the LFSR, INVERTED
         if self.lfsr & 1 != 0 {
-            0
+            Sample(0)
         } else {
             self.envelope.get_volume()
         }

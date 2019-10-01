@@ -13,6 +13,7 @@ use sound::length::Length;
 use sound::wave::WaveChannel;
 use sound::noise::NoiseChannel;
 use cpu::CPU_FREQ;
+use std::ops::{Add, Sub, AddAssign};
 
 pub const APU_CLOCK_MULTIPLIER: f32 = 1.0;
 const WAVE_TABLE_START: u16 = 0xFF30;
@@ -20,7 +21,50 @@ pub const SAMPLE_RATE: usize = 44_100;
 const DUTY_PATTERNS_LENGTH: u8 = 8;
 pub const AUDIO_BUFFER_SIZE: usize = 1024;
 
-pub type Sample = u8;
+
+#[derive(Eq, Clone, Copy)]
+pub struct Sample(u8);
+
+impl Add for Sample {
+    type Output = Self;
+
+    fn add(self, b: Sample) -> Self {
+        Sample(self.0 + b.0)
+    }
+}
+
+impl Sub for Sample {
+    type Output = Self;
+
+    fn sub(self, b: Sample) -> Self {
+        Sample(self.0 - b.0)
+    }
+}
+
+impl AddAssign for Sample {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs
+    }
+}
+
+impl PartialEq for Sample {
+    fn eq(&self, b: &Sample) -> bool {
+        self.0 == b.0
+    }
+}
+
+impl From<Sample> for u8 {
+    fn from(sample: Sample) -> Self {
+        sample.0
+    }
+}
+
+// converts the sample from unsigned to signed
+impl From<Sample> for i16 {
+    fn from(sample: Sample) -> Self {
+        16 - (u8::from(sample) as i16 * 2)
+    }
+}
 
 
 pub struct Sound {
@@ -214,7 +258,7 @@ impl Sound {
 
             // fetch the samples!
             if self.sample_timer.tick() {
-                let mut s: Sample = 0;
+                let mut s: Sample = Sample(0);
 
                 if self.power {
                     let s1 = self.square_1.sample();
@@ -227,14 +271,7 @@ impl Sound {
                     if self.left_enables.square_2 { s += s2 }
                     if self.left_enables.wave { s += s3 }
                     if self.left_enables.noise { s += s4 }
-//
-//                    if self.right_enables.square_1 { right += s1 }
-//                    if self.right_enables.square_2 { right += s2 }
-//                    if self.right_enables.wave { right += s3 }
-//                    if self.right_enables.noise { right += s4 }
                 }
-//                right *= self.right_volume * 8;
-
                 self.output_sample(s);
             }
 
@@ -243,7 +280,7 @@ impl Sound {
     }
 
     fn output_sample(&mut self, sample: Sample) {
-        self.buffer[self.buffer_index] = 16 - (sample as i16 * 2) * ((self.left_volume + 1) as i16);
+        self.buffer[self.buffer_index] = i16::from(sample) * ((self.left_volume + 1) as i16);
 
         self.buffer_index += 1;
 

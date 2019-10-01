@@ -12,7 +12,7 @@ pub struct WaveChannel {
     wave_ram_accessible: bool,  // if channel is enabled, wave ram can be accessed from outside only when accessed by the wave channel recently
     pub buffer: u8,
     pub position: u8,
-    samples: [Sample; WAVE_RAM_SAMPLES as usize / 2],
+    samples: [u8; WAVE_RAM_SAMPLES as usize / 2],
     volume: Volume,
 
     // Becomes true during a trigger
@@ -59,12 +59,12 @@ impl Into<u8> for Volume {
 
 impl Volume {
     fn apply_to(self, sample: Sample) -> Sample {
-        match self {
+        Sample(match self {
             Volume::Silent => 0,
-            Volume::Max => sample,
-            Volume::Half => sample / 2,
-            Volume::Quarter => sample / 4,
-        }
+            Volume::Max => sample.0,
+            Volume::Half => sample.0 / 2,
+            Volume::Quarter => sample.0 / 4,
+        })
     }
 }
 
@@ -113,13 +113,13 @@ impl WaveChannel {
     }
 
     pub fn sample(&mut self) -> Sample {
-        if !self.is_running() || !self.dac_enabled() { return 0 }
+        if !self.is_running() || !self.dac_enabled() { return Sample(0) }
 
         // take first nibble if even, second if odd
-        let sample = match self.position % 2 {
+        let sample = Sample(match self.position % 2 {
             0 => { self.buffer >> 4 }
             _ => { self.buffer & 0xF }
-        };
+        });
 
         self.volume.apply_to(sample)
     }
@@ -183,7 +183,7 @@ impl WaveChannel {
         }
     }
 
-    pub fn read_ram_sample(&self, pos: u8) -> Sample {
+    pub fn read_ram_sample(&self, pos: u8) -> u8 {
         // Just like write
         if !self.running {
             return self.samples[pos as usize]
