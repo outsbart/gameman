@@ -39,7 +39,6 @@ impl Envelope {
 
     pub fn write(&mut self, byte: u8) {
         self.timer.period = (byte & 0b111) as usize;
-        self.timer.restart();  // todo: make sure this is necessary
 
         self.add_mode = byte & 0b1000 != 0;
         self.volume_initial = byte >> 4;
@@ -50,8 +49,8 @@ impl Envelope {
     }
 
     pub fn tick(&mut self) {
-        if !self.enabled {
-            return
+        if self.timer.period == 0 {
+            return;
         }
 
         // when timer runs out
@@ -59,7 +58,6 @@ impl Envelope {
 
             // must disable on overflow/underflow
             if (self.add_mode && self.volume == VOLUME_MAX) || (!self.add_mode && self.volume == VOLUME_MIN) {
-                self.enabled = false;
                 return;
             }
 
