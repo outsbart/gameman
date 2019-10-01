@@ -9,7 +9,7 @@ pub struct WaveChannel {
     length: Length,
     timer: Timer,
 
-    wave_ram_accessible: bool,  // can be accessed from outside only when accessed internally recently
+    wave_ram_accessible: bool,  // if channel is enabled, wave ram can be accessed from outside only when accessed by the wave channel recently
     pub buffer: u8,
     pub position: u8,
     samples: [Sample; WAVE_RAM_SAMPLES as usize / 2],
@@ -99,7 +99,7 @@ impl WaveChannel {
     pub fn tick(&mut self) {
         // ticks even if channel disabled
         if self.timer.tick() {
-            self.position = self.position.wrapping_add(1) % WAVE_RAM_SAMPLES;
+            self.position = (self.position + 1) % WAVE_RAM_SAMPLES;
 
             self.buffer = self.samples[self.position as usize / 2];
             self.wave_ram_accessible = true;
@@ -152,20 +152,28 @@ impl WaveChannel {
 
         self.running = true;
 
+        if !self.dac_enabled() {
+            self.running = false;
+        } else if was_enabled && self.timer.curr <= 2  {
+            // Only on DMG
+            // Triggering the wave channel on the DMG while it reads a sample byte
+            // will alter the first four bytes of wave RAM
+            self.corrupt_wave();
+        }
+
         // Wave channel's position is set to 0 but sample buffer is NOT refilled
         self.position = 0;
 
         self.timer.period = (2048 - self.frequency) as usize * 2 + 6;
         self.timer.restart();
-
-        if !self.dac_enabled() {
-            self.running = false;
-        } else if was_enabled && self.wave_ram_accessible  {  // only on dmg
-            println!("corruption but should occur");
-        }
     }
 
     pub fn write_ram_sample(&mut self, pos: u8, value: u8) {
+        // If the wave channel is enabled, accessing any byte from $FF30-$FF3F is
+        // equivalent to accessing the current byte selected by the waveform
+        // position. Further, on the DMG accesses will only work in this manner if
+        // made within a couple of clocks of the wave channel accessing wave RAM;
+        // if made at any other time, reads return $FF and writes have no effect.
         if !self.running {
             self.samples[pos as usize] = value;
             return;
@@ -176,11 +184,7 @@ impl WaveChannel {
     }
 
     pub fn read_ram_sample(&self, pos: u8) -> Sample {
-        // If the wave channel is enabled, accessing any byte from $FF30-$FF3F is
-        // equivalent to accessing the current byte selected by the waveform
-        // position. Further, on the DMG accesses will only work in this manner if
-        // made within a couple of clocks of the wave channel accessing wave RAM;
-        // if made at any other time, reads return $FF and writes have no effect.
+        // Just like write
         if !self.running {
             return self.samples[pos as usize]
         }
@@ -188,6 +192,31 @@ impl WaveChannel {
             return self.samples[self.position as usize / 2];
         }
         0xFF
+    }
+
+    fn corrupt_wave(&mut self) {
+        // If the channel was reading
+        // one of the first four bytes, only the first byte will be rewritten with
+        // the byte being read. If the channel was reading one of the later 12
+        // bytes, the first FOUR bytes of wave RAM will be rewritten with the four
+        // aligned bytes that the read was from (bytes 4-7, 8-11, or 12-15); for
+        // example if it were reading byte 9 when it was retriggered, the first
+        // four bytes would be rewritten with the contents of bytes 8-11
+
+        // We are interested in the sample that will be picked next
+        let next_sample_position = (self.position + 1) % WAVE_RAM_SAMPLES;
+        let byte_position = next_sample_position as usize / 2;
+
+        // 0 indicates bytes 0-3, 1 indicates bytes 4-7, ... i indicates [4*i]-[4*i+3]
+        let quartet_index = byte_position / 4;
+
+        if quartet_index == 0 {
+            self.samples[0] = self.samples[byte_position]
+        } else {
+            for j in 0..4 {
+                self.samples[j] = self.samples[4 * quartet_index + j]
+            }
+        }
     }
 
     // sets frequency least significate bits
