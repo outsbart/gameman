@@ -272,6 +272,8 @@ impl Sound {
                     if self.left_enables.wave { s += s3 }
                     if self.left_enables.noise { s += s4 }
                 }
+
+                // todo: output right channel too
                 self.output_sample(s);
             }
 
