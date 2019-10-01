@@ -682,6 +682,10 @@ impl TimerDefaultPeriod {
     }
 
     pub fn tick(&mut self) -> bool {
+        if self.curr == 0 {
+            return false;
+        }
+
         self.curr -= 1;
 
         if self.curr == 0 {
