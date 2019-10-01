@@ -13,7 +13,6 @@ pub struct Envelope {
     pub add_mode: bool,
     volume: u8,
     pub volume_initial: u8,
-    enabled: bool,
 }
 
 impl Envelope {
@@ -23,7 +22,6 @@ impl Envelope {
             add_mode: false,
             volume: 0,
             volume_initial: 0,
-            enabled: false,
         }
     }
 
@@ -37,8 +35,6 @@ impl Envelope {
 
         // Channel volume is reloaded from NRx2
         self.volume = self.volume_initial;
-
-        self.enabled = true;
     }
 
     pub fn write(&mut self, byte: u8) {
