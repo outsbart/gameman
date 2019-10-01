@@ -12,12 +12,13 @@ use sound::square::SquareChannel;
 use sound::length::Length;
 use sound::wave::WaveChannel;
 use sound::noise::NoiseChannel;
+use cpu::CPU_FREQ;
 
 pub const APU_CLOCK_MULTIPLIER: f32 = 1.0;
 const WAVE_TABLE_START: u16 = 0xFF30;
-pub const SAMPLE_RATE: usize = 24_000;
+pub const SAMPLE_RATE: usize = 44_100;
 const DUTY_PATTERNS_LENGTH: u8 = 8;
-pub const AUDIO_BUFFER_SIZE: usize = 512;
+pub const AUDIO_BUFFER_SIZE: usize = 1024;
 
 pub type Sample = u8;
 
@@ -41,7 +42,7 @@ pub struct Sound {
 
     // output buffer
     buffer_index: usize,
-    buffer: [u8; AUDIO_BUFFER_SIZE],
+    buffer: [i16; AUDIO_BUFFER_SIZE],
 
     audio_available: bool,
     buffer_2: [i16; AUDIO_BUFFER_SIZE],
@@ -154,7 +155,7 @@ impl Sound {
             noise: NoiseChannel::new(),
 
             frame_sequencer: FrameSequencer::new(),
-            sample_timer: Timer::new(4194304 / SAMPLE_RATE),
+            sample_timer: Timer::new(CPU_FREQ / SAMPLE_RATE),
 
             vin_l_enable: false,
             vin_r_enable: false,
@@ -221,22 +222,17 @@ impl Sound {
                     let s3 = self.wave.sample();
                     let s4 = self.noise.sample();
 
-                    s+= s1 + s2 + s3 + s4;
-//                    let s3 = self.wave.sample();
-//                    let s4 = self.noise.sample();
-
-                    // mixer
-//                    if self.left_enables.square_1 { left += s1 }
-//                    if self.left_enables.square_2 { left += s2 }
-//                    if self.left_enables.wave { left += s3 }
-//                    if self.left_enables.noise { left += s4 }
+                    // mixers
+                    if self.left_enables.square_1 { s += s1 }
+                    if self.left_enables.square_2 { s += s2 }
+                    if self.left_enables.wave { s += s3 }
+                    if self.left_enables.noise { s += s4 }
 //
 //                    if self.right_enables.square_1 { right += s1 }
 //                    if self.right_enables.square_2 { right += s2 }
 //                    if self.right_enables.wave { right += s3 }
 //                    if self.right_enables.noise { right += s4 }
                 }
-                s = s * self.left_volume;
 //                right *= self.right_volume * 8;
 
                 self.output_sample(s);
@@ -247,7 +243,7 @@ impl Sound {
     }
 
     fn output_sample(&mut self, sample: Sample) {
-        self.buffer[self.buffer_index] = sample;
+        self.buffer[self.buffer_index] = 16 - (sample as i16 * 2) * ((self.left_volume + 1) as i16);
 
         self.buffer_index += 1;
 
@@ -255,7 +251,7 @@ impl Sound {
             self.audio_available = true;
 
             for i in 0..AUDIO_BUFFER_SIZE {
-                self.buffer_2[i] = self.buffer[i] as i16 * 5;
+                self.buffer_2[i] = self.buffer[i];
             }
 
             self.buffer_index = 0;

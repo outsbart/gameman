@@ -1,4 +1,5 @@
 use sound::{Sample, TimerDefaultPeriod};
+use std::ops::{Add, Sub};
 
 const VOLUME_MAX: Sample = 0xF;
 const VOLUME_MIN: Sample = 0;
@@ -67,11 +68,9 @@ impl Envelope {
             }
 
             // increase or decrease based on add_mode
-            self.volume = if self.add_mode {
-                self.volume + 1
-            } else {
-                self.volume - 1
-            };
+            let operation = if self.add_mode { u8::add } else { u8::sub };
+
+            self.volume = operation(self.volume, 1);
         }
     }
 }

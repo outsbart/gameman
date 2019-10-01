@@ -402,6 +402,11 @@ impl Emulator {
             if self.cpu.mmu.sound.is_audio_buffer_ready() {
                 let audio_buffer = self.cpu.mmu.sound.get_audio_buffer();
 
+                // wait for device queue to drain audio buffer
+                while device.size() > AUDIO_BUFFER_SIZE as u32 {
+                    thread::sleep(time::Duration::from_millis(1));
+                }
+
                 device.queue(&audio_buffer[0..]);
 
                 device.resume();

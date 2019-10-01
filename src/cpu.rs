@@ -9,6 +9,8 @@ use crate::utils::set_bit;
 use crate::utils::sub_bytes;
 use crate::utils::swap_nibbles;
 
+pub const CPU_FREQ: usize = 4194304;  // cpu frequency, in hz
+
 // Flags bit poisition in the F register
 const ZERO_FLAG: u8 = 7;
 const OPERATION_FLAG: u8 = 6;
