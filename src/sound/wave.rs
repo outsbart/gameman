@@ -113,7 +113,7 @@ impl WaveChannel {
     }
 
     pub fn sample(&mut self) -> Sample {
-        if !self.running || !self.dac_power { return 0 }
+        if !self.is_running() || !self.dac_enabled() { return 0 }
 
         // take first nibble if even, second if odd
         let sample = match self.position % 2 {

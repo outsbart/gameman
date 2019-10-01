@@ -57,9 +57,8 @@ impl NoiseChannel {
     }
 
     pub fn sample(&mut self) -> Sample {
-        if !self.is_running() {
-            return 0;
-        }
+        if !self.is_running() || !self.dac_enabled() { return 0 }
+
 
         // The waveform output is bit 0 of the LFSR, INVERTED
         if self.lfsr & 1 != 0 {
@@ -82,6 +81,10 @@ impl NoiseChannel {
     }
 
     pub fn tick_envelope(&mut self) {
+        if !self.is_running() {
+            return;
+        }
+
         self.envelope.tick();
     }
 

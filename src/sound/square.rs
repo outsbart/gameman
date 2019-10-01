@@ -61,6 +61,10 @@ impl SquareChannel {
     }
 
     pub fn tick_envelope(&mut self) {
+        if !self.is_running() {
+            return;
+        }
+
         self.envelope.tick();
     }
 
@@ -138,9 +142,7 @@ impl SquareChannel {
     }
 
     pub fn sample(&mut self) -> Sample {
-        if !self.is_running() {
-            return 0;
-        }
+        if !self.is_running() || !self.dac_enabled() { return 0 }
 
         let duty_pattern = self.get_duty_pattern();
 
