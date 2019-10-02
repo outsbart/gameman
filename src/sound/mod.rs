@@ -97,11 +97,8 @@ pub struct Sound {
     frame_sequencer: FrameSequencer,  // responsible for ticking the channels
     sample_timer: Timer,              // timer for fetching the channels output
 
-    left_volume: VolumeMaster,
-    right_volume: VolumeMaster,
-
-    left_enables: Mixer,
-    right_enables: Mixer,
+    left_sound_output: SoundOutput,
+    right_sound_output: SoundOutput,
 
     // output buffer
     buffer_index: usize,
@@ -176,6 +173,24 @@ impl Memory for Sound {
         }
     }
 }
+
+pub struct SoundOutput {
+    mixer: Mixer,
+    volume_master: VolumeMaster,
+}
+
+impl SoundOutput {
+    pub fn new() -> Self {
+        SoundOutput { mixer: Mixer::new(), volume_master: VolumeMaster::new() }
+    }
+
+    pub fn process(&self, voltages: [Voltage; 4]) -> Voltage {
+        let mixed = self.mixer.mix(voltages);
+
+        self.volume_master.apply(mixed)
+    }
+}
+
 
 pub struct VolumeMaster {
     volume: u8
@@ -267,11 +282,8 @@ impl Sound {
             frame_sequencer: FrameSequencer::new(),
             sample_timer: Timer::new(CPU_FREQ / SAMPLE_RATE),
 
-            left_volume: VolumeMaster::new(),
-            right_volume: VolumeMaster::new(),
-
-            left_enables: Mixer::new(),
-            right_enables: Mixer::new(),
+            left_sound_output: SoundOutput::new(),
+            right_sound_output: SoundOutput::new(),
 
             buffer_index: 0,
             buffer: [0; AUDIO_BUFFER_SIZE],
@@ -327,12 +339,10 @@ impl Sound {
                     voltages = self.fetch_channels_outputs();
                 }
 
-                let mixed = self.left_enables.mix(voltages);
-
-                let amplified = self.left_volume.apply(mixed);
+                let processed = self.left_sound_output.process(voltages);
 
                 // todo: output right channel too
-                self.output_sample(amplified);
+                self.output_sample(processed);
             }
 
         }
@@ -624,17 +634,17 @@ impl Sound {
             return
         }
 
-        self.left_enables.set_vin_enable((byte & 0b1000_0000) >> 7 != 0);
-        self.right_enables.set_vin_enable((byte & 0b1000) >> 3 != 0);
-        self.left_volume.set_volume((byte & 0b0111_0000) >> 4);
-        self.right_volume.set_volume(byte & 0b111);
+        self.left_sound_output.mixer.set_vin_enable((byte & 0b1000_0000) >> 7 != 0);
+        self.right_sound_output.mixer.set_vin_enable((byte & 0b1000) >> 3 != 0);
+        self.left_sound_output.volume_master.set_volume((byte & 0b0111_0000) >> 4);
+        self.right_sound_output.volume_master.set_volume(byte & 0b111);
 }
 
     pub fn get_nr50(&self) -> u8 {
-        (if self.left_enables.get_vin_enable() { 0b1000_0000 } else { 0 }) |
-            (self.left_volume.get_volume() << 4) |
-            (if self.right_enables.get_vin_enable() { 0b1000} else { 0 }) |
-            (self.right_volume.get_volume())
+        (if self.left_sound_output.mixer.get_vin_enable() { 0b1000_0000 } else { 0 }) |
+            (self.left_sound_output.volume_master.get_volume() << 4) |
+            (if self.right_sound_output.mixer.get_vin_enable() { 0b1000} else { 0 }) |
+            (self.right_sound_output.volume_master.get_volume())
     }
 
     // NR51 FF25 NW21 NW21 Left enables, Right enables
@@ -643,12 +653,12 @@ impl Sound {
             return
         }
 
-        self.left_enables.write((byte & 0xF0) >> 4);
-        self.right_enables.write(byte & 0xF);
+        self.left_sound_output.mixer.write((byte & 0xF0) >> 4);
+        self.right_sound_output.mixer.write(byte & 0xF);
     }
 
     pub fn get_nr51(&self) -> u8 {
-        self.left_enables.read() << 4 | self.right_enables.read()
+        self.left_sound_output.mixer.read() << 4 | self.right_sound_output.mixer.read()
     }
 
     // NR52 FF26 P--- NW21 Power control/status, Channel length statuses
