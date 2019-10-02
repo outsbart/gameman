@@ -1,8 +1,8 @@
-use sound::{Length, Timer, Sample, DUTY_PATTERNS_LENGTH};
-use sound::envelope::Envelope;
-use sound::sweep::Sweep;
 use cpu::is_bit_set;
+use sound::{DUTY_PATTERNS_LENGTH, Length, Sample, Timer, Voltage};
+use sound::envelope::Envelope;
 use sound::length::MaxLength;
+use sound::sweep::Sweep;
 
 pub struct SquareChannel {
     sweep: Sweep,
@@ -141,7 +141,7 @@ impl SquareChannel {
         self.running
     }
 
-    pub fn sample(&mut self) -> Sample {
+    fn sample(&mut self) -> Sample {
         if !self.is_running() || !self.dac_enabled() { return Sample(0) }
 
         let duty_pattern = self.get_duty_pattern();
@@ -151,6 +151,10 @@ impl SquareChannel {
         }
 
         Sample(0)
+    }
+
+    pub fn output(&mut self) -> Voltage {
+        self.sample().to_voltage()
     }
 
     pub fn reset(&mut self) {

@@ -1,6 +1,6 @@
-use sound::length::{Length, MaxLength};
+use sound::{Sample, Timer, Voltage};
 use sound::envelope::Envelope;
-use sound::{Sample, Timer};
+use sound::length::{Length, MaxLength};
 
 pub struct NoiseChannel {
     length: Length,
@@ -55,7 +55,7 @@ impl NoiseChannel {
         self.timer.restart();
     }
 
-    pub fn sample(&mut self) -> Sample {
+    fn sample(&mut self) -> Sample {
         if !self.is_running() || !self.dac_enabled() { return Sample(0) }
 
         // The waveform output is bit 0 of the LFSR, INVERTED
@@ -64,6 +64,10 @@ impl NoiseChannel {
         } else {
             self.envelope.get_volume()
         }
+    }
+
+    pub fn output(&mut self) -> Voltage {
+        self.sample().to_voltage()
     }
 
     pub fn tick_length(&mut self) {

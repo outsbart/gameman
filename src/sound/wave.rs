@@ -1,5 +1,5 @@
+use sound::{Sample, Timer, Voltage};
 use sound::length::{Length, MaxLength};
-use sound::{Sample, Timer};
 
 const WAVE_RAM_SAMPLES: u8 = 32;
 
@@ -112,7 +112,7 @@ impl WaveChannel {
         }
     }
 
-    pub fn sample(&mut self) -> Sample {
+    fn sample(&mut self) -> Sample {
         if !self.is_running() || !self.dac_enabled() { return Sample(0) }
 
         // take first nibble if even, second if odd
@@ -122,6 +122,10 @@ impl WaveChannel {
         });
 
         self.volume.apply_to(sample)
+    }
+
+    pub fn output(&mut self) -> Voltage {
+        self.sample().to_voltage()
     }
 
     pub fn is_running(&self) -> bool {

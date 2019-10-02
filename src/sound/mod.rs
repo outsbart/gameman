@@ -1,3 +1,14 @@
+use std::iter::Sum;
+use std::ops::{Add, AddAssign, Sub, Mul};
+
+use cpu::CPU_FREQ;
+use mem::Memory;
+use sound::envelope::Envelope;
+use sound::length::Length;
+use sound::noise::NoiseChannel;
+use sound::square::SquareChannel;
+use sound::wave::WaveChannel;
+
 pub mod envelope;
 pub mod sweep;
 pub mod square;
@@ -5,45 +16,29 @@ pub mod length;
 pub mod wave;
 pub mod noise;
 
-use mem::Memory;
-
-use sound::envelope::Envelope;
-use sound::square::SquareChannel;
-use sound::length::Length;
-use sound::wave::WaveChannel;
-use sound::noise::NoiseChannel;
-use cpu::CPU_FREQ;
-use std::ops::{Add, Sub, AddAssign};
-
-pub const APU_CLOCK_MULTIPLIER: f32 = 1.0;
-const WAVE_TABLE_START: u16 = 0xFF30;
-pub const SAMPLE_RATE: usize = 44_100;
-const DUTY_PATTERNS_LENGTH: u8 = 8;
 pub const AUDIO_BUFFER_SIZE: usize = 1024;
+pub const SAMPLE_RATE: usize = 44_100;
+
+const WAVE_TABLE_START: u16 = 0xFF30;
+const DUTY_PATTERNS_LENGTH: u8 = 8;
 
 
 #[derive(Eq, Clone, Copy)]
 pub struct Sample(u8);
+const SAMPLE_MAX: Sample = Sample(0xF);
+const SAMPLE_MIN: Sample = Sample(0);
 
-impl Add for Sample {
-    type Output = Self;
-
-    fn add(self, b: Sample) -> Self {
-        Sample(self.0 + b.0)
+impl Sample {
+    fn increase(&mut self) {
+        if self.0 < SAMPLE_MAX.0 {
+            *self = Sample(self.0 + 1)
+        }
     }
-}
 
-impl Sub for Sample {
-    type Output = Self;
-
-    fn sub(self, b: Sample) -> Self {
-        Sample(self.0 - b.0)
-    }
-}
-
-impl AddAssign for Sample {
-    fn add_assign(&mut self, rhs: Self) {
-        *self = *self + rhs
+    fn decrease(&mut self) {
+        if self.0 > SAMPLE_MIN.0 {
+            *self = Sample(self.0 - 1)
+        }
     }
 }
 
@@ -59,10 +54,36 @@ impl From<Sample> for u8 {
     }
 }
 
-// converts the sample from unsigned to signed
-impl From<Sample> for i16 {
+impl Sample {
+    fn to_voltage(self) -> Voltage {
+        Voltage::from(self)
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct Voltage(i16);
+
+impl Add for Voltage {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Voltage(self.0 + rhs.0)
+    }
+}
+
+impl AddAssign for Voltage {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = self.add(rhs)
+    }
+}
+
+
+impl From<Sample> for Voltage {
+    // this converts the input value to a proportional output voltage. An input of 0
+    // generates -1.0 and an input of 15 generates +1.0, using arbitrary
+    // voltage units.
     fn from(sample: Sample) -> Self {
-        16 - (u8::from(sample) as i16 * 2)
+        Voltage(u8::from(SAMPLE_MAX) as i16 - (u8::from(sample) as i16 * 2))
     }
 }
 
@@ -74,15 +95,13 @@ pub struct Sound {
     noise: NoiseChannel,
 
     frame_sequencer: FrameSequencer,  // responsible for ticking the channels
-    sample_timer: Timer,
+    sample_timer: Timer,              // timer for fetching the channels output
 
-    vin_l_enable: bool,
-    vin_r_enable: bool,
-    left_volume: u8,
-    right_volume: u8,
+    left_volume: VolumeMaster,
+    right_volume: VolumeMaster,
 
-    left_enables: ChannelsFlag,
-    right_enables: ChannelsFlag,
+    left_enables: Mixer,
+    right_enables: Mixer,
 
     // output buffer
     buffer_index: usize,
@@ -158,21 +177,55 @@ impl Memory for Sound {
     }
 }
 
-pub struct ChannelsFlag {
+pub struct VolumeMaster {
+    volume: u8
+}
+
+impl VolumeMaster {
+    pub fn set_volume(&mut self, volume: u8) {
+        self.volume = volume;
+    }
+
+    pub fn get_volume(&self) -> u8 {
+        self.volume
+    }
+
+    pub fn apply(&self, voltage: Voltage) -> Voltage {
+        Voltage(voltage.0 * (self.volume + 1) as i16)
+    }
+
+    pub fn new() -> Self {
+        VolumeMaster { volume: 0 }
+    }
+}
+
+
+// Mixes together the sound voltages from the channels
+pub struct Mixer {
     noise: bool,
     wave: bool,
     square_2: bool,
     square_1: bool,
+    vin: bool,
 }
 
-impl ChannelsFlag {
+impl Mixer {
     pub fn new() -> Self {
-        ChannelsFlag {
+        Mixer {
             noise: false,
             wave: false,
             square_2: false,
             square_1: false,
+            vin: false,
         }
+    }
+
+    pub fn set_vin_enable(&mut self, value: bool) {
+        self.vin = value;
+    }
+
+    pub fn get_vin_enable(&self) -> bool {
+        self.vin
     }
 
     pub fn write(&mut self, byte: u8) {
@@ -188,6 +241,19 @@ impl ChannelsFlag {
         (if self.square_2 { 0b10 } else { 0 }) |
         (if self.square_1 { 1 } else { 0 })
     }
+
+    pub fn mix(&self, voltages: [Voltage; 4]) -> Voltage {
+        let mut sum = Voltage(0);
+
+        let [square_1_voltage, square_2_voltage, wave_voltage, noise_voltage] = voltages;
+
+        if self.square_1 { sum += square_1_voltage }
+        if self.square_2 { sum += square_2_voltage }
+        if self.wave { sum += wave_voltage }
+        if self.noise { sum += noise_voltage }
+
+        sum
+    }
 }
 
 impl Sound {
@@ -201,20 +267,17 @@ impl Sound {
             frame_sequencer: FrameSequencer::new(),
             sample_timer: Timer::new(CPU_FREQ / SAMPLE_RATE),
 
-            vin_l_enable: false,
-            vin_r_enable: false,
+            left_volume: VolumeMaster::new(),
+            right_volume: VolumeMaster::new(),
 
-            left_volume: 0,
-            right_volume: 0,
-
-            left_enables: ChannelsFlag::new(),
-            right_enables: ChannelsFlag::new(),
+            left_enables: Mixer::new(),
+            right_enables: Mixer::new(),
 
             buffer_index: 0,
             buffer: [0; AUDIO_BUFFER_SIZE],
 
             audio_available: false,
-            buffer_2: [0; AUDIO_BUFFER_SIZE],  // this is the buffer that will
+            buffer_2: [0; AUDIO_BUFFER_SIZE],  // this is the buffer that will be sent to the device
 
             power: false,
         }
@@ -256,33 +319,32 @@ impl Sound {
                 }
             }
 
-            // fetch the samples!
+            // fetch the channel outputs!
             if self.sample_timer.tick() {
-                let mut s: Sample = Sample(0);
+                let mut voltages: [Voltage; 4] = [Voltage(0); 4];
 
                 if self.power {
-                    let s1 = self.square_1.sample();
-                    let s2 = self.square_2.sample();
-                    let s3 = self.wave.sample();
-                    let s4 = self.noise.sample();
-
-                    // mixers
-                    if self.left_enables.square_1 { s += s1 }
-                    if self.left_enables.square_2 { s += s2 }
-                    if self.left_enables.wave { s += s3 }
-                    if self.left_enables.noise { s += s4 }
+                    voltages = self.fetch_channels_outputs();
                 }
 
+                let mixed = self.left_enables.mix(voltages);
+
+                let amplified = self.left_volume.apply(mixed);
+
                 // todo: output right channel too
-                self.output_sample(s);
+                self.output_sample(amplified);
             }
 
         }
 
     }
 
-    fn output_sample(&mut self, sample: Sample) {
-        self.buffer[self.buffer_index] = i16::from(sample) * ((self.left_volume + 1) as i16);
+    fn fetch_channels_outputs(&mut self) -> [Voltage; 4] {
+        [self.square_1.output(), self.square_2.output(), self.wave.output(), self.noise.output()]
+    }
+
+    fn output_sample(&mut self, voltage: Voltage) {
+        self.buffer[self.buffer_index] = voltage.0;
 
         self.buffer_index += 1;
 
@@ -562,17 +624,17 @@ impl Sound {
             return
         }
 
-        self.vin_l_enable = (byte & 0b1000_0000) >> 7 != 0;
-        self.vin_r_enable = (byte & 0b1000) >> 3 != 0;
-        self.left_volume = (byte & 0b0111_0000) >> 4;
-        self.right_volume = byte & 0b111;
+        self.left_enables.set_vin_enable((byte & 0b1000_0000) >> 7 != 0);
+        self.right_enables.set_vin_enable((byte & 0b1000) >> 3 != 0);
+        self.left_volume.set_volume((byte & 0b0111_0000) >> 4);
+        self.right_volume.set_volume(byte & 0b111);
 }
 
     pub fn get_nr50(&self) -> u8 {
-        (if self.vin_l_enable { 0b1000_0000 } else { 0 }) |
-            (self.left_volume << 4) |
-            (if self.vin_r_enable { 0b1000} else { 0 }) |
-            (self.right_volume)
+        (if self.left_enables.get_vin_enable() { 0b1000_0000 } else { 0 }) |
+            (self.left_volume.get_volume() << 4) |
+            (if self.right_enables.get_vin_enable() { 0b1000} else { 0 }) |
+            (self.right_volume.get_volume())
     }
 
     // NR51 FF25 NW21 NW21 Left enables, Right enables
@@ -797,15 +859,15 @@ mod tests {
         assert_eq!(sound.get_nr50(), 0);
 
         sound.set_nr50(0b1001_0010);
-        assert_eq!(sound.vin_l_enable, true);
-        assert_eq!(sound.vin_r_enable, false);
+        assert_eq!(sound.left_enables.get_vin_enable(), true);
+        assert_eq!(sound.right_enables.get_vin_enable(), false);
         assert_eq!(sound.left_volume, 1);
         assert_eq!(sound.right_volume, 0b10);
 
-        sound.vin_l_enable = false;
-        sound.vin_r_enable = true;
-        sound.left_volume = 0b100;
-        sound.right_volume = 0b111;
+        sound.left_enables.set_vin_enable(false);
+        sound.right_enables.set_vin_enable(true);
+        sound.left_volume.set_volume(0b100);
+        sound.right_volume.set_volume(0b111);
 
         assert_eq!(sound.get_nr50(), 0b0100_1111);
     }

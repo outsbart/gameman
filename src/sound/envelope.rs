@@ -1,9 +1,6 @@
-use sound::{Sample, TimerDefaultPeriod};
 use std::ops::{Add, Sub};
 
-const VOLUME_MAX: Sample = Sample(0xF);
-const VOLUME_MIN: Sample = Sample(0);
-
+use sound::{Sample, TimerDefaultPeriod};
 
 // every tick, increases or decreases volume
 #[derive(Clone, Copy)]
@@ -49,22 +46,22 @@ impl Envelope {
     }
 
     pub fn tick(&mut self) {
+        // not initialized
         if self.timer.period == 0 {
             return;
         }
 
-        // when timer runs out
-        if self.timer.tick() {
-
-            // must disable on overflow/underflow
-            if (self.add_mode && self.volume == VOLUME_MAX) || (!self.add_mode && self.volume == VOLUME_MIN) {
-                return;
-            }
-
-            // increase or decrease based on add_mode
-            let operation = if self.add_mode { Sample::add } else { Sample::sub };
-
-            self.volume = operation(self.volume, Sample(1));
+        // timer still not zero
+        if !self.timer.tick() {
+            return
         }
+
+        // increase or decrease based on add_mode
+        // value stays between SAMPLE_MIN and SAMPLE_MAX
+        if self.add_mode {
+            self.volume.increase();
+        } else {
+            self.volume.decrease();
+        };
     }
 }
