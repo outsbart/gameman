@@ -45,9 +45,9 @@ pub fn load_rom(path: &str) -> Box<Cartridge> {
 
     let cart_type = rom[0x147] as usize;
 
-    println!("rom capacity = {}kb, len = {:x}", rom.capacity()/1024, rom.len());
-    println!("rom type  = {:x}", cart_type);
-    println!("ram size = {:x}", ram_size);
+    println!("rom size = 0x{:x}", rom.len());
+    println!("rom type = 0x{:x}", cart_type);
+    println!("ram size = 0x{:x}", ram_size);
 
     match cart_type {
         0 => Box::new(CartridgeNoMBC::new(rom)),

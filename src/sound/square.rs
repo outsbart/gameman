@@ -276,7 +276,6 @@ mod tests {
         assert_eq!(channel.read_register_1(), 0b11_1111);
 
         channel.write_register_1(0b1000_1111);
-        assert_eq!(channel.length.get_value(), 64 - 0b1111);
         assert_eq!(channel.duty, 0b10);
 
         channel.length.set_value(0b1110);

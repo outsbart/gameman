@@ -361,62 +361,70 @@ impl Sound {
 
     pub fn tick(&mut self, t: u8) {
         for _i in 0..t {
-            self.square_1.tick();
-            self.square_2.tick();
-            self.wave.tick();
-            self.noise.tick();
-
-            // if sequence timer has finished/reached zero
-            if self.frame_sequencer.tick() {
-
-                // every 2 steps we tick the channel length counters
-                if self.frame_sequencer.step % 2 == 0 {
-                    self.square_1.tick_length();
-                    self.square_2.tick_length();
-                    self.wave.tick_length();
-                    self.noise.tick_length();
-                } else {
-                    self.square_1.half_tick_length();
-                    self.square_2.half_tick_length();
-                    self.wave.half_tick_length();
-                    self.noise.half_tick_length();
-                }
-
-                // at step 7, tick the channel envelopes
-                if self.frame_sequencer.step == 7 {
-                    self.square_1.tick_envelope();
-                    self.square_2.tick_envelope();
-                    self.noise.tick_envelope();
-                }
-
-                // at step 2 and 6 tick the sweep
-                if self.frame_sequencer.step == 2 || self.frame_sequencer.step == 6 {
-                     self.square_1.tick_sweep();
-                }
-            }
-
-            // fetch the channel outputs!
-            if self.sample_timer.tick() {
-                let mut channel_outputs= ChannelsOutput::new();
-
-                if self.power {
-                    channel_outputs = self.fetch_channels_output();
-                }
-
-                self.left_sound_output.receive(channel_outputs);
-            }
-
+            self.tick_channels();
+            self.tick_frame_sequencer();
+            self.tick_sample_timer();
         }
-
     }
 
-    fn fetch_channels_output(&mut self) -> ChannelsOutput {
-        ChannelsOutput {
-            square_1: self.square_1.output(),
-            square_2: self.square_2.output(),
-            wave: self.wave.output(),
-            noise: self.noise.output(),
+    fn tick_channels(&mut self) {
+        self.square_1.tick();
+        self.square_2.tick();
+        self.wave.tick();
+        self.noise.tick();
+    }
+
+    fn tick_frame_sequencer(&mut self) {
+        // if sequence timer has not finished/reached zero yet, return
+        if !self.frame_sequencer.tick() {
+            return
         }
+
+        // every 2 steps we tick the channel length counters
+        if self.frame_sequencer.step % 2 == 0 {
+            self.square_1.tick_length();
+            self.square_2.tick_length();
+            self.wave.tick_length();
+            self.noise.tick_length();
+        } else {
+            self.square_1.half_tick_length();
+            self.square_2.half_tick_length();
+            self.wave.half_tick_length();
+            self.noise.half_tick_length();
+        }
+
+        // at step 7, tick the channel envelopes
+        if self.frame_sequencer.step == 7 {
+            self.square_1.tick_envelope();
+            self.square_2.tick_envelope();
+            self.noise.tick_envelope();
+        }
+
+        // at step 2 and 6 tick the sweep
+        if self.frame_sequencer.step == 2 || self.frame_sequencer.step == 6 {
+             self.square_1.tick_sweep();
+        }
+    }
+
+    fn tick_sample_timer(&mut self) {
+        // sample timer not done yet? return
+        if !self.sample_timer.tick() {
+            return
+        }
+
+        let mut channel_outputs= ChannelsOutput::new();
+
+        if self.power {
+            channel_outputs = ChannelsOutput {
+                square_1: self.square_1.output(),
+                square_2: self.square_2.output(),
+                wave: self.wave.output(),
+                noise: self.noise.output(),
+            };
+        }
+
+        self.left_sound_output.receive(channel_outputs);
+        // todo: what about right sound output?
     }
 
     pub fn get_audio_buffer(&mut self) -> Option<&[AudioOutType; AUDIO_BUFFER_SIZE]> {

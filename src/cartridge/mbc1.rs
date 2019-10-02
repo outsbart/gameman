@@ -26,13 +26,15 @@ impl CartridgeMBC1 {
 
 impl Cartridge for CartridgeMBC1 {
     fn read_rom(&mut self, addr: u16) -> u8 {
-        match addr & 0xF000 {
-            0x0000 | 0x1000 | 0x2000 | 0x3000 => self.rom[addr as usize],
+        let abs_addr = match addr & 0xF000 {
+            0x0000 | 0x1000 | 0x2000 | 0x3000 => addr as usize,
             0x4000 | 0x5000 | 0x6000 | 0x7000 => {
-                self.rom[self.rom_offset + (addr & 0x3FFF) as usize]
+                self.rom_offset + (addr & 0x3FFF) as usize
             }
             _ => panic!("Unhandled ROM MBC1 read at addr {:x}", addr)
-        }
+        };
+
+        if abs_addr < self.rom.len() { self.rom[abs_addr] } else { 0 }
     }
 
     fn write_rom(&mut self, addr: u16, byte: u8) {
