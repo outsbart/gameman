@@ -1,5 +1,3 @@
-use std::ops::{Add, Sub};
-
 use sound::{Sample, TimerDefaultPeriod};
 
 // every tick, increases or decreases volume

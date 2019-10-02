@@ -1,5 +1,4 @@
-use std::iter::Sum;
-use std::ops::{Add, AddAssign, Sub, Mul};
+use std::ops::{Add, AddAssign};
 
 use cpu::CPU_FREQ;
 use mem::Memory;
@@ -21,6 +20,8 @@ pub const SAMPLE_RATE: usize = 44_100;
 
 const WAVE_TABLE_START: u16 = 0xFF30;
 const DUTY_PATTERNS_LENGTH: u8 = 8;
+
+type AudioOutType = i16;
 
 
 #[derive(Eq, Clone, Copy)]
@@ -77,6 +78,13 @@ impl AddAssign for Voltage {
     }
 }
 
+impl Voltage {
+    // converts the voltage in the desired output type
+    fn to_out_type(&self) -> AudioOutType {
+        AudioOutType::from(self.0)
+    }
+}
+
 
 impl From<Sample> for Voltage {
     // this converts the input value to a proportional output voltage. An input of 0
@@ -99,13 +107,6 @@ pub struct Sound {
 
     left_sound_output: SoundOutput,
     right_sound_output: SoundOutput,
-
-    // output buffer
-    buffer_index: usize,
-    buffer: [i16; AUDIO_BUFFER_SIZE],
-
-    audio_available: bool,
-    buffer_2: [i16; AUDIO_BUFFER_SIZE],
 
     // sound circuit enabled?
     power: bool,
@@ -174,21 +175,47 @@ impl Memory for Sound {
     }
 }
 
-pub struct SoundOutput {
+pub struct ChannelsOutput {
+    square_1: Voltage,
+    square_2: Voltage,
+    wave: Voltage,
+    noise: Voltage,
+}
+
+impl ChannelsOutput {
+    pub fn new() -> Self {
+        ChannelsOutput {
+            square_1: Voltage(0),
+            square_2: Voltage(0),
+            wave: Voltage(0),
+            noise: Voltage(0),
+        }
+    }
+}
+
+
+struct SoundOutput {
     mixer: Mixer,
     volume_master: VolumeMaster,
+    out_buffer: OutputBuffer,
 }
 
 impl SoundOutput {
     pub fn new() -> Self {
-        SoundOutput { mixer: Mixer::new(), volume_master: VolumeMaster::new() }
+        SoundOutput {
+            mixer: Mixer::new(),
+            volume_master: VolumeMaster::new(),
+            out_buffer: OutputBuffer::new()
+        }
     }
 
-    pub fn process(&self, voltages: [Voltage; 4]) -> Voltage {
-        let mixed = self.mixer.mix(voltages);
+    pub fn receive(&mut self, channel_outputs: ChannelsOutput) {
+        let mixed = self.mixer.mix(channel_outputs);
+        let scaled = self.volume_master.apply(mixed);
 
-        self.volume_master.apply(mixed)
+        self.out_buffer.push(scaled);
     }
+
 }
 
 
@@ -257,17 +284,60 @@ impl Mixer {
         (if self.square_1 { 1 } else { 0 })
     }
 
-    pub fn mix(&self, voltages: [Voltage; 4]) -> Voltage {
+    pub fn mix(&self, voltages: ChannelsOutput) -> Voltage {
         let mut sum = Voltage(0);
 
-        let [square_1_voltage, square_2_voltage, wave_voltage, noise_voltage] = voltages;
-
-        if self.square_1 { sum += square_1_voltage }
-        if self.square_2 { sum += square_2_voltage }
-        if self.wave { sum += wave_voltage }
-        if self.noise { sum += noise_voltage }
+        if self.square_1 { sum += voltages.square_1 }
+        if self.square_2 { sum += voltages.square_2 }
+        if self.wave { sum += voltages.wave }
+        if self.noise { sum += voltages.noise }
 
         sum
+    }
+}
+
+
+pub struct OutputBuffer {
+    // output buffer
+    buffer_index: usize,
+    audio_available: bool,
+    buffer: [AudioOutType; AUDIO_BUFFER_SIZE],
+    buffer_2: [AudioOutType; AUDIO_BUFFER_SIZE],
+}
+
+impl OutputBuffer {
+    pub fn new() -> Self {
+        OutputBuffer {
+            buffer_index: 0,
+            audio_available: false,
+            buffer: [0; AUDIO_BUFFER_SIZE],
+            buffer_2: [0; AUDIO_BUFFER_SIZE],
+        }
+    }
+
+    pub fn push(&mut self, voltage: Voltage) {
+        self.buffer[self.buffer_index] = voltage.to_out_type();
+        self.buffer_index += 1;
+
+        if self.buffer_index == self.buffer.len() {
+            // todo: actually, a callback should be called here
+            self.audio_available = true;
+
+            for i in 0..AUDIO_BUFFER_SIZE {
+                self.buffer_2[i] = self.buffer[i];
+            }
+
+            self.buffer_index = 0;
+        }
+    }
+
+    // return the audio_buffer if it is filled
+    pub fn get_audio_buffer(&mut self) -> Option<&[AudioOutType; AUDIO_BUFFER_SIZE]> {
+        if !self.audio_available {
+            return None
+        }
+        self.audio_available = false;
+        Some(&self.buffer_2)
     }
 }
 
@@ -284,12 +354,6 @@ impl Sound {
 
             left_sound_output: SoundOutput::new(),
             right_sound_output: SoundOutput::new(),
-
-            buffer_index: 0,
-            buffer: [0; AUDIO_BUFFER_SIZE],
-
-            audio_available: false,
-            buffer_2: [0; AUDIO_BUFFER_SIZE],  // this is the buffer that will be sent to the device
 
             power: false,
         }
@@ -333,49 +397,30 @@ impl Sound {
 
             // fetch the channel outputs!
             if self.sample_timer.tick() {
-                let mut voltages: [Voltage; 4] = [Voltage(0); 4];
+                let mut channel_outputs= ChannelsOutput::new();
 
                 if self.power {
-                    voltages = self.fetch_channels_outputs();
+                    channel_outputs = self.fetch_channels_output();
                 }
 
-                let processed = self.left_sound_output.process(voltages);
-
-                // todo: output right channel too
-                self.output_sample(processed);
+                self.left_sound_output.receive(channel_outputs);
             }
 
         }
 
     }
 
-    fn fetch_channels_outputs(&mut self) -> [Voltage; 4] {
-        [self.square_1.output(), self.square_2.output(), self.wave.output(), self.noise.output()]
-    }
-
-    fn output_sample(&mut self, voltage: Voltage) {
-        self.buffer[self.buffer_index] = voltage.0;
-
-        self.buffer_index += 1;
-
-        if self.buffer_index == self.buffer.len() {
-            self.audio_available = true;
-
-            for i in 0..AUDIO_BUFFER_SIZE {
-                self.buffer_2[i] = self.buffer[i];
-            }
-
-            self.buffer_index = 0;
+    fn fetch_channels_output(&mut self) -> ChannelsOutput {
+        ChannelsOutput {
+            square_1: self.square_1.output(),
+            square_2: self.square_2.output(),
+            wave: self.wave.output(),
+            noise: self.noise.output(),
         }
     }
 
-    pub fn is_audio_buffer_ready(&self) -> bool {
-        self.audio_available
-    }
-
-    pub fn get_audio_buffer(&mut self) -> &[i16; AUDIO_BUFFER_SIZE] {
-        self.audio_available = false;
-        &self.buffer_2
+    pub fn get_audio_buffer(&mut self) -> Option<&[AudioOutType; AUDIO_BUFFER_SIZE]> {
+        self.left_sound_output.out_buffer.get_audio_buffer()
     }
 
     // Square channel 1 sweep
@@ -703,10 +748,8 @@ impl Sound {
 
     // called when power is set to off, through register nr52
     pub fn reset(&mut self) {
-        self.buffer = [0; AUDIO_BUFFER_SIZE];
-        self.buffer_2 = [0; AUDIO_BUFFER_SIZE];
-        self.buffer_index = 0;
-        self.audio_available = false;
+        self.left_sound_output = SoundOutput::new();
+        self.right_sound_output = SoundOutput::new();
 
         self.set_nr10(0);
         self.set_nr11(0);
@@ -851,78 +894,5 @@ impl Timer {
 
     pub fn restart(&mut self) {
         self.curr = self.period;
-    }
-}
-
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_control_volume() {
-        let mut sound = Sound::new();
-
-        // enable sound
-        sound.set_nr52(0x80);
-
-        assert_eq!(sound.get_nr50(), 0);
-
-        sound.set_nr50(0b1001_0010);
-        assert_eq!(sound.left_enables.get_vin_enable(), true);
-        assert_eq!(sound.right_enables.get_vin_enable(), false);
-        assert_eq!(sound.left_volume, 1);
-        assert_eq!(sound.right_volume, 0b10);
-
-        sound.left_enables.set_vin_enable(false);
-        sound.right_enables.set_vin_enable(true);
-        sound.left_volume.set_volume(0b100);
-        sound.right_volume.set_volume(0b111);
-
-        assert_eq!(sound.get_nr50(), 0b0100_1111);
-    }
-
-    #[test]
-    fn test_left_right_enables() {
-        let mut sound = Sound::new();
-
-        // enable sound
-        sound.set_nr52(0x80);
-
-        assert_eq!(sound.get_nr51(), 0);
-
-        sound.set_nr51(0b1001_0010);
-        assert_eq!(sound.left_enables.noise, true);
-        assert_eq!(sound.left_enables.wave, false);
-        assert_eq!(sound.left_enables.square_2, false);
-        assert_eq!(sound.left_enables.square_1, true);
-        assert_eq!(sound.right_enables.noise, false);
-        assert_eq!(sound.right_enables.wave, false);
-        assert_eq!(sound.right_enables.square_2, true);
-        assert_eq!(sound.right_enables.square_1, false);
-
-        sound.left_enables.noise = false;
-        sound.left_enables.wave = true;
-        sound.left_enables.square_2 = true;
-        sound.left_enables.square_1 = false;
-        sound.right_enables.noise = true;
-        sound.right_enables.wave = true;
-        sound.right_enables.square_2 = false;
-        sound.right_enables.square_1 = true;
-        assert_eq!(sound.get_nr51(), 0b0110_1101);
-    }
-
-
-    #[test]
-    fn test_control_master() {
-        let mut sound = Sound::new();
-
-        assert_eq!(sound.get_nr52(), 0b0111_0000);
-
-        sound.set_nr52(0b1000_1010);
-        assert_eq!(sound.power, true);
-
-        sound.power = false;
-        assert_eq!(sound.get_nr52(), 0b0111_0000);
     }
 }
