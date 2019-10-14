@@ -1,60 +1,38 @@
-use cartridge::Cartridge;
+use cartridge::{Cartridge, CartridgeAccess};
 
 pub struct CartridgeMBC3 {
-    pub rom: Vec<u8>,
-    pub ram: Vec<u8>,
-
+    cart: Cartridge,
     ram_and_timer_enabled: bool,
-    rom_bank: u8,
-    ram_bank: u8,
-    rom_offset: usize,
-    ram_offset: usize,
-    mode: u8,
 }
 
 impl CartridgeMBC3 {
-    pub fn new(rom: Vec<u8>, ram_size: usize) -> Self {
-        CartridgeMBC3 {
-            rom, ram: vec![0; ram_size],
-            ram_and_timer_enabled: false,
-            rom_bank: 1, rom_offset: 0x4000,
-            ram_bank: 0, ram_offset: 0,
-            mode: 0,
-        }
+    pub fn new(cart: Cartridge) -> Self {
+        Self { cart, ram_and_timer_enabled: false }
     }
 }
 
-impl Cartridge for CartridgeMBC3 {
-    fn read_rom(&mut self, addr: u16) -> u8 {
-        let abs_addr = match addr & 0xF000 {
-            0x0000 | 0x1000 | 0x2000 | 0x3000 => addr as usize,
-            0x4000 | 0x5000 | 0x6000 | 0x7000 => {
-                self.rom_offset + (addr & 0x3FFF) as usize
-            }
-            _ => panic!("Unhandled ROM MBC3 read at addr {:x}", addr)
-        };
-
-        if abs_addr < self.rom.len() { self.rom[abs_addr] } else { 0 }
-    }
+impl CartridgeAccess for CartridgeMBC3 {
+    fn cartridge(&self) -> &Cartridge { &self.cart }
+    fn cartridge_mut(&mut self) -> &mut Cartridge { &mut self.cart }
 
     fn write_rom(&mut self, addr: u16, byte: u8) {
+        let cartridge = self.cartridge_mut();
+
         match addr & 0xF000 {
             0x0000 | 0x1000 => {  // enable eram and timer
                 self.ram_and_timer_enabled = byte == 0x0A;
             }
             0x2000 | 0x3000 => {  // change rom bank
-                self.rom_bank = if byte == 0 { 1 } else { byte };
-                self.rom_offset = self.rom_bank as usize * 0x4000;
+                cartridge.rom_bank = if byte == 0 { 1 } else { byte.into() };
             }
             0x4000 | 0x5000 => {  // change ram bank or make rtc register readable
                 match byte {
                     0x0..=0x3 => {
-                        self.mode = 0;
-                        self.ram_bank = byte & 3;
-                        self.ram_offset = self.ram_bank as usize * 0x2000;
+                        cartridge.mode = 0;
+                        cartridge.ram_bank = byte & 3;
                     }
                     0x8..=0xC => {
-                        self.mode = 1
+                        cartridge.mode = 1
                     }
                     _ => {}
                 }
@@ -64,25 +42,32 @@ impl Cartridge for CartridgeMBC3 {
         };
     }
 
-    fn read_ram(&mut self, addr: u16) -> u8 {
-        if self.mode == 1 {  // return the rtc register value
+    fn read_ram(&self, addr: u16) -> u8 {
+        let cartridge = self.cartridge();
+
+        if cartridge.mode == 1 {  // return the rtc register value
             println!("attempt to access rtc register");
             return 0x0
         }
-        if self.ram.is_empty() || !self.ram_and_timer_enabled {
+        if cartridge.ram.is_empty() || !self.ram_and_timer_enabled {
             return 0xFF
         } else {
-            return self.ram[self.ram_offset + addr as usize]
+            return cartridge.ram[self.ram_offset() + addr as usize]
         }
     }
 
     fn write_ram(&mut self, addr: u16, byte: u8) {
-        if self.mode == 1 {  // write to the rtc register
+        let ram_and_timer_enabled = self.ram_and_timer_enabled;
+        let ram_offset = self.ram_offset();
+
+        let cartridge = self.cartridge_mut();
+
+        if cartridge.mode == 1 {  // write to the rtc register
             println!("attempt to write rtc register");
         }
-        if self.ram.is_empty() || !self.ram_and_timer_enabled {
+        if cartridge.ram.is_empty() || !ram_and_timer_enabled {
             return
         }
-        self.ram[self.ram_offset + addr as usize] = byte;
+        cartridge.ram[ram_offset + addr as usize] = byte;
     }
 }

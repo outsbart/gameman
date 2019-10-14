@@ -652,8 +652,6 @@ impl<M: Memory> CPU<M> {
 
             // lcd status triggers
             else if (interrupts & 0x2) != 0 {
-                println!("Handling lcd stat");
-
                 self.mmu
                     .write_byte(0xFF0F, reset_bit(1, interrupt_flags) as u8);
 

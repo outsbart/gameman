@@ -258,7 +258,6 @@ impl GPUMemoriesAccess for GPU {
             },
             0xFF41 => {
                 self.compare_enabled = if (byte & 0x40) != 0 { true } else { false };
-                println!("compare_enabled = {}", self.compare_enabled);
             }
             0xFF42 => {
                 self.scroll_y = byte;
@@ -272,7 +271,6 @@ impl GPUMemoriesAccess for GPU {
             }
             0xFF45 => {
                 self.compare_line = byte;
-                println!("compare_line = {}", self.compare_line);
             }
             0xFF46 => {
                 // DMA transfer, handled from outside

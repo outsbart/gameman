@@ -3,7 +3,7 @@ use crate::link::Link;
 use crate::keypad::Key;
 use crate::timers::Timers;
 use crate::sound::Sound;
-use cartridge::Cartridge;
+use cartridge::CartridgeAccess;
 
 pub struct MMU<M: GPUMemoriesAccess> {
     still_bios: bool,
@@ -12,7 +12,7 @@ pub struct MMU<M: GPUMemoriesAccess> {
     wram: [u8; 0x2000],
     zram: [u8; 0x0080],
 
-    pub cartridge: Box<Cartridge>,
+    pub cartridge: Box<CartridgeAccess>,
     pub timers: Timers,
     pub sound: Sound,
 
@@ -26,7 +26,7 @@ pub struct MMU<M: GPUMemoriesAccess> {
 }
 
 impl<M: GPUMemoriesAccess> MMU<M> {
-    pub fn new(gpu: M, cartridge: Box<Cartridge>) -> MMU<M> {
+    pub fn new(gpu: M, cartridge: Box<CartridgeAccess>) -> MMU<M> {
         MMU {
             still_bios: false,
             bios: [0; 0x0100],
