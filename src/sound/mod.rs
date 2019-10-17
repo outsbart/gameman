@@ -21,6 +21,9 @@ pub const SAMPLE_RATE: usize = 44_100;
 const WAVE_TABLE_START: u16 = 0xFF30;
 const DUTY_PATTERNS_LENGTH: u8 = 8;
 
+// final volume is moltiplied by this value
+const VOLUME_BOOST: u8 = 3;
+
 type AudioOutType = i16;
 
 
@@ -324,7 +327,7 @@ impl OutputBuffer {
             self.audio_available = true;
 
             for i in 0..AUDIO_BUFFER_SIZE {
-                self.buffer_2[i] = self.buffer[i];
+                self.buffer_2[i] = self.buffer[i] * VOLUME_BOOST as i16;
             }
 
             self.buffer_index = 0;
