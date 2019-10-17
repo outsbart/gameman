@@ -5,16 +5,14 @@ extern crate sdl2;
 use keypad::Button;
 
 use crate::cpu::CPU;
-use crate::cpu::is_bit_set;
 use crate::gpu::GPU;
 use crate::mem::{Memory, MMU};
 use crate::cartridge::load_rom;
 use crate::sound::AUDIO_BUFFER_SIZE;
 
-use crate::utils::{load_boot_rom};
+use crate::utils::load_boot_rom;
 use self::sdl2::event::Event;
 use self::sdl2::keyboard::Keycode;
-use self::sdl2::pixels::Color;
 use self::sdl2::pixels::PixelFormatEnum;
 use self::sdl2::rect::Rect;
 use self::sdl2::audio::AudioSpecDesired;
