@@ -99,15 +99,6 @@ pub fn sub_bytes(a: u16, b: u16, c: u16) -> (u16, bool, bool) {
 mod tests {
     use super::*;
 
-    /// test that the bot rom file is succesfully found and loaded
-    #[test]
-    fn test_boot_rom_loading() {
-        let boot_rom: [u8; 0x0100] = load_boot_rom();
-
-        assert_ne!(boot_rom[0], 0);
-        assert_ne!(boot_rom[255], 0);
-    }
-
     #[test]
     fn test_u8_to_i8() {
         assert_eq!(u8_to_i8(0b0111_1111u8), 0b0111_1111i8);

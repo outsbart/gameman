@@ -197,14 +197,3 @@ pub fn load_rom(path: &str) -> Box<CartridgeAccess> {
         _ => panic!("Cartridge type {:x} not implemented", cart_type)
     }
 }
-
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_rom_load_mbc1() {
-        load_rom("tests/cpu_instrs/cpu_instrs.gb");
-    }
-}
