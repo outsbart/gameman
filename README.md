@@ -2,7 +2,9 @@
 gameman is a game boy (DMG) emulator written in rust as a hobby project.
 I'm doing it mostly for learning Rust and to have fun with the challenges of emulation.
 
-![Tetris main screen in gameman](https://user-images.githubusercontent.com/3172529/67021247-a958b300-f0ff-11e9-8543-d883cf1fdbb4.png)
+<p align="center">
+  <img alt="A pokemon game running in gameman" src="https://user-images.githubusercontent.com/3172529/67021247-a958b300-f0ff-11e9-8543-d883cf1fdbb4.png">
+</p>
 
 ## Status
 Major games like Tetris, Kirby, Zelda and Pokemon are fully working and playable.
@@ -38,7 +40,7 @@ cargo run --release <rom location>
 
 ## Buttons
 Use keyboard arrows for directions and...
-<table>
+<table style="text-align: center">
     <tr>
         <td>Gameboy</td><td>A</td><td>B</td><td>Select</td><td>Start</td>
     </tr>
