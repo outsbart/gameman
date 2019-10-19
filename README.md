@@ -1,5 +1,5 @@
 # gameman [![Build Status](https://travis-ci.com/outsbart/gameman.svg?branch=master)](https://travis-ci.com/outsbart/gameman)
-gameman is a game boy (DMG) emulator written in rust as a hobby project.
+gameman is a Game Boy (DMG) emulator written in Rust as a hobby project.
 I'm doing it mostly for learning Rust and to have fun with the challenges of emulation.
 
 <p align="center">
@@ -7,9 +7,11 @@ I'm doing it mostly for learning Rust and to have fun with the challenges of emu
 </p>
 
 ## Status
-Major games like Tetris, Kirby, Zelda and Pokemon are fully working and playable.
+Major games like Tetris, Mario, Kirby, Zelda and Pokemon are fully working and playable.
 
-Audio works, but needs more testing on more platforms.
+Save files will be put in the same directory as the rom file, but with a .sav extension.
+
+Audio works, but needs more testing on different platforms.
 
 ## Accuracy
 
