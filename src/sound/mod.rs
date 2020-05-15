@@ -140,7 +140,7 @@ impl Memory for Sound {
             0x24 => self.get_nr50(),
             0x25 => self.get_nr51(),
             0x26 => self.get_nr52(),
-            0x30...0x3f => {
+            0x30..=0x3f => {
                 self.wave.read_ram_sample((addr - WAVE_TABLE_START) as u8)
             },
             _ => 0xFF,
@@ -170,7 +170,7 @@ impl Memory for Sound {
             0x24 => self.set_nr50(byte),
             0x25 => self.set_nr51(byte),
             0x26 => self.set_nr52(byte),
-            0x30...0x3F => {
+            0x30..=0x3F => {
                 self.wave.write_ram_sample((addr - WAVE_TABLE_START) as u8, byte);
             },
             _ => (),

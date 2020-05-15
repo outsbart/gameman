@@ -12,7 +12,7 @@ pub struct MMU<M: GPUMemoriesAccess> {
     wram: [u8; 0x2000],
     zram: [u8; 0x0080],
 
-    pub cartridge: Box<CartridgeAccess>,
+    pub cartridge: Box<dyn CartridgeAccess>,
     pub timers: Timers,
     pub sound: Sound,
 
@@ -26,7 +26,7 @@ pub struct MMU<M: GPUMemoriesAccess> {
 }
 
 impl<M: GPUMemoriesAccess> MMU<M> {
-    pub fn new(gpu: M, cartridge: Box<CartridgeAccess>) -> MMU<M> {
+    pub fn new(gpu: M, cartridge: Box<dyn CartridgeAccess>) -> MMU<M> {
         MMU {
             still_bios: false,
             bios: [0; 0x0100],

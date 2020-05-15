@@ -158,7 +158,7 @@ pub trait CartridgeAccess {
 }
 
 
-pub fn load_rom(path: &str) -> Box<CartridgeAccess> {
+pub fn load_rom(path: &str) -> Box<dyn CartridgeAccess> {
     let mut rom: Vec<u8> = Vec::new();
 
     match File::open(path) {
