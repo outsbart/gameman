@@ -160,8 +160,8 @@ impl<M: Memory> CPU<M> {
         word
     }
 
-    // fetch the operation, decodes it, fetch parameters if required and executes it.
-    // returns the address of the executed instruction
+    // fetch the operation, decodes it, and executes it.
+    // returns the address of the executed instruction, and t cycles passed during this step
     pub fn step(&mut self) -> (u16, u8) {
         let line_number = self.get_registry_value("PC");
 
@@ -193,15 +193,12 @@ impl<M: Memory> CPU<M> {
                 self.schedule_interrupt_enable = false;
             }
 
-            // lets use temporarily M to see if the condition failed
-            self.regs.write_byte(REG_M, 0);
+            self.regs.write_byte(REG_T, 0);
 
             self.execute(byte, prefixed);
 
-            if self.regs.read_byte(REG_M) == 0 {
+            if self.regs.read_byte(REG_T) == 0 {
                 self.regs.write_byte(REG_T, op.cycles_ok)
-            } else {
-                self.regs.write_byte(REG_T, op.cycles_no.expect("wat?"))
             }
 
         } else {
@@ -1211,6 +1208,8 @@ impl<M: Memory> CPU<M> {
         self.store_result("HL", result, false);
 
         self.regs.set_flags(old_z, false, h, c);
+
+        self.regs.write_byte(REG_T, 8);
     }
 
     fn x1A(&mut self) {
@@ -1274,7 +1273,7 @@ impl<M: Memory> CPU<M> {
 
         let cond = self.get_operand_value("NZ");
         if cond == 0 {
-            self.regs.write_byte(REG_M, 1);
+            self.regs.write_byte(REG_T, 8);
             return;
         }
 
@@ -1377,7 +1376,7 @@ impl<M: Memory> CPU<M> {
         let cond = self.get_operand_value("Z");
 
         if cond == 0 {
-            self.regs.write_byte(REG_M, 1);
+            self.regs.write_byte(REG_T, 8);
             return;
         }
 
@@ -1458,7 +1457,7 @@ impl<M: Memory> CPU<M> {
 
         let cond = self.get_operand_value("NC");
         if cond == 0 {
-            self.regs.write_byte(REG_M, 1);
+            self.regs.write_byte(REG_T, 8);
             return;
         }
 
@@ -1529,7 +1528,7 @@ impl<M: Memory> CPU<M> {
 
         let cond = self.get_operand_value("CA");
         if cond == 0 {
-            self.regs.write_byte(REG_M, 1);
+            self.regs.write_byte(REG_T, 8);
             return;
         }
 
@@ -2621,7 +2620,7 @@ impl<M: Memory> CPU<M> {
     fn xC0(&mut self) {
         let cond = self.get_operand_value("NZ");
         if cond == 0 {
-            self.regs.write_byte(REG_M, 1);
+            self.regs.write_byte(REG_T, 8);
             return;
         }
 
@@ -2639,7 +2638,7 @@ impl<M: Memory> CPU<M> {
         let cond = self.get_operand_value("NZ");
 
         if cond == 0 {
-            self.regs.write_byte(REG_M, 1);
+            self.regs.write_byte(REG_T, 12);
             return;
         }
 
@@ -2656,7 +2655,7 @@ impl<M: Memory> CPU<M> {
 
         let cond = self.get_operand_value("NZ");
         if cond == 0 {
-            self.regs.write_byte(REG_M, 1);
+            self.regs.write_byte(REG_T, 12);
             return;
         }
 
@@ -2692,7 +2691,7 @@ impl<M: Memory> CPU<M> {
         let cond = self.get_operand_value("Z");
 
         if cond == 0 {
-            self.regs.write_byte(REG_M, 1);
+            self.regs.write_byte(REG_T, 8);
             return;
         }
 
@@ -2710,7 +2709,7 @@ impl<M: Memory> CPU<M> {
 
         let cond = self.get_operand_value("Z");
         if cond == 0 {
-            self.regs.write_byte(REG_M, 1);
+            self.regs.write_byte(REG_T, 12);
             return;
         }
 
@@ -2724,7 +2723,7 @@ impl<M: Memory> CPU<M> {
 
         let cond = self.get_operand_value("Z");
         if cond == 0 {
-            self.regs.write_byte(REG_M, 1);
+            self.regs.write_byte(REG_T, 12);
             return;
         }
 
@@ -2765,7 +2764,7 @@ impl<M: Memory> CPU<M> {
     fn xD0(&mut self) {
         let cond = self.get_operand_value("NC");
         if cond == 0 {
-            self.regs.write_byte(REG_M, 1);
+            self.regs.write_byte(REG_T, 8);
             return;
         }
 
@@ -2783,7 +2782,7 @@ impl<M: Memory> CPU<M> {
 
         let cond = self.get_operand_value("NC");
         if cond == 0 {
-            self.regs.write_byte(REG_M, 1);
+            self.regs.write_byte(REG_T, 12);
             return;
         }
 
@@ -2797,7 +2796,7 @@ impl<M: Memory> CPU<M> {
 
         let cond = self.get_operand_value("NC");
         if cond == 0 {
-            self.regs.write_byte(REG_M, 1);
+            self.regs.write_byte(REG_T, 12);
             return;
         }
 
@@ -2831,7 +2830,7 @@ impl<M: Memory> CPU<M> {
     fn xD8(&mut self) {
         let cond = self.get_operand_value("CA");
         if cond == 0 {
-            self.regs.write_byte(REG_M, 1);
+            self.regs.write_byte(REG_T, 8);
             return;
         }
 
@@ -2851,7 +2850,7 @@ impl<M: Memory> CPU<M> {
 
         let cond = self.get_operand_value("CA");
         if cond == 0 {
-            self.regs.write_byte(REG_M, 1);
+            self.regs.write_byte(REG_T, 12);
             return;
         }
 
@@ -2865,7 +2864,7 @@ impl<M: Memory> CPU<M> {
 
         let cond = self.get_operand_value("CA");
         if cond == 0 {
-            self.regs.write_byte(REG_M, 1);
+            self.regs.write_byte(REG_T, 12);
             return;
         }
 
