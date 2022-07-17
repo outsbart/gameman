@@ -81,10 +81,10 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
             // BIOS
             0x0000 => {
                 if self.still_bios {
-                    if addr < 0x0100 {
-                        return self.bios[addr as usize];
-                    } else if addr == 0x0100 {
-                        self.still_bios = false;
+                    match addr {
+                        0x0100 => self.still_bios = false,
+                        0x0000..=0x00FF => return self.bios[addr as usize],
+                        _ => panic!("Unhandled memory access"),
                     }
                 }
                 self.cartridge.read_rom(addr)

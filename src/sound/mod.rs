@@ -82,7 +82,7 @@ impl AddAssign for Voltage {
 
 impl Voltage {
     // converts the voltage in the desired output type
-    fn to_out_type(&self) -> AudioOutType {
+    fn to_out_type(self) -> AudioOutType {
         self.0
     }
 }

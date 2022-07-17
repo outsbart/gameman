@@ -376,6 +376,7 @@ impl GPU {
             let cell_y: usize = line_to_draw % TILE_SIZE;
 
             // for each pixel in the line (which is long 160 pixel)
+            #[allow(clippy::needless_range_loop)]
             for row_pixel in 0..TILES_IN_A_SCREEN_ROW * TILE_SIZE {
                 let curr_pixel_x = self.scroll_x as usize + row_pixel;
 
@@ -430,6 +431,7 @@ impl GPU {
             // the row of the pixel in the cell
             let cell_y: usize = window_line % TILE_SIZE;
 
+            #[allow(clippy::needless_range_loop)]
             for pixel in (window_x as usize)..TILES_IN_A_SCREEN_ROW * TILE_SIZE {
                 let mut curr_pixel_x = (pixel as u8).wrapping_add(self.scroll_x);
                 if curr_pixel_x >= window_x {
