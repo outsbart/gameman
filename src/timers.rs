@@ -21,13 +21,14 @@ impl TimerSpeed {
     }
 }
 
-impl Into<u8> for TimerSpeed {
-    fn into(self) -> u8 {
-        match self {
-            TimerSpeed::Speed0 => 0,
-            TimerSpeed::Speed1 => 1,
-            TimerSpeed::Speed2 => 0b10,
-            TimerSpeed::Speed3 => 0b11,
+impl From<u8> for TimerSpeed {
+    fn from(val: u8) -> Self {
+        match val {
+            0 => TimerSpeed::Speed0,
+            1 => TimerSpeed::Speed1,
+            0b10 => TimerSpeed::Speed2,
+            0b11 => TimerSpeed::Speed3,
+            _ => panic!("Impossible timer speed"),
         }
     }
 }

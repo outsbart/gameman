@@ -45,13 +45,14 @@ impl Volume {
     }
 }
 
-impl Into<u8> for Volume {
-    fn into(self) -> u8 {
-        match self {
-            Volume::Silent => 0,
-            Volume::Max => 1,
-            Volume::Half => 2,
-            Volume::Quarter => 3,
+impl From<u8> for Volume {
+    fn from(val: u8) -> Self {
+        match val {
+            0 => Volume::Silent,
+            1 => Volume::Max,
+            2 => Volume::Half,
+            3 => Volume::Quarter,
+            _ => panic!("Impossible volume"),
         }
     }
 }

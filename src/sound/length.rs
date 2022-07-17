@@ -6,11 +6,12 @@ pub enum MaxLength {
     NotWave = 64,
 }
 
-impl Into<u16> for MaxLength {
-    fn into(self) -> u16 {
-        match self {
-            MaxLength::Wave => 256,
-            MaxLength::NotWave => 64,
+impl From<u16> for MaxLength {
+    fn from(val: u16) -> Self {
+        match val {
+            64 => MaxLength::NotWave,
+            256 => MaxLength::Wave,
+            _ => panic!("Impossible value"),
         }
     }
 }

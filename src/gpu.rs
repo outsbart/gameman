@@ -44,13 +44,14 @@ impl Colour {
     }
 }
 
-impl Into<u8> for Colour {
-    fn into(self) -> u8 {
-        match self {
-            Colour::Off => 0,
-            Colour::Light => 1,
-            Colour::Dark => 2,
-            Colour::On => 3,
+impl From<u8> for Colour {
+    fn from(val: u8) -> Self {
+        match val {
+            0 => Colour::Off,
+            1 => Colour::Light,
+            2 => Colour::Dark,
+            3 => Colour::On,
+            _ => panic!("Impossible colour"),
         }
     }
 }
