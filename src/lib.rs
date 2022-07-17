@@ -1,12 +1,9 @@
 #![allow(dead_code)]
 
+extern crate csv;
+extern crate lazy_static;
 #[macro_use]
 extern crate log;
-
-#[macro_use]
-extern crate lazy_static;
-
-extern crate csv;
 extern crate serde_derive;
 
 pub mod cartridge;
@@ -16,7 +13,6 @@ pub mod gpu;
 pub mod keypad;
 pub mod link;
 pub mod mem;
-pub mod ops;
 pub mod sound;
 pub mod timers;
 pub mod utils;
