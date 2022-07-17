@@ -28,7 +28,7 @@ lazy_static! {
 impl Operation {
     pub fn code_as_u8(&self) -> u8 {
         u8::from_str_radix(&self.code[2..], 16)
-            .expect(&format!("Opcode is not a number! {}, op", self.code))
+            .unwrap_or_else(|_| panic!("Opcode is not a number! {}, op", self.code))
     }
 }
 
@@ -53,10 +53,11 @@ impl Ops {
     }
 
     pub fn load_op_type(map: &mut HashMap<u8, Operation>, filepath: &str) {
-        let file = File::open(filepath).expect(&format!("File not found: {}", filepath));
+        let file = File::open(filepath).unwrap_or_else(|_| panic!("File not found: {}", filepath));
 
         for result in csv::Reader::from_reader(file).deserialize() {
-            let op: Operation = result.expect(&format!("Opcodes CSV file is broken! {}", filepath));
+            let op: Operation =
+                result.unwrap_or_else(|_| panic!("Opcodes CSV file is broken! {}", filepath));
             map.insert(op.code_as_u8(), op);
         }
     }

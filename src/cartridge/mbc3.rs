@@ -61,9 +61,9 @@ impl CartridgeAccess for CartridgeMBC3 {
             return 0x0;
         }
         if cartridge.ram.is_empty() || !self.ram_and_timer_enabled {
-            return 0xFF;
+            0xFF
         } else {
-            return cartridge.ram[self.ram_offset() + addr as usize];
+            cartridge.ram[self.ram_offset() + addr as usize]
         }
     }
 

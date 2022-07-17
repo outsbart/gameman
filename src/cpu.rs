@@ -5270,10 +5270,10 @@ mod tests {
         cpu.regs.set_flags(true, false, true, false);
         let (z, n, h, c) = cpu.regs.get_flags();
 
-        assert!(z, true);
-        assert!(n, false);
-        assert!(h, true);
-        assert!(c, false);
+        assert!(z);
+        assert!(!n);
+        assert!(h);
+        assert!(!c);
     }
 
     #[test]

@@ -94,6 +94,12 @@ impl Sweep {
     }
 }
 
+impl Default for Sweep {
+    fn default() -> Self {
+        Sweep::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -105,7 +111,7 @@ mod tests {
 
         sweep.write(0b0010_1011);
         assert_eq!(sweep.shift, 0b011);
-        assert_eq!(sweep.negate, true);
+        assert!(sweep.negate);
         assert_eq!(sweep.timer.period, 0b010);
 
         sweep.shift = 0b010;

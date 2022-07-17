@@ -83,7 +83,7 @@ impl AddAssign for Voltage {
 impl Voltage {
     // converts the voltage in the desired output type
     fn to_out_type(&self) -> AudioOutType {
-        AudioOutType::from(self.0)
+        self.0
     }
 }
 
@@ -191,6 +191,12 @@ impl ChannelsOutput {
     }
 }
 
+impl Default for ChannelsOutput {
+    fn default() -> Self {
+        ChannelsOutput::new()
+    }
+}
+
 struct SoundOutput {
     mixer: Mixer,
     volume_master: VolumeMaster,
@@ -233,6 +239,12 @@ impl VolumeMaster {
 
     pub fn new() -> Self {
         VolumeMaster { volume: 0 }
+    }
+}
+
+impl Default for VolumeMaster {
+    fn default() -> Self {
+        VolumeMaster::new()
     }
 }
 
@@ -298,6 +310,12 @@ impl Mixer {
     }
 }
 
+impl Default for Mixer {
+    fn default() -> Self {
+        Mixer::new()
+    }
+}
+
 pub struct OutputBuffer {
     // output buffer
     buffer_index: usize,
@@ -339,6 +357,12 @@ impl OutputBuffer {
         }
         self.audio_available = false;
         Some(&self.buffer_2)
+    }
+}
+
+impl Default for OutputBuffer {
+    fn default() -> Self {
+        OutputBuffer::new()
     }
 }
 
@@ -763,7 +787,7 @@ impl Sound {
         0b0111_0000
             | (if self.power { 0b1000_0000 } else { 0 })
             | (if self.noise.is_running() { 0b_1000 } else { 0 })
-            | (if self.wave.is_running() { 0b_100 } else { 0 })
+            | (if self.wave.is_running() { 0b_0100 } else { 0 })
             | (if self.square_2.is_running() { 0b_10 } else { 0 })
             | (if self.square_1.is_running() { 1 } else { 0 })
     }
@@ -807,6 +831,12 @@ impl Sound {
     }
 }
 
+impl Default for Sound {
+    fn default() -> Self {
+        Sound::new()
+    }
+}
+
 pub struct FrameSequencer {
     timer: Timer,
     step: u8, // goes up by 1 everytime the timer hits 0
@@ -836,6 +866,12 @@ impl FrameSequencer {
     }
 }
 
+impl Default for FrameSequencer {
+    fn default() -> Self {
+        FrameSequencer::new()
+    }
+}
+
 #[derive(Clone, Copy)]
 // a timer with a default period of 8
 pub struct TimerDefaultPeriod {
@@ -860,7 +896,7 @@ impl TimerDefaultPeriod {
             return true;
         }
 
-        return false;
+        false
     }
 
     pub fn get_period(&self) -> usize {
@@ -877,6 +913,12 @@ impl TimerDefaultPeriod {
 
     pub fn restart(&mut self) {
         self.curr = self.get_period()
+    }
+}
+
+impl Default for TimerDefaultPeriod {
+    fn default() -> Self {
+        TimerDefaultPeriod::new()
     }
 }
 

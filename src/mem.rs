@@ -67,7 +67,7 @@ pub trait Memory {
         (self.read_byte(addr) as u16) | ((self.read_byte(addr + 1) as u16) << 8)
     }
 
-    fn write_word(&mut self, addr: u16, word: u16) -> () {
+    fn write_word(&mut self, addr: u16, word: u16) {
         self.write_byte(addr, (word & 0x00FF) as u8);
         self.write_byte(addr + 1, ((word & 0xFF00) >> 8) as u8);
     }
@@ -160,17 +160,14 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
             // VRAM
             0x8000 | 0x9000 => {
                 self.gpu.write_vram(addr & 0x1FFF, byte);
-                return;
             }
             // External RAM
             0xA000 | 0xB000 => {
                 self.cartridge.write_ram(addr & 0x1FFF, byte);
-                return;
             }
             // Working RAM
             0xC000 | 0xD000 | 0xE000 => {
                 self.wram[(addr & 0x1FFF) as usize] = byte;
-                return;
             }
 
             0xF000 => {
@@ -178,17 +175,14 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                     0x0000 | 0x0100 | 0x0200 | 0x0300 | 0x0400 | 0x0500 | 0x0600 | 0x0700
                     | 0x0800 | 0x0900 | 0x0A00 | 0x0B00 | 0x0C00 | 0x0D00 => {
                         self.wram[(addr & 0x1FFF) as usize] = byte;
-                        return;
                     }
                     // GPU OAM
                     0x0E00 => {
                         // Sprite Attribute Table (OAM - Object Attribute Memory) at $FE00-FE9F
                         if addr & 0x00FF < 0xA0 {
                             self.gpu.write_oam(addr & 0xFF, byte);
-                            return;
                         } else {
                             // 0xFEA0 <= addr <= 0xFEFF, unused memory area
-                            return;
                         }
                     }
 
@@ -196,36 +190,26 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                     0x0F00 => {
                         if addr == 0xFFFF {
                             self.interrupt_enable = byte;
-                            return;
                         } else if addr == 0xFF0F {
                             self.interrupt_flags = byte;
-                            return;
                         }
                         // keypad
                         else if addr == 0xFF00 {
                             self.key.write_byte(byte);
-                            return;
                         } else if addr == 0xFF01 {
                             self.link.set_data(byte);
-                            return;
                         } else if addr == 0xFF02 {
                             self.link.set_control(byte);
-                            return;
                         } else if addr == 0xFF04 {
                             self.timers.change_divider(byte);
-                            return;
                         } else if addr == 0xFF05 {
                             self.timers.change_counter(byte);
-                            return;
                         } else if addr == 0xFF06 {
                             self.timers.change_modulo(byte);
-                            return;
                         } else if addr == 0xFF07 {
                             self.timers.change_control(byte);
-                            return;
                         } else if addr >= 0xFF80 {
                             self.zram[(addr & 0x007F) as usize] = byte;
-                            return;
                         } else if addr >= 0xFF40 {
                             if addr == 0xFF46 {
                                 // OAM DMA transfer
@@ -238,10 +222,8 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                                 return;
                             }
                             self.gpu.write_byte(addr, byte);
-                            return;
                         } else if addr >= 0xFF10 {
                             self.sound.write_byte(addr, byte);
-                            return;
                         }
                     }
 

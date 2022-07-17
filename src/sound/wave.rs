@@ -297,6 +297,12 @@ impl WaveChannel {
     }
 }
 
+impl Default for WaveChannel {
+    fn default() -> Self {
+        WaveChannel::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -306,12 +312,12 @@ mod tests {
         let mut channel: WaveChannel = WaveChannel::new();
 
         assert_eq!(channel.read_register_0(), 0b0111_1111);
-        assert_eq!(channel.dac_power, false);
+        assert!(!channel.dac_power);
 
         channel.write_register_0(0b1000_0000);
         assert_eq!(channel.read_register_0(), 0b1111_1111);
 
-        assert_eq!(channel.dac_power, true);
+        assert!(channel.dac_power);
 
         channel.dac_power = false;
         assert_eq!(channel.read_register_0(), 0b0111_1111);
@@ -351,7 +357,7 @@ mod tests {
         assert_eq!(channel.read_register_4(), 0b1011_1111);
 
         channel.write_register_4(0b1000_1110);
-        assert_eq!(channel.length.enabled(), false);
+        assert!(!channel.length.enabled());
         assert_eq!(channel.frequency, 0b110_0000_0000);
 
         channel.length.set_enable(true, false);

@@ -186,6 +186,12 @@ impl NoiseChannel {
     }
 }
 
+impl Default for NoiseChannel {
+    fn default() -> Self {
+        NoiseChannel::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -197,7 +203,7 @@ mod tests {
         assert_eq!(channel.read_register_4(), 0b1011_1111);
 
         channel.write_register_4(0b1000_1110);
-        assert_eq!(channel.length.enabled(), false);
+        assert!(!channel.length.enabled());
 
         channel.length.set_enable(true, false);
 

@@ -1,7 +1,5 @@
 extern crate gameman;
 
-
-
 #[test]
 fn sound_registers() {
     // this test rom is not writing to the link cable...

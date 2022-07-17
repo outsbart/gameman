@@ -23,17 +23,14 @@ impl Key {
     }
 
     pub fn read_byte(&mut self) -> u8 {
-        let ret = match self.column {
+        (match self.column {
             0x10 => self.rows[0],
             0x20 => self.rows[1],
             _ => 0xCF,
-        } | self.column;
-        // println!("somebody read {:b}", ret);
-        ret
+        } | self.column)
     }
 
     pub fn write_byte(&mut self, value: u8) {
-        // println!("somebody wrote {:b}", value);
         self.column = value & 0b110000;
     }
 
@@ -61,5 +58,11 @@ impl Key {
             Button::B => self.rows[0] |= 0x2,
             Button::A => self.rows[0] |= 0x1,
         }
+    }
+}
+
+impl Default for Key {
+    fn default() -> Self {
+        Key::new()
     }
 }

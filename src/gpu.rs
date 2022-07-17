@@ -110,10 +110,10 @@ impl SpriteOptions {
     }
 
     pub fn update(&mut self, value: u8) {
-        self.palette = if (value & 0x10) != 0 { true } else { false };
-        self.flip_x = if (value & 0x20) != 0 { true } else { false };
-        self.flip_y = if (value & 0x40) != 0 { true } else { false };
-        self.z = if (value & 0x80) != 0 { true } else { false };
+        self.palette = (value & 0x10) != 0;
+        self.flip_x = (value & 0x20) != 0;
+        self.flip_y = (value & 0x40) != 0;
+        self.z = (value & 0x80) != 0;
     }
 
     pub fn byte(&self) -> u8 {
@@ -253,17 +253,17 @@ impl GPUMemoriesAccess for GPU {
         match addr {
             0xFF40 => {
                 // LCD Control
-                self.bg_enabled = if (byte & 0x01) != 0 { true } else { false };
-                self.obj_enabled = if (byte & 0x02) != 0 { true } else { false };
-                self.obj_size = if (byte & 0x04) != 0 { true } else { false };
-                self.bg_map = if (byte & 0x08) != 0 { true } else { false };
-                self.bg_tile = if (byte & 0x10) != 0 { true } else { false };
-                self.window_enabled = if (byte & 0x20) != 0 { true } else { false };
-                self.window_map = if (byte & 0x40) != 0 { true } else { false };
-                self.lcd_enabled = if (byte & 0x80) != 0 { true } else { false };
+                self.bg_enabled = (byte & 0x01) != 0;
+                self.obj_enabled = (byte & 0x02) != 0;
+                self.obj_size = (byte & 0x04) != 0;
+                self.bg_map = (byte & 0x08) != 0;
+                self.bg_tile = (byte & 0x10) != 0;
+                self.window_enabled = (byte & 0x20) != 0;
+                self.window_map = (byte & 0x40) != 0;
+                self.lcd_enabled = (byte & 0x80) != 0;
             }
             0xFF41 => {
-                self.compare_enabled = if (byte & 0x40) != 0 { true } else { false };
+                self.compare_enabled = (byte & 0x40) != 0;
             }
             0xFF42 => {
                 self.scroll_y = byte;
@@ -305,7 +305,7 @@ impl GPU {
     pub fn new() -> Self {
         GPU {
             vram: [0; 8192],
-            sprites: iter::repeat_with(|| Sprite::new()).take(40).collect(),
+            sprites: iter::repeat_with(Sprite::new).take(40).collect(),
             buffer: [0; 160 * 144],
             modeclock: 0,
             mode: 2,
@@ -335,7 +335,7 @@ impl GPU {
     }
 
     pub fn get_buffer(&self) -> &[u8; 160 * 144] {
-        return &self.buffer;
+        &self.buffer
     }
 
     fn get_tileset_index(&self, mut index: u8) -> usize {
@@ -347,7 +347,7 @@ impl GPU {
 
         if index >= 128 {
             offset = TILEDATA_SHARED;
-            index = index - 128;
+            index -= 128;
         }
 
         offset + 2 * TILE_SIZE * (index as usize)
@@ -547,7 +547,7 @@ impl GPU {
 
     // returns true if compare stat interrupt should raise
     fn check_compare_int(&self) -> bool {
-        return self.compare_enabled && self.compare();
+        self.compare_enabled && self.compare()
     }
 
     // go forward based on the cpu's last operation clocks
@@ -612,6 +612,12 @@ impl GPU {
         }
 
         (vblank_interrupt, compare_interrupt)
+    }
+}
+
+impl Default for GPU {
+    fn default() -> Self {
+        GPU::new()
     }
 }
 
@@ -703,45 +709,45 @@ mod tests {
     fn test_control() {
         let mut gpu = GPU::new();
 
-        assert_eq!(gpu.bg_enabled, false);
-        assert_eq!(gpu.obj_enabled, false);
-        assert_eq!(gpu.obj_size, false);
-        assert_eq!(gpu.bg_map, false);
-        assert_eq!(gpu.bg_tile, false);
-        assert_eq!(gpu.window_enabled, false);
-        assert_eq!(gpu.window_map, false);
-        assert_eq!(gpu.lcd_enabled, false);
+        assert!(!gpu.bg_enabled);
+        assert!(!gpu.obj_enabled);
+        assert!(!gpu.obj_size);
+        assert!(!gpu.bg_map);
+        assert!(!gpu.bg_tile);
+        assert!(!gpu.window_enabled);
+        assert!(!gpu.window_map);
+        assert!(!gpu.lcd_enabled);
 
         gpu.write_byte(0xFF40, 1);
-        assert_eq!(gpu.bg_enabled, true);
+        assert!(gpu.bg_enabled);
         assert_eq!(gpu.read_byte(0xFF40), 1);
 
         gpu.write_byte(0xFF40, 0x02);
-        assert_eq!(gpu.obj_enabled, true);
+        assert!(gpu.obj_enabled);
         assert_eq!(gpu.read_byte(0xFF40), 0x02);
 
         gpu.write_byte(0xFF40, 0x04);
-        assert_eq!(gpu.obj_size, true);
+        assert!(gpu.obj_size);
         assert_eq!(gpu.read_byte(0xFF40), 0x04);
 
         gpu.write_byte(0xFF40, 0x08);
-        assert_eq!(gpu.bg_map, true);
+        assert!(gpu.bg_map);
         assert_eq!(gpu.read_byte(0xFF40), 0x08);
 
         gpu.write_byte(0xFF40, 0x10);
-        assert_eq!(gpu.bg_tile, true);
+        assert!(gpu.bg_tile);
         assert_eq!(gpu.read_byte(0xFF40), 0x10);
 
         gpu.write_byte(0xFF40, 0x20);
-        assert_eq!(gpu.window_enabled, true);
+        assert!(gpu.window_enabled);
         assert_eq!(gpu.read_byte(0xFF40), 0x20);
 
         gpu.write_byte(0xFF40, 0x40);
-        assert_eq!(gpu.window_map, true);
+        assert!(gpu.window_map);
         assert_eq!(gpu.read_byte(0xFF40), 0x40);
 
         gpu.write_byte(0xFF40, 0x80);
-        assert_eq!(gpu.lcd_enabled, true);
+        assert!(gpu.lcd_enabled);
         assert_eq!(gpu.read_byte(0xFF40), 0x80);
     }
 
@@ -781,33 +787,33 @@ mod tests {
         assert_eq!(gpu.read_oam(2), 4);
 
         // should update first sprite's options z
-        assert_eq!(gpu.sprites[0].options.z, false);
+        assert!(!gpu.sprites[0].options.z);
         gpu.write_oam(3, 0b10000000);
-        assert_eq!(gpu.sprites[0].options.z, true);
+        assert!(gpu.sprites[0].options.z);
         assert_eq!(gpu.read_oam(3), 0b10000000);
 
         // should update first sprite's options flip_y
-        assert_eq!(gpu.sprites[0].options.flip_y, false);
+        assert!(!gpu.sprites[0].options.flip_y);
         gpu.write_oam(3, 0b01000000);
-        assert_eq!(gpu.sprites[0].options.flip_y, true);
+        assert!(gpu.sprites[0].options.flip_y);
         assert_eq!(gpu.read_oam(3), 0b01000000);
 
         // should update first sprite's options flip_x
-        assert_eq!(gpu.sprites[0].options.flip_x, false);
+        assert!(!gpu.sprites[0].options.flip_x);
         gpu.write_oam(3, 0b00100000);
-        assert_eq!(gpu.sprites[0].options.flip_x, true);
+        assert!(gpu.sprites[0].options.flip_x);
         assert_eq!(gpu.read_oam(3), 0b00100000);
 
         // should update first sprite's options flip_x
-        assert_eq!(gpu.sprites[0].options.palette, false);
+        assert!(!gpu.sprites[0].options.palette);
         gpu.write_oam(3, 0b00010000);
-        assert_eq!(gpu.sprites[0].options.palette, true);
+        assert!(gpu.sprites[0].options.palette);
         assert_eq!(gpu.read_oam(3), 0b00010000);
 
         // should update sprite 40's options flip_x
-        assert_eq!(gpu.sprites[39].options.palette, false);
+        assert!(!gpu.sprites[39].options.palette);
         gpu.write_oam(159, 0b00010000);
-        assert_eq!(gpu.sprites[39].options.palette, true);
+        assert!(gpu.sprites[39].options.palette);
         assert_eq!(gpu.read_oam(3), 0b00010000);
     }
 }

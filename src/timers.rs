@@ -149,6 +149,12 @@ impl Timers {
     }
 }
 
+impl Default for Timers {
+    fn default() -> Self {
+        Timers::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -161,7 +167,7 @@ mod tests {
         assert_eq!(timers.counter, 0);
         assert_eq!(timers.modulo, 0);
         assert_eq!(timers.speed as u8, 0);
-        assert_eq!(timers.running, false);
+        assert!(!timers.running);
     }
 
     #[test]
@@ -198,7 +204,7 @@ mod tests {
 
         timers.change_control(0b0000_0111);
 
-        assert_eq!(timers.running, true);
+        assert!(timers.running);
         assert_eq!(timers.speed as u8, 0b11);
 
         assert_eq!(timers.read_control(), 0b0000_0111);

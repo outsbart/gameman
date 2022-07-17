@@ -269,6 +269,12 @@ impl SquareChannel {
     }
 }
 
+impl Default for SquareChannel {
+    fn default() -> Self {
+        SquareChannel::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -295,7 +301,7 @@ mod tests {
         assert_eq!(channel.read_register_4(), 0b1011_1111);
 
         channel.write_register_4(0b1000_1110);
-        assert_eq!(channel.length.enabled(), false);
+        assert!(!channel.length.enabled());
         assert_eq!(channel.frequency, 0b110_0000_0000);
 
         channel.length.set_enable(true, false);

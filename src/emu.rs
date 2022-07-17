@@ -317,7 +317,7 @@ impl Emulator {
             canvas.present();
 
             // audio
-            if let Some(ref audio_buffer) = self.cpu.mmu.sound.get_audio_buffer() {
+            if let Some(audio_buffer) = self.cpu.mmu.sound.get_audio_buffer() {
                 // wait for device queue to drain audio buffer
                 while device.size() > AUDIO_BUFFER_SIZE as u32 {
                     thread::sleep(time::Duration::from_millis(1));

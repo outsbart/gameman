@@ -46,6 +46,12 @@ impl Link {
     }
 }
 
+impl Default for Link {
+    fn default() -> Self {
+        Link::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -63,11 +69,11 @@ mod tests {
     fn send() {
         let mut link = Link::new();
 
-        link.set_data('w' as u8);
+        link.set_data(b'w');
         link.send();
-        link.set_data('o' as u8);
+        link.set_data(b'o');
         link.send();
-        link.set_data('w' as u8);
+        link.set_data(b'w');
         link.send();
 
         assert_eq!(link.get_buffer()[0], 'w');

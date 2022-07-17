@@ -40,7 +40,7 @@ impl Envelope {
 
     pub fn read(&self) -> u8 {
         self.timer.period as u8
-            | (if self.add_mode == true { 0b1000 } else { 0 })
+            | (if self.add_mode { 0b1000 } else { 0 })
             | (u8::from(self.volume_initial) << 4)
     }
 
@@ -62,5 +62,11 @@ impl Envelope {
         } else {
             self.volume.decrease();
         };
+    }
+}
+
+impl Default for Envelope {
+    fn default() -> Self {
+        Envelope::new()
     }
 }
