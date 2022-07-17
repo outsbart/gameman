@@ -1,6 +1,6 @@
 extern crate gameman;
 
-use gameman::emu::Emulator;
+
 
 #[test]
 fn sound_registers() {

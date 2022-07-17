@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use crate::mem::Memory;
 use crate::ops::{fetch_operation, Operation};
 use crate::utils::add_bytes;
@@ -96,7 +98,7 @@ impl Memory for Regs {
     fn read_word(&mut self, addr: u16) -> u16 {
         (self.read_byte(addr + 1) as u16) | ((self.read_byte(addr) as u16) << 8)
     }
-    fn write_word(&mut self, addr: u16, word: u16) -> () {
+    fn write_word(&mut self, addr: u16, word: u16) {
         self.write_byte(addr + 1, (word & 0x00FF) as u8);
         self.write_byte(addr, ((word & 0xFF00) >> 8) as u8);
     }
@@ -257,7 +259,7 @@ impl<M: Memory> CPU<M> {
 
     pub fn store_result(&mut self, into: &str, value: u16, is_byte: bool) {
         info!("Storing into {} value 0x{:x}", into, value);
-        let addr: u16 = match into.as_ref() {
+        let addr: u16 = match into {
             "BC" | "DE" | "HL" | "PC" | "SP" | "AF" | "A" | "B" | "C" | "D" | "E" | "H" | "L" => {
                 return self.set_registry_value(into, value);
             }
@@ -281,7 +283,7 @@ impl<M: Memory> CPU<M> {
     }
 
     pub fn get_operand_value(&mut self, operand: &str) -> u16 {
-        match operand.as_ref() {
+        match operand {
             "(BC)" | "(DE)" | "(HL)" | "(PC)" | "(SP)" => {
                 let reg = operand[1..operand.len() - 1].as_ref();
                 let addr = self.get_registry_value(reg);
@@ -292,16 +294,15 @@ impl<M: Memory> CPU<M> {
             }
             "(a8)" => {
                 let addr = 0xFF00 + u16::from(self.fetch_next_byte());
-                let res = u16::from(self.mmu.read_byte(addr));
+                u16::from(self.mmu.read_byte(addr))
                 //                info!("Reading input from 0x{:x} --> 0b{:b}", addr, res);
-                res
             }
             "(C)" => {
-                let addr = 0xFF00 + u16::from(self.get_registry_value("C"));
+                let addr = 0xFF00 + self.get_registry_value("C");
                 u16::from(self.mmu.read_byte(addr))
             }
             "(a16)" => {
-                let addr = u16::from(self.fetch_next_word());
+                let addr = self.fetch_next_word();
                 self.mmu.read_byte(addr) as u16
             }
             "d16" | "a16" => self.fetch_next_word(),
@@ -414,7 +415,7 @@ impl<M: Memory> CPU<M> {
     }
 
     pub fn execute(&mut self, opcode: u8, cb: bool) {
-        if cb == false {
+        if !cb {
             match opcode {
                 0x00 => self.x00(),
                 0x01 => self.x01(),
@@ -672,7 +673,6 @@ impl<M: Memory> CPU<M> {
                 0xFD => self.xFD(),
                 0xFE => self.xFE(),
                 0xFF => self.xFF(),
-                _ => {}
             }
         } else {
             match opcode {
@@ -932,7 +932,6 @@ impl<M: Memory> CPU<M> {
                 0xFD => self.xCBFD(),
                 0xFE => self.xCBFE(),
                 0xFF => self.xCBFF(),
-                _ => {}
             }
         }
     }
@@ -2193,7 +2192,7 @@ impl<M: Memory> CPU<M> {
         let op2 = self.get_operand_value("B");
         let (_, _, _, op3) = self.regs.get_flags();
 
-        let (result, c, h) = sub_bytes(op1, op2, if op3 == true { 1 } else { 0 });
+        let (result, c, h) = sub_bytes(op1, op2, if op3 { 1 } else { 0 });
 
         self.regs.set_flags((result as u8) == 0, true, h, c);
         self.store_result("A", result, true);
@@ -2204,7 +2203,7 @@ impl<M: Memory> CPU<M> {
         let op2 = self.get_operand_value("C");
         let (_, _, _, op3) = self.regs.get_flags();
 
-        let (result, c, h) = sub_bytes(op1, op2, if op3 == true { 1 } else { 0 });
+        let (result, c, h) = sub_bytes(op1, op2, if op3 { 1 } else { 0 });
 
         self.regs.set_flags((result as u8) == 0, true, h, c);
         self.store_result("A", result, true);
@@ -2215,7 +2214,7 @@ impl<M: Memory> CPU<M> {
         let op2 = self.get_operand_value("D");
         let (_, _, _, op3) = self.regs.get_flags();
 
-        let (result, c, h) = sub_bytes(op1, op2, if op3 == true { 1 } else { 0 });
+        let (result, c, h) = sub_bytes(op1, op2, if op3 { 1 } else { 0 });
 
         self.regs.set_flags((result as u8) == 0, true, h, c);
         self.store_result("A", result, true);
@@ -2226,7 +2225,7 @@ impl<M: Memory> CPU<M> {
         let op2 = self.get_operand_value("E");
         let (_, _, _, op3) = self.regs.get_flags();
 
-        let (result, c, h) = sub_bytes(op1, op2, if op3 == true { 1 } else { 0 });
+        let (result, c, h) = sub_bytes(op1, op2, if op3 { 1 } else { 0 });
 
         self.regs.set_flags((result as u8) == 0, true, h, c);
         self.store_result("A", result, true);
@@ -2237,7 +2236,7 @@ impl<M: Memory> CPU<M> {
         let op2 = self.get_operand_value("H");
         let (_, _, _, op3) = self.regs.get_flags();
 
-        let (result, c, h) = sub_bytes(op1, op2, if op3 == true { 1 } else { 0 });
+        let (result, c, h) = sub_bytes(op1, op2, if op3 { 1 } else { 0 });
 
         self.regs.set_flags((result as u8) == 0, true, h, c);
         self.store_result("A", result, true);
@@ -2248,7 +2247,7 @@ impl<M: Memory> CPU<M> {
         let op2 = self.get_operand_value("L");
         let (_, _, _, op3) = self.regs.get_flags();
 
-        let (result, c, h) = sub_bytes(op1, op2, if op3 == true { 1 } else { 0 });
+        let (result, c, h) = sub_bytes(op1, op2, if op3 { 1 } else { 0 });
 
         self.regs.set_flags((result as u8) == 0, true, h, c);
         self.store_result("A", result, true);
@@ -2259,7 +2258,7 @@ impl<M: Memory> CPU<M> {
         let op2 = self.get_operand_value("(HL)");
         let (_, _, _, op3) = self.regs.get_flags();
 
-        let (result, c, h) = sub_bytes(op1, op2, if op3 == true { 1 } else { 0 });
+        let (result, c, h) = sub_bytes(op1, op2, if op3 { 1 } else { 0 });
 
         self.regs.set_flags((result as u8) == 0, true, h, c);
         self.store_result("A", result, true);
@@ -2270,7 +2269,7 @@ impl<M: Memory> CPU<M> {
         let op2 = self.get_operand_value("A");
         let (_, _, _, op3) = self.regs.get_flags();
 
-        let (result, c, h) = sub_bytes(op1, op2, if op3 == true { 1 } else { 0 });
+        let (result, c, h) = sub_bytes(op1, op2, if op3 { 1 } else { 0 });
 
         self.regs.set_flags((result as u8) == 0, true, h, c);
         self.store_result("A", result, true);
@@ -2894,7 +2893,7 @@ impl<M: Memory> CPU<M> {
         let op2 = self.get_operand_value("d8");
         let (_, _, _, op3) = self.regs.get_flags();
 
-        let (result, c, h) = sub_bytes(op1, op2, if op3 == true { 1 } else { 0 });
+        let (result, c, h) = sub_bytes(op1, op2, if op3 { 1 } else { 0 });
 
         self.regs.set_flags((result as u8) == 0, true, h, c);
         self.store_result("A", result, true);
@@ -5271,10 +5270,10 @@ mod tests {
         cpu.regs.set_flags(true, false, true, false);
         let (z, n, h, c) = cpu.regs.get_flags();
 
-        assert_eq!(z, true);
-        assert_eq!(n, false);
-        assert_eq!(h, true);
-        assert_eq!(c, false);
+        assert!(z, true);
+        assert!(n, false);
+        assert!(h, true);
+        assert!(c, false);
     }
 
     #[test]

@@ -9,12 +9,14 @@ pub fn load_boot_rom() -> [u8; 0x0100] {
     match File::open("roms/DMG_ROM.bin") {
         Ok(mut file) => {
             match file.read_exact(&mut boot_rom[..]) {
-                Ok(_) => return boot_rom,
+                Ok(_) => boot_rom,
                 Err(_) => panic!("couldnt read the boot rom into the buffer!"),
             };
         }
         Err(_) => panic!("couldnt open the boot rom file"),
     }
+
+    boot_rom
 }
 
 pub fn u16_to_i16(unsigned: u16) -> i16 {
@@ -41,7 +43,7 @@ pub fn swap_nibbles(unsigned: u8) -> u16 {
 }
 
 pub fn parse_hex(number: &str) -> u16 {
-    u16::from_str_radix(number, 16).expect(format!("cant read {} yet!!!", number).as_ref())
+    u16::from_str_radix(number, 16).unwrap_or_else(|_| panic!("cant read {} yet!!!", number))
 }
 
 pub fn reset_bit(position: u8, number: u8) -> u16 {
