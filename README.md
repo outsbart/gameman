@@ -1,4 +1,4 @@
-# gameman [![Build Status](https://travis-ci.com/outsbart/gameman.svg?branch=master)](https://travis-ci.com/outsbart/gameman)
+# gameman [![Build Status](https://github.com/outsbart/gameman/actions/workflows/integration.yml/badge.svg)](https://github.com/outsbart/gameman/actions)
 gameman is a Game Boy (DMG) emulator written in Rust as a hobby project.
 I'm doing it mostly for learning Rust and to have fun with the challenges of emulation.
 
