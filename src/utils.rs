@@ -2,7 +2,6 @@ use std::fs::File;
 use std::io::Read;
 use std::mem;
 
-
 pub fn load_boot_rom() -> [u8; 0x0100] {
     // TODO: make a generic function for loading roms
     let mut boot_rom: [u8; 0x0100] = [0; 0x0100];

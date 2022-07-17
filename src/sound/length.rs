@@ -64,12 +64,8 @@ impl Length {
         let max_val = self.max_length as u16;
 
         self.timer = match self.max_length {
-            MaxLength::NotWave => {
-                max_val - ((value as u16) & (max_val - 1))
-            },
-            MaxLength::Wave => {
-                max_val - (value as u16)
-            }
+            MaxLength::NotWave => max_val - ((value as u16) & (max_val - 1)),
+            MaxLength::Wave => max_val - (value as u16),
         }
     }
 

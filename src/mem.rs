@@ -1,8 +1,8 @@
 use crate::gpu::GPUMemoriesAccess;
-use crate::link::Link;
 use crate::keypad::Key;
-use crate::timers::Timers;
+use crate::link::Link;
 use crate::sound::Sound;
+use crate::timers::Timers;
 use cartridge::CartridgeAccess;
 
 pub struct MMU<M: GPUMemoriesAccess> {
@@ -98,13 +98,14 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
 
             0xF000 => {
                 match addr & 0x0F00 {
-                    0x0000 | 0x0100 | 0x0200 | 0x0300 | 0x0400 |
-                    0x0500 | 0x0600 | 0x0700 | 0x0800 | 0x0900 |
-                    0x0A00 | 0x0B00 | 0x0C00 | 0x0D00 => self.wram[(addr & 0x1FFF) as usize], // Working RAM echo
+                    0x0000 | 0x0100 | 0x0200 | 0x0300 | 0x0400 | 0x0500 | 0x0600 | 0x0700
+                    | 0x0800 | 0x0900 | 0x0A00 | 0x0B00 | 0x0C00 | 0x0D00 => {
+                        self.wram[(addr & 0x1FFF) as usize]
+                    } // Working RAM echo
 
                     // GPU OAM
                     0x0E00 => {
-                        if addr & 0xFF < 0xA0  {
+                        if addr & 0xFF < 0xA0 {
                             self.gpu.read_oam(addr & 0xFF)
                         } else {
                             // 0xFEA0 <= addr <= 0xFEFF, unused memory area
@@ -121,17 +122,17 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                         } else {
                             match addr & 0xF0 {
                                 0x00 => match addr & 0xF {
-                                    0 => { self.key.read_byte() }
-                                    1 => { self.link.get_data() }
-                                    2 => { self.link.get_control() }
-                                    4 => { self.timers.read_divider() }
-                                    5 => { self.timers.read_counter() }
-                                    6 => { self.timers.read_modulo() }
-                                    7 => { self.timers.read_control() }
-                                    0xF => { self.interrupt_flags }
-                                    _ => { 0 }
-                                }
-                                0x10 | 0x20 | 0x30 => { self.sound.read_byte(addr) }
+                                    0 => self.key.read_byte(),
+                                    1 => self.link.get_data(),
+                                    2 => self.link.get_control(),
+                                    4 => self.timers.read_divider(),
+                                    5 => self.timers.read_counter(),
+                                    6 => self.timers.read_modulo(),
+                                    7 => self.timers.read_control(),
+                                    0xF => self.interrupt_flags,
+                                    _ => 0,
+                                },
+                                0x10 | 0x20 | 0x30 => self.sound.read_byte(addr),
                                 0x40 | 0x50 | 0x60 | 0x70 => {
                                     if addr == 0xFF46 {
                                         self.oam_dma_source
@@ -139,7 +140,7 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                                         self.gpu.read_byte(addr)
                                     }
                                 }
-                                _ => panic!("Unhandled memory access")
+                                _ => panic!("Unhandled memory access"),
                             }
                         }
                     }
@@ -174,9 +175,8 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
 
             0xF000 => {
                 match addr & 0x0F00 {
-                    0x0000 | 0x0100 | 0x0200 | 0x0300 | 0x0400 |
-                    0x0500 | 0x0600 | 0x0700 | 0x0800 | 0x0900 |
-                    0x0A00 | 0x0B00 | 0x0C00 | 0x0D00 => {
+                    0x0000 | 0x0100 | 0x0200 | 0x0300 | 0x0400 | 0x0500 | 0x0600 | 0x0700
+                    | 0x0800 | 0x0900 | 0x0A00 | 0x0B00 | 0x0C00 | 0x0D00 => {
                         self.wram[(addr & 0x1FFF) as usize] = byte;
                         return;
                     }
@@ -205,50 +205,41 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                         else if addr == 0xFF00 {
                             self.key.write_byte(byte);
                             return;
-                        }
-                        else if addr == 0xFF01 {
+                        } else if addr == 0xFF01 {
                             self.link.set_data(byte);
                             return;
-                        }
-                        else if addr == 0xFF02 {
+                        } else if addr == 0xFF02 {
                             self.link.set_control(byte);
                             return;
-                        }
-                        else if addr == 0xFF04 {
+                        } else if addr == 0xFF04 {
                             self.timers.change_divider(byte);
                             return;
-                        }
-                        else if addr == 0xFF05 {
+                        } else if addr == 0xFF05 {
                             self.timers.change_counter(byte);
                             return;
-                        }
-                        else if addr == 0xFF06 {
+                        } else if addr == 0xFF06 {
                             self.timers.change_modulo(byte);
                             return;
-                        }
-                        else if addr == 0xFF07 {
+                        } else if addr == 0xFF07 {
                             self.timers.change_control(byte);
                             return;
-                        }
-                        else if addr >= 0xFF80 {
+                        } else if addr >= 0xFF80 {
                             self.zram[(addr & 0x007F) as usize] = byte;
                             return;
-                        }
-                        else if addr >= 0xFF40 {
+                        } else if addr >= 0xFF40 {
                             if addr == 0xFF46 {
                                 // OAM DMA transfer
                                 self.oam_dma_source = byte;
                                 let start: u16 = (byte as u16) << 8;
                                 for i in 0u16..160 {
-                                    let to_be_copied = self.read_byte(start+i);
+                                    let to_be_copied = self.read_byte(start + i);
                                     self.gpu.write_oam(i, to_be_copied);
                                 }
                                 return;
                             }
                             self.gpu.write_byte(addr, byte);
                             return;
-                        }
-                        else if addr >= 0xFF10 {
+                        } else if addr >= 0xFF10 {
                             self.sound.write_byte(addr, byte);
                             return;
                         }
@@ -323,10 +314,7 @@ mod tests {
 
     #[test]
     fn little_endian() {
-        let mut mmu = MMU::new(
-            DummyGPU::new(),
-            load_rom("tests/cpu_instrs/01-special.gb")
-        );
+        let mut mmu = MMU::new(DummyGPU::new(), load_rom("tests/cpu_instrs/01-special.gb"));
 
         mmu.write_word(0xC000, 0x1FF);
         assert_eq!(0x1FF, mmu.read_word(0xC000))
@@ -334,10 +322,7 @@ mod tests {
 
     #[test]
     fn read_and_write_byte() {
-        let mut mmu = MMU::new(
-            DummyGPU::new(),
-            load_rom("tests/cpu_instrs/01-special.gb")
-        );
+        let mut mmu = MMU::new(DummyGPU::new(), load_rom("tests/cpu_instrs/01-special.gb"));
 
         mmu.write_byte(0xC000, 0x1);
         assert_eq!(0x1, mmu.read_byte(0xC000))
@@ -361,10 +346,7 @@ mod tests {
     /// from 0xA000 to 0xBFFF should access eram
     #[test]
     fn eram_access() {
-        let mut mmu = MMU::new(
-            DummyGPU::new(),
-            load_rom("tests/cpu_instrs/01-special.gb")
-        );
+        let mut mmu = MMU::new(DummyGPU::new(), load_rom("tests/cpu_instrs/01-special.gb"));
 
         assert_eq!(mmu.read_byte(0xA000), 0xFF);
         // returns 0xFF because this rom doesnt need an eram
@@ -382,11 +364,7 @@ mod tests {
     /// from 0xC000 to 0xFDFF should access wram
     #[test]
     fn wram_access() {
-        let mut mmu = MMU::new(
-            DummyGPU::new(),
-            load_rom("tests/cpu_instrs/01-special.gb")
-        );
-
+        let mut mmu = MMU::new(DummyGPU::new(), load_rom("tests/cpu_instrs/01-special.gb"));
 
         mmu.wram = [1; 0x2000];
         mmu.wram[0xD000 & 0x1FFF] = 2;
@@ -403,10 +381,7 @@ mod tests {
     /// from 0xC000 to 0xFDFF should write to wram at addr &0x1FFF
     #[test]
     fn wram_write() {
-        let mut mmu = MMU::new(
-            DummyGPU::new(),
-            load_rom("tests/cpu_instrs/01-special.gb")
-        );
+        let mut mmu = MMU::new(DummyGPU::new(), load_rom("tests/cpu_instrs/01-special.gb"));
 
         mmu.write_byte(0xC000, 1);
         mmu.write_byte(0xD000, 1);
@@ -424,10 +399,7 @@ mod tests {
     /// careful, cause the areas overlaps with IO
     #[test]
     fn zram_access() {
-        let mut mmu = MMU::new(
-            DummyGPU::new(),
-            load_rom("tests/cpu_instrs/01-special.gb")
-        );
+        let mut mmu = MMU::new(DummyGPU::new(), load_rom("tests/cpu_instrs/01-special.gb"));
 
         mmu.zram = [1; 0x0080];
         mmu.zram[0xFF80 & 0x007F] = 2;
@@ -446,10 +418,7 @@ mod tests {
     /// from 0xFF80 to 0xFFFF should write to zram at addr &0x007F
     #[test]
     fn zram_write() {
-        let mut mmu = MMU::new(
-            DummyGPU::new(),
-            load_rom("tests/cpu_instrs/01-special.gb")
-        );
+        let mut mmu = MMU::new(DummyGPU::new(), load_rom("tests/cpu_instrs/01-special.gb"));
 
         mmu.write_byte(0xFF80, 1);
         mmu.write_byte(0xFFB0, 1);
@@ -464,7 +433,7 @@ mod tests {
     fn gpu_vram_access() {
         let mut mmu = MMU::new(
             DummyGPU::with([1; 65536], [0; 65536]),
-            load_rom("tests/cpu_instrs/01-special.gb")
+            load_rom("tests/cpu_instrs/01-special.gb"),
         );
 
         assert_eq!(mmu.read_byte(0x7FFF), 0);
@@ -479,10 +448,7 @@ mod tests {
     /// from 0x8000 to 0x9FFF should write to gpu vram at addr &0x1FFF
     #[test]
     fn gpu_vram_write() {
-        let mut mmu = MMU::new(
-            DummyGPU::new(),
-            load_rom("tests/cpu_instrs/01-special.gb")
-        );
+        let mut mmu = MMU::new(DummyGPU::new(), load_rom("tests/cpu_instrs/01-special.gb"));
 
         mmu.write_byte(0x8000, 1);
         mmu.write_byte(0x9000, 1);
@@ -499,7 +465,7 @@ mod tests {
     fn gpu_oam_access() {
         let mut mmu = MMU::new(
             DummyGPU::with([0; 65536], [1; 65536]),
-            load_rom("tests/cpu_instrs/01-special.gb")
+            load_rom("tests/cpu_instrs/01-special.gb"),
         );
 
         assert_eq!(mmu.read_byte(0xFDFF), 0);
@@ -513,10 +479,7 @@ mod tests {
     /// from 0xFE00 to 0xFE9F should write to gpu oam at addr &0x00FF
     #[test]
     fn gpu_oam_write() {
-        let mut mmu = MMU::new(
-            DummyGPU::new(),
-            load_rom("tests/cpu_instrs/01-special.gb")
-        );
+        let mut mmu = MMU::new(DummyGPU::new(), load_rom("tests/cpu_instrs/01-special.gb"));
 
         mmu.write_byte(0xFE00, 1);
         mmu.write_byte(0xFE70, 1);
@@ -531,10 +494,7 @@ mod tests {
     /// from 0xFF40 to 0xFF7F should write to gpu registers
     #[test]
     fn gpu_registers_write() {
-        let mut mmu = MMU::new(
-            DummyGPU::new(),
-            load_rom("tests/cpu_instrs/01-special.gb")
-        );
+        let mut mmu = MMU::new(DummyGPU::new(), load_rom("tests/cpu_instrs/01-special.gb"));
 
         for i in 0u16..64u16 {
             mmu.write_byte(0xFF40 + i, 1);
@@ -553,11 +513,7 @@ mod tests {
     /// unmapped area (0xFEA0-0xFEFF) is unwritable and reads should always return 0xFF
     #[test]
     fn unmapped_areas() {
-        let mut mmu = MMU::new(
-            DummyGPU::new(),
-            load_rom("tests/cpu_instrs/01-special.gb")
-        );
-
+        let mut mmu = MMU::new(DummyGPU::new(), load_rom("tests/cpu_instrs/01-special.gb"));
 
         mmu.write_byte(0xFEA0, 0);
         assert_eq!(mmu.read_byte(0xFEA0), 0xFF);

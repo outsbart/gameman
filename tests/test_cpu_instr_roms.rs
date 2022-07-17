@@ -1,6 +1,5 @@
 extern crate gameman;
 
-
 use gameman::emu::Emulator;
 
 #[test]
@@ -68,4 +67,3 @@ fn cpu_instrs_11() {
     let mut emulator = Emulator::new("tests/cpu_instrs/11-op a,(hl).gb");
     assert!(emulator.passes_test_rom());
 }
-

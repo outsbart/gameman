@@ -1,16 +1,16 @@
 use cpu::is_bit_set;
-use sound::{DUTY_PATTERNS_LENGTH, Length, Sample, Timer, Voltage};
 use sound::envelope::Envelope;
 use sound::length::MaxLength;
 use sound::sweep::Sweep;
+use sound::{Length, Sample, Timer, Voltage, DUTY_PATTERNS_LENGTH};
 
 pub struct SquareChannel {
     sweep: Sweep,
     pub envelope: Envelope,
     pub length: Length,
-    pub duty_timer: Timer,  // it resets when it runs out, and the position in the duty pattern moves forward
+    pub duty_timer: Timer, // it resets when it runs out, and the position in the duty pattern moves forward
 
-    pub duty_index: usize,  // in which position in the duty cycle we are. From 0 to 7
+    pub duty_index: usize, // in which position in the duty cycle we are. From 0 to 7
 
     // Duty Pattern
     //  0 — 00000001 (12.5%)
@@ -18,17 +18,16 @@ pub struct SquareChannel {
     //  2 — 10000111 (50.0%)
     //  3 — 01111110 (75.0%)
     duty: u8,
-    frequency: u16,  // it's 11 bits
+    frequency: u16, // it's 11 bits
 
     running: bool,
 }
-
 
 impl SquareChannel {
     pub fn new() -> Self {
         SquareChannel {
             sweep: Sweep::new(),
-            envelope: Envelope::new(),  // holds the volume
+            envelope: Envelope::new(), // holds the volume
             length: Length::new(MaxLength::NotWave),
             duty_timer: Timer::new(0),
 
@@ -81,15 +80,15 @@ impl SquareChannel {
 
         // timer has not run out yet
         if !self.sweep.timer.tick() {
-            return
+            return;
         }
 
         if !self.sweep.enabled() {
-            return
+            return;
         }
 
         if self.sweep.timer.period == 0 {
-            return
+            return;
         }
 
         // turns off the channel on overflow
@@ -122,7 +121,7 @@ impl SquareChannel {
 
         // timer didnt run out yet
         if !self.duty_timer.tick() {
-            return
+            return;
         }
 
         self.duty_index = (self.duty_index + 1) % DUTY_PATTERNS_LENGTH as usize;
@@ -142,7 +141,9 @@ impl SquareChannel {
     }
 
     fn sample(&mut self) -> Sample {
-        if !self.is_running() || !self.dac_enabled() { return Sample(0) }
+        if !self.is_running() || !self.dac_enabled() {
+            return Sample(0);
+        }
 
         let duty_pattern = self.get_duty_pattern();
 
@@ -208,9 +209,9 @@ impl SquareChannel {
     pub fn set_envelope(&mut self, envelope: Envelope) {
         self.envelope = envelope;
 
-         if !self.dac_enabled() {
-             self.running = false;
-         }
+        if !self.dac_enabled() {
+            self.running = false;
+        }
     }
 
     pub fn get_envelope(&self) -> &Envelope {
@@ -259,11 +260,14 @@ impl SquareChannel {
     }
 
     pub fn read_register_4(&self) -> u8 {
-        0b1011_1111 |
-        (if self.length.enabled() { 0b0100_0000 } else { 0 })
+        0b1011_1111
+            | (if self.length.enabled() {
+                0b0100_0000
+            } else {
+                0
+            })
     }
 }
-
 
 #[cfg(test)]
 mod tests {

@@ -9,11 +9,11 @@ use sound::square::SquareChannel;
 use sound::wave::WaveChannel;
 
 pub mod envelope;
-pub mod sweep;
-pub mod square;
 pub mod length;
-pub mod wave;
 pub mod noise;
+pub mod square;
+pub mod sweep;
+pub mod wave;
 
 pub const AUDIO_BUFFER_SIZE: usize = 1024;
 pub const SAMPLE_RATE: usize = 44_100;
@@ -25,7 +25,6 @@ const DUTY_PATTERNS_LENGTH: u8 = 8;
 const VOLUME_BOOST: u8 = 3;
 
 type AudioOutType = i16;
-
 
 #[derive(Eq, Clone, Copy)]
 pub struct Sample(u8);
@@ -88,7 +87,6 @@ impl Voltage {
     }
 }
 
-
 impl From<Sample> for Voltage {
     // this converts the input value to a proportional output voltage. An input of 0
     // generates -1.0 and an input of 15 generates +1.0, using arbitrary
@@ -98,15 +96,14 @@ impl From<Sample> for Voltage {
     }
 }
 
-
 pub struct Sound {
     square_1: SquareChannel,
     square_2: SquareChannel,
     wave: WaveChannel,
     noise: NoiseChannel,
 
-    frame_sequencer: FrameSequencer,  // responsible for ticking the channels
-    sample_timer: Timer,              // timer for fetching the channels output
+    frame_sequencer: FrameSequencer, // responsible for ticking the channels
+    sample_timer: Timer,             // timer for fetching the channels output
 
     left_sound_output: SoundOutput,
     right_sound_output: SoundOutput,
@@ -114,7 +111,6 @@ pub struct Sound {
     // sound circuit enabled?
     power: bool,
 }
-
 
 impl Memory for Sound {
     fn read_byte(&mut self, addr: u16) -> u8 {
@@ -140,9 +136,7 @@ impl Memory for Sound {
             0x24 => self.get_nr50(),
             0x25 => self.get_nr51(),
             0x26 => self.get_nr52(),
-            0x30..=0x3f => {
-                self.wave.read_ram_sample((addr - WAVE_TABLE_START) as u8)
-            },
+            0x30..=0x3f => self.wave.read_ram_sample((addr - WAVE_TABLE_START) as u8),
             _ => 0xFF,
         }
     }
@@ -171,8 +165,9 @@ impl Memory for Sound {
             0x25 => self.set_nr51(byte),
             0x26 => self.set_nr52(byte),
             0x30..=0x3F => {
-                self.wave.write_ram_sample((addr - WAVE_TABLE_START) as u8, byte);
-            },
+                self.wave
+                    .write_ram_sample((addr - WAVE_TABLE_START) as u8, byte);
+            }
             _ => (),
         }
     }
@@ -196,7 +191,6 @@ impl ChannelsOutput {
     }
 }
 
-
 struct SoundOutput {
     mixer: Mixer,
     volume_master: VolumeMaster,
@@ -208,7 +202,7 @@ impl SoundOutput {
         SoundOutput {
             mixer: Mixer::new(),
             volume_master: VolumeMaster::new(),
-            out_buffer: OutputBuffer::new()
+            out_buffer: OutputBuffer::new(),
         }
     }
 
@@ -218,12 +212,10 @@ impl SoundOutput {
 
         self.out_buffer.push(scaled);
     }
-
 }
 
-
 pub struct VolumeMaster {
-    volume: u8
+    volume: u8,
 }
 
 impl VolumeMaster {
@@ -243,7 +235,6 @@ impl VolumeMaster {
         VolumeMaster { volume: 0 }
     }
 }
-
 
 // Mixes together the sound voltages from the channels
 pub struct Mixer {
@@ -281,24 +272,31 @@ impl Mixer {
     }
 
     pub fn read(&self) -> u8 {
-        (if self.noise { 0b1000 } else { 0 }) |
-        (if self.wave { 0b100 } else { 0 }) |
-        (if self.square_2 { 0b10 } else { 0 }) |
-        (if self.square_1 { 1 } else { 0 })
+        (if self.noise { 0b1000 } else { 0 })
+            | (if self.wave { 0b100 } else { 0 })
+            | (if self.square_2 { 0b10 } else { 0 })
+            | (if self.square_1 { 1 } else { 0 })
     }
 
     pub fn mix(&self, voltages: ChannelsOutput) -> Voltage {
         let mut sum = Voltage(0);
 
-        if self.square_1 { sum += voltages.square_1 }
-        if self.square_2 { sum += voltages.square_2 }
-        if self.wave { sum += voltages.wave }
-        if self.noise { sum += voltages.noise }
+        if self.square_1 {
+            sum += voltages.square_1
+        }
+        if self.square_2 {
+            sum += voltages.square_2
+        }
+        if self.wave {
+            sum += voltages.wave
+        }
+        if self.noise {
+            sum += voltages.noise
+        }
 
         sum
     }
 }
-
 
 pub struct OutputBuffer {
     // output buffer
@@ -337,7 +335,7 @@ impl OutputBuffer {
     // return the audio_buffer if it is filled
     pub fn get_audio_buffer(&mut self) -> Option<&[AudioOutType; AUDIO_BUFFER_SIZE]> {
         if !self.audio_available {
-            return None
+            return None;
         }
         self.audio_available = false;
         Some(&self.buffer_2)
@@ -380,7 +378,7 @@ impl Sound {
     fn tick_frame_sequencer(&mut self) {
         // if sequence timer has not finished/reached zero yet, return
         if !self.frame_sequencer.tick() {
-            return
+            return;
         }
 
         // every 2 steps we tick the channel length counters
@@ -405,17 +403,17 @@ impl Sound {
 
         // at step 2 and 6 tick the sweep
         if self.frame_sequencer.step == 2 || self.frame_sequencer.step == 6 {
-             self.square_1.tick_sweep();
+            self.square_1.tick_sweep();
         }
     }
 
     fn tick_sample_timer(&mut self) {
         // sample timer not done yet? return
         if !self.sample_timer.tick() {
-            return
+            return;
         }
 
-        let mut channel_outputs= ChannelsOutput::new();
+        let mut channel_outputs = ChannelsOutput::new();
 
         if self.power {
             channel_outputs = ChannelsOutput {
@@ -438,7 +436,7 @@ impl Sound {
     // NR10 FF10 -PPP NSSS Sweep period, negate, shift
     pub fn set_nr10(&mut self, value: u8) {
         if !self.power {
-            return
+            return;
         }
         self.square_1.write_sweep(value);
     }
@@ -466,7 +464,7 @@ impl Sound {
     // NR12 FF12 VVVV APPP Starting volume, Envelope add mode, period
     pub fn set_nr12(&mut self, value: u8) {
         if !self.power {
-            return
+            return;
         }
         let mut envelope = Envelope::new();
         envelope.write(value);
@@ -481,7 +479,7 @@ impl Sound {
     // Square channel 1 frequency LSB
     pub fn set_nr13(&mut self, value: u8) {
         if !self.power {
-            return
+            return;
         }
         self.square_1.set_frequency_lsb(value);
     }
@@ -493,7 +491,7 @@ impl Sound {
     // Square channel 1 trigger, frequency MSB and length
     pub fn set_nr14(&mut self, value: u8) {
         if !self.power {
-            return
+            return;
         }
         self.square_1.write_register_4(value);
     }
@@ -521,7 +519,7 @@ impl Sound {
     // NR22 FF17 VVVV APPP Starting volume, Envelope add mode, period
     pub fn set_nr22(&mut self, value: u8) {
         if !self.power {
-            return
+            return;
         }
         let mut envelope = Envelope::new();
         envelope.write(value);
@@ -537,7 +535,7 @@ impl Sound {
     // NR23 FF18 FFFF FFFF Frequency LSB
     pub fn set_nr23(&mut self, value: u8) {
         if !self.power {
-            return
+            return;
         }
 
         self.square_2.set_frequency_lsb(value);
@@ -551,7 +549,7 @@ impl Sound {
     // NR24 FF19 TL-- -FFF Trigger, Length enable, Frequency MSB
     pub fn set_nr24(&mut self, value: u8) {
         if !self.power {
-            return
+            return;
         }
 
         self.square_2.write_register_4(value);
@@ -565,7 +563,7 @@ impl Sound {
     // NR30 FF1A E--- ---- DAC power
     pub fn set_nr30(&mut self, value: u8) {
         if !self.power {
-            return
+            return;
         }
 
         self.wave.write_register_0(value);
@@ -591,7 +589,7 @@ impl Sound {
     // NR32 FF1C -VV- ---- Volume code (00=0%, 01=100%, 10=50%, 11=25%)
     pub fn set_nr32(&mut self, value: u8) {
         if !self.power {
-            return
+            return;
         }
 
         self.wave.write_volume(value);
@@ -605,7 +603,7 @@ impl Sound {
     // NR33 FF1D FFFF FFFF Frequency LSB
     pub fn set_nr33(&mut self, value: u8) {
         if !self.power {
-            return
+            return;
         }
 
         self.wave.set_frequency_lsb(value);
@@ -619,7 +617,7 @@ impl Sound {
     // NR34 FF1E TL-- -FFF Trigger, Length enable, Frequency MSB
     pub fn set_nr34(&mut self, value: u8) {
         if !self.power {
-            return
+            return;
         }
         self.wave.write_register_4(value);
     }
@@ -643,7 +641,7 @@ impl Sound {
     // NR42 FF21 VVVV APPP Starting volume, Envelope add mode, period
     pub fn set_nr42(&mut self, value: u8) {
         if !self.power {
-            return
+            return;
         }
 
         let mut envelope = Envelope::new();
@@ -660,7 +658,7 @@ impl Sound {
     // NR43 FF22 SSSS WDDD Clock shift, Width mode of LFSR, Divisor code
     pub fn set_nr43(&mut self, value: u8) {
         if !self.power {
-            return
+            return;
         }
 
         self.noise.write_register_3(value);
@@ -674,7 +672,7 @@ impl Sound {
     // NR44 FF23 TL-- ---- Trigger, Length enable
     pub fn set_nr44(&mut self, value: u8) {
         if !self.power {
-            return
+            return;
         }
 
         self.noise.write_register_4(value);
@@ -687,26 +685,41 @@ impl Sound {
     // NR50 FF24 ALLL BRRR	Vin L enable, Left vol, Vin R enable, Right vol
     pub fn set_nr50(&mut self, byte: u8) {
         if !self.power {
-            return
+            return;
         }
 
-        self.left_sound_output.mixer.set_vin_enable((byte & 0b1000_0000) >> 7 != 0);
-        self.right_sound_output.mixer.set_vin_enable((byte & 0b1000) >> 3 != 0);
-        self.left_sound_output.volume_master.set_volume((byte & 0b0111_0000) >> 4);
-        self.right_sound_output.volume_master.set_volume(byte & 0b111);
-}
+        self.left_sound_output
+            .mixer
+            .set_vin_enable((byte & 0b1000_0000) >> 7 != 0);
+        self.right_sound_output
+            .mixer
+            .set_vin_enable((byte & 0b1000) >> 3 != 0);
+        self.left_sound_output
+            .volume_master
+            .set_volume((byte & 0b0111_0000) >> 4);
+        self.right_sound_output
+            .volume_master
+            .set_volume(byte & 0b111);
+    }
 
     pub fn get_nr50(&self) -> u8 {
-        (if self.left_sound_output.mixer.get_vin_enable() { 0b1000_0000 } else { 0 }) |
-            (self.left_sound_output.volume_master.get_volume() << 4) |
-            (if self.right_sound_output.mixer.get_vin_enable() { 0b1000} else { 0 }) |
-            (self.right_sound_output.volume_master.get_volume())
+        (if self.left_sound_output.mixer.get_vin_enable() {
+            0b1000_0000
+        } else {
+            0
+        }) | (self.left_sound_output.volume_master.get_volume() << 4)
+            | (if self.right_sound_output.mixer.get_vin_enable() {
+                0b1000
+            } else {
+                0
+            })
+            | (self.right_sound_output.volume_master.get_volume())
     }
 
     // NR51 FF25 NW21 NW21 Left enables, Right enables
     pub fn set_nr51(&mut self, byte: u8) {
         if !self.power {
-            return
+            return;
         }
 
         self.left_sound_output.mixer.write((byte & 0xF0) >> 4);
@@ -734,8 +747,7 @@ impl Sound {
             self.square_1.duty_index = 0;
             self.square_2.duty_index = 0;
             self.wave.buffer = 0;
-        }
-        else {
+        } else {
             // When powered off, all
             // registers (NR10-NR51) are instantly written with zero and any writes to
             // those registers are ignored while power remains off (except on the DMG,
@@ -745,16 +757,15 @@ impl Sound {
         }
 
         self.power = new_power;
-
     }
 
     pub fn get_nr52(&self) -> u8 {
-        0b0111_0000 |
-        (if self.power { 0b1000_0000 } else { 0 }) |
-        (if self.noise.is_running() { 0b_1000 } else { 0 }) |
-        (if self.wave.is_running() { 0b_100 } else { 0 }) |
-        (if self.square_2.is_running() { 0b_10 } else { 0 }) |
-        (if self.square_1.is_running() { 1 } else { 0 })
+        0b0111_0000
+            | (if self.power { 0b1000_0000 } else { 0 })
+            | (if self.noise.is_running() { 0b_1000 } else { 0 })
+            | (if self.wave.is_running() { 0b_100 } else { 0 })
+            | (if self.square_2.is_running() { 0b_10 } else { 0 })
+            | (if self.square_1.is_running() { 1 } else { 0 })
     }
 
     // called when power is set to off, through register nr52
@@ -796,10 +807,9 @@ impl Sound {
     }
 }
 
-
 pub struct FrameSequencer {
     timer: Timer,
-    step: u8,      // goes up by 1 everytime the timer hits 0
+    step: u8, // goes up by 1 everytime the timer hits 0
 }
 
 impl FrameSequencer {
@@ -826,8 +836,7 @@ impl FrameSequencer {
     }
 }
 
-
-#[derive(Clone,Copy)]
+#[derive(Clone, Copy)]
 // a timer with a default period of 8
 pub struct TimerDefaultPeriod {
     period: usize, // initial and max value of curr
@@ -836,10 +845,7 @@ pub struct TimerDefaultPeriod {
 
 impl TimerDefaultPeriod {
     pub fn new() -> Self {
-        TimerDefaultPeriod {
-            period: 0,
-            curr: 0,
-        }
+        TimerDefaultPeriod { period: 0, curr: 0 }
     }
 
     pub fn tick(&mut self) -> bool {
@@ -858,7 +864,11 @@ impl TimerDefaultPeriod {
     }
 
     pub fn get_period(&self) -> usize {
-        if self.period != 0 { self.period } else { 8 }
+        if self.period != 0 {
+            self.period
+        } else {
+            8
+        }
     }
 
     pub fn set_period(&mut self, period: usize) {
@@ -870,13 +880,11 @@ impl TimerDefaultPeriod {
     }
 }
 
-
-#[derive(Clone,Copy)]
+#[derive(Clone, Copy)]
 pub struct Timer {
     period: usize, // initial and max value of curr
     curr: usize,   // goes down by 1 every tick and wraps back to period
 }
-
 
 impl Timer {
     pub fn new(period: usize) -> Self {

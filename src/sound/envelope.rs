@@ -9,7 +9,6 @@ pub struct Envelope {
     pub volume_initial: Sample,
 }
 
-
 impl Envelope {
     pub fn new() -> Self {
         Envelope {
@@ -40,7 +39,9 @@ impl Envelope {
     }
 
     pub fn read(&self) -> u8 {
-        self.timer.period as u8 | (if self.add_mode == true { 0b1000 } else { 0 }) | (u8::from(self.volume_initial) << 4)
+        self.timer.period as u8
+            | (if self.add_mode == true { 0b1000 } else { 0 })
+            | (u8::from(self.volume_initial) << 4)
     }
 
     pub fn tick(&mut self) {
@@ -51,7 +52,7 @@ impl Envelope {
 
         // timer still not zero
         if !self.timer.tick() {
-            return
+            return;
         }
 
         // increase or decrease based on add_mode

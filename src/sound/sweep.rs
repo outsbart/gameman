@@ -1,6 +1,5 @@
-use sound::{TimerDefaultPeriod};
-use std::ops::{Sub, Add};
-
+use sound::TimerDefaultPeriod;
+use std::ops::{Add, Sub};
 
 pub struct Sweep {
     pub shift: u8,
@@ -38,10 +37,10 @@ impl Sweep {
     }
 
     pub fn read(&self) -> u8 {
-        0b1000_0000 |
-        ((self.timer.period as u8) << 4) |
-        (if self.negate {0b1000} else {0}) |
-        self.shift
+        0b1000_0000
+            | ((self.timer.period as u8) << 4)
+            | (if self.negate { 0b1000 } else { 0 })
+            | self.shift
     }
 
     // return true if frequency calculations should be performed immediately
@@ -72,10 +71,15 @@ impl Sweep {
         // the operands are:
         // - the shadow frequency unaltered,
         // - the shadow frequency shifted right by self.shift
-        let result = operation(self.shadow_frequency, self.shadow_frequency >> self.shift as u16);
+        let result = operation(
+            self.shadow_frequency,
+            self.shadow_frequency >> self.shift as u16,
+        );
 
         // if we used negate mode, remember it
-        if self.negate { self.negate_mode_used = true; }
+        if self.negate {
+            self.negate_mode_used = true;
+        }
 
         // freq is 11bit
         (result & 0b111_1111_1111, result > 0x7FF)
@@ -89,7 +93,6 @@ impl Sweep {
         self.enabled
     }
 }
-
 
 #[cfg(test)]
 mod tests {

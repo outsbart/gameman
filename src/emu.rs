@@ -4,18 +4,18 @@ extern crate sdl2;
 
 use keypad::Button;
 
+use crate::cartridge::load_rom;
 use crate::cpu::CPU;
 use crate::gpu::GPU;
 use crate::mem::{Memory, MMU};
-use crate::cartridge::load_rom;
 use crate::sound::AUDIO_BUFFER_SIZE;
 
-use crate::utils::load_boot_rom;
+use self::sdl2::audio::AudioSpecDesired;
 use self::sdl2::event::Event;
 use self::sdl2::keyboard::Keycode;
 use self::sdl2::pixels::PixelFormatEnum;
 use self::sdl2::rect::Rect;
-use self::sdl2::audio::AudioSpecDesired;
+use crate::utils::load_boot_rom;
 use sound::SAMPLE_RATE;
 use std::{thread, time};
 
@@ -25,7 +25,6 @@ const SCREEN_HEIGHT: u32 = 144 * SCREEN_SIZE_MULTIPLIER;
 const FPS: u32 = 60;
 const CLOCKS_IN_A_FRAME: u32 = 70224;
 const DELAY_EVERY_FRAME: u32 = 1000 / FPS;
-
 
 pub struct Emulator {
     cpu: CPU<MMU<GPU>>,
@@ -37,9 +36,7 @@ impl Emulator {
         let mmu = MMU::new(GPU::new(), cartridge);
         let cpu = CPU::new(mmu);
 
-        Emulator {
-            cpu
-        }
+        Emulator { cpu }
     }
 
     pub fn load_bios(&mut self) {
@@ -116,10 +113,12 @@ impl Emulator {
         let desired_spec = AudioSpecDesired {
             freq: Some(SAMPLE_RATE as i32),
             channels: Some(1),
-            samples: Some(AUDIO_BUFFER_SIZE as u16)       // default sample size
+            samples: Some(AUDIO_BUFFER_SIZE as u16), // default sample size
         };
 
-        let device = audio_subsystem.open_queue::<i16, _>(None, &desired_spec).unwrap();
+        let device = audio_subsystem
+            .open_queue::<i16, _>(None, &desired_spec)
+            .unwrap();
 
         let window = video_subsystem
             .window("gameman", SCREEN_WIDTH, SCREEN_HEIGHT)
@@ -171,98 +170,98 @@ impl Emulator {
                     } => {
                         self.cpu.mmu.key.press(Button::A);
                         self.request_keypad_interrupt();
-                    },
+                    }
                     Event::KeyDown {
                         keycode: Some(Keycode::X),
                         ..
                     } => {
                         self.cpu.mmu.key.press(Button::B);
                         self.request_keypad_interrupt();
-                    },
+                    }
                     Event::KeyDown {
                         keycode: Some(Keycode::A),
                         ..
                     } => {
                         self.cpu.mmu.key.press(Button::SELECT);
                         self.request_keypad_interrupt();
-                    },
+                    }
                     Event::KeyDown {
                         keycode: Some(Keycode::S),
                         ..
                     } => {
                         self.cpu.mmu.key.press(Button::START);
                         self.request_keypad_interrupt();
-                    },
+                    }
                     Event::KeyDown {
                         keycode: Some(Keycode::Down),
                         ..
                     } => {
                         self.cpu.mmu.key.press(Button::DOWN);
                         self.request_keypad_interrupt();
-                    },
+                    }
                     Event::KeyDown {
                         keycode: Some(Keycode::Up),
                         ..
                     } => {
                         self.cpu.mmu.key.press(Button::UP);
                         self.request_keypad_interrupt();
-                    },
+                    }
                     Event::KeyDown {
                         keycode: Some(Keycode::Left),
                         ..
                     } => {
                         self.cpu.mmu.key.press(Button::LEFT);
                         self.request_keypad_interrupt();
-                    },
+                    }
                     Event::KeyDown {
                         keycode: Some(Keycode::Right),
                         ..
                     } => {
                         self.cpu.mmu.key.press(Button::RIGHT);
                         self.request_keypad_interrupt();
-                    },
+                    }
                     Event::KeyUp {
                         keycode: Some(Keycode::Z),
                         ..
                     } => {
                         self.cpu.mmu.key.release(Button::A);
-                    },
+                    }
                     Event::KeyUp {
                         keycode: Some(Keycode::X),
                         ..
                     } => {
                         self.cpu.mmu.key.release(Button::B);
-                    },
+                    }
                     Event::KeyUp {
                         keycode: Some(Keycode::A),
                         ..
                     } => {
                         self.cpu.mmu.key.release(Button::SELECT);
-                    },
+                    }
                     Event::KeyUp {
                         keycode: Some(Keycode::S),
                         ..
                     } => {
                         self.cpu.mmu.key.release(Button::START);
-                    },
+                    }
                     Event::KeyUp {
                         keycode: Some(Keycode::Down),
                         ..
                     } => {
                         self.cpu.mmu.key.release(Button::DOWN);
-                    },
+                    }
                     Event::KeyUp {
                         keycode: Some(Keycode::Up),
                         ..
                     } => {
                         self.cpu.mmu.key.release(Button::UP);
-                    },
+                    }
                     Event::KeyUp {
                         keycode: Some(Keycode::Left),
                         ..
                     } => {
                         self.cpu.mmu.key.release(Button::LEFT);
-                    },
+                    }
                     Event::KeyUp {
                         keycode: Some(Keycode::Right),
                         ..
@@ -308,7 +307,11 @@ impl Emulator {
                 })
                 .unwrap();
             canvas
-                .copy(&texture2, None, Some(Rect::new(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)))
+                .copy(
+                    &texture2,
+                    None,
+                    Some(Rect::new(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)),
+                )
                 .unwrap();
 
             canvas.present();
@@ -323,14 +326,15 @@ impl Emulator {
                 device.queue(&audio_buffer[0..]);
 
                 device.resume();
-
             }
 
             let ticks = time::Instant::now();
             let time_passed = (ticks - last_ticks).as_millis() as u32;
 
             if time_passed < DELAY_EVERY_FRAME {
-                thread::sleep(time::Duration::from_millis((DELAY_EVERY_FRAME - time_passed) as u64));
+                thread::sleep(time::Duration::from_millis(
+                    (DELAY_EVERY_FRAME - time_passed) as u64,
+                ));
             }
 
             last_ticks = ticks;

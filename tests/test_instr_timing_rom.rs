@@ -1,6 +1,5 @@
 extern crate gameman;
 
-
 use gameman::emu::Emulator;
 
 #[test]

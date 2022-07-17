@@ -1,5 +1,5 @@
-use sound::{Sample, Timer, Voltage};
 use sound::length::{Length, MaxLength};
+use sound::{Sample, Timer, Voltage};
 
 const WAVE_RAM_SAMPLES: u8 = 32;
 
@@ -9,7 +9,7 @@ pub struct WaveChannel {
     length: Length,
     timer: Timer,
 
-    wave_ram_accessible: bool,  // if channel is enabled, wave ram can be accessed from outside only when accessed by the wave channel recently
+    wave_ram_accessible: bool, // if channel is enabled, wave ram can be accessed from outside only when accessed by the wave channel recently
     pub buffer: u8,
     pub position: u8,
     samples: [u8; WAVE_RAM_SAMPLES as usize / 2],
@@ -24,7 +24,6 @@ pub struct WaveChannel {
     // - dac is disabled
     running: bool,
 }
-
 
 #[derive(Clone, Copy)]
 #[repr(u8)]
@@ -68,7 +67,6 @@ impl Volume {
     }
 }
 
-
 impl WaveChannel {
     pub fn new() -> Self {
         WaveChannel {
@@ -80,7 +78,10 @@ impl WaveChannel {
             wave_ram_accessible: false,
             buffer: 0,
             position: 0,
-            samples: [0x84, 0x40, 0x43, 0xAA, 0x2D, 0x78, 0x92, 0x3C, 0x60, 0x59, 0x59, 0xB0, 0x34, 0xB8, 0x2E, 0xDA],
+            samples: [
+                0x84, 0x40, 0x43, 0xAA, 0x2D, 0x78, 0x92, 0x3C, 0x60, 0x59, 0x59, 0xB0, 0x34, 0xB8,
+                0x2E, 0xDA,
+            ],
             volume: Volume::Silent,
 
             running: false,
@@ -93,7 +94,6 @@ impl WaveChannel {
         self.timer = Timer::new(0);
         self.running = false;
         self.wave_ram_accessible = false;
-
     }
 
     pub fn tick(&mut self) {
@@ -113,12 +113,14 @@ impl WaveChannel {
     }
 
     fn sample(&mut self) -> Sample {
-        if !self.is_running() || !self.dac_enabled() { return Sample(0) }
+        if !self.is_running() || !self.dac_enabled() {
+            return Sample(0);
+        }
 
         // take first nibble if even, second if odd
         let sample = Sample(match self.position % 2 {
-            0 => { self.buffer >> 4 }
-            _ => { self.buffer & 0xF }
+            0 => self.buffer >> 4,
+            _ => self.buffer & 0xF,
         });
 
         self.volume.apply_to(sample)
@@ -158,7 +160,7 @@ impl WaveChannel {
 
         if !self.dac_enabled() {
             self.running = false;
-        } else if was_enabled && self.timer.curr <= 2  {
+        } else if was_enabled && self.timer.curr <= 2 {
             // Only on DMG
             // Triggering the wave channel on the DMG while it reads a sample byte
             // will alter the first four bytes of wave RAM
@@ -190,7 +192,7 @@ impl WaveChannel {
     pub fn read_ram_sample(&self, pos: u8) -> u8 {
         // Just like write
         if !self.running {
-            return self.samples[pos as usize]
+            return self.samples[pos as usize];
         }
         if self.wave_ram_accessible {
             return self.samples[self.position as usize / 2];
@@ -250,8 +252,7 @@ impl WaveChannel {
     }
 
     pub fn read_register_0(&self) -> u8 {
-        0b111_1111 |
-        (if self.dac_power { 0b1000_0000 } else { 0 })
+        0b111_1111 | (if self.dac_power { 0b1000_0000 } else { 0 })
     }
 
     pub fn write_length_value(&mut self, byte: u8) {
@@ -267,8 +268,7 @@ impl WaveChannel {
     }
 
     pub fn read_volume(&self) -> u8 {
-        0b1001_1111 |
-        (self.volume as u8) << 5
+        0b1001_1111 | (self.volume as u8) << 5
     }
 
     pub fn write_register_4(&mut self, byte: u8) {
@@ -288,11 +288,14 @@ impl WaveChannel {
     }
 
     pub fn read_register_4(&self) -> u8 {
-        0b1011_1111 |
-        (if self.length.enabled() { 0b0100_0000 } else { 0 })
+        0b1011_1111
+            | (if self.length.enabled() {
+                0b0100_0000
+            } else {
+                0
+            })
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -340,7 +343,6 @@ mod tests {
         channel.volume = Volume::Max;
         assert_eq!(channel.read_volume(), 0b1011_1111);
     }
-
 
     #[test]
     fn test_wave_register_4() {

@@ -9,7 +9,7 @@ use crate::utils::set_bit;
 use crate::utils::sub_bytes;
 use crate::utils::swap_nibbles;
 
-pub const CPU_FREQ: usize = 4194304;  // cpu frequency, in hz
+pub const CPU_FREQ: usize = 4194304; // cpu frequency, in hz
 
 // Flags bit poisition in the F register
 const ZERO_FLAG: u8 = 7;
@@ -200,7 +200,6 @@ impl<M: Memory> CPU<M> {
             if self.regs.read_byte(REG_T) == 0 {
                 self.regs.write_byte(REG_T, op.cycles_ok)
             }
-
         } else {
             self.regs.write_byte(REG_T, 4);
         }
@@ -354,7 +353,6 @@ impl<M: Memory> CPU<M> {
 
         // if we have to handle an interrupt
         if self.interrupt_master_enable && interrupts != 0 {
-
             // only one interrupt handling at a time
             self.interrupt_master_enable = false;
 
@@ -374,7 +372,6 @@ impl<M: Memory> CPU<M> {
 
                 self.set_registry_value("PC", 0x0040);
             }
-
             // lcd status triggers
             else if (interrupts & 0x2) != 0 {
                 self.mmu
@@ -392,7 +389,6 @@ impl<M: Memory> CPU<M> {
 
                 self.set_registry_value("PC", 0x0050);
             }
-
             // serial
             else if (interrupts & 0b1000) != 0 {
                 println!("Handling serial");
@@ -402,7 +398,6 @@ impl<M: Memory> CPU<M> {
 
                 self.set_registry_value("PC", 0x0058);
             }
-
             // joypad
             else if (interrupts & 0b10000) != 0 {
                 println!("Handling joypad");
@@ -419,7 +414,6 @@ impl<M: Memory> CPU<M> {
     }
 
     pub fn execute(&mut self, opcode: u8, cb: bool) {
-
         if cb == false {
             match opcode {
                 0x00 => self.x00(),
@@ -1174,7 +1168,7 @@ impl<M: Memory> CPU<M> {
     fn x17(&mut self) {
         let op1 = self.get_operand_value("A");
 
-        let (_, _, _, prev_c) =  self.regs.get_flags();
+        let (_, _, _, prev_c) = self.regs.get_flags();
 
         let result = ((op1 as u8) << 1 | u8::from(prev_c)) as u16;
         let new_carry = (op1 & 0x80) != 0;
@@ -1257,7 +1251,7 @@ impl<M: Memory> CPU<M> {
     fn x1F(&mut self) {
         let op1 = self.get_operand_value("A");
 
-        let (_, _, _, prev_c) =  self.regs.get_flags();
+        let (_, _, _, prev_c) = self.regs.get_flags();
 
         let result = ((op1 as u8) >> 1 | (u8::from(prev_c) << 7)) as u16;
         let new_carry = (op1 & 1) != 0;
@@ -1366,7 +1360,8 @@ impl<M: Memory> CPU<M> {
         };
 
         self.store_result("A", result, true);
-        self.regs.set_flags((result as u8) == 0, prev_n, false, new_carry);
+        self.regs
+            .set_flags((result as u8) == 0, prev_n, false, new_carry);
     }
 
     fn x28(&mut self) {
@@ -2377,7 +2372,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("A", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, false);
+        self.regs
+            .set_flags((result as u8) == 0, false, false, false);
     }
 
     fn xA9(&mut self) {
@@ -2388,7 +2384,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("A", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, false);
+        self.regs
+            .set_flags((result as u8) == 0, false, false, false);
     }
 
     fn xAA(&mut self) {
@@ -2399,7 +2396,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("A", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, false);
+        self.regs
+            .set_flags((result as u8) == 0, false, false, false);
     }
 
     fn xAB(&mut self) {
@@ -2410,7 +2408,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("A", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, false);
+        self.regs
+            .set_flags((result as u8) == 0, false, false, false);
     }
 
     fn xAC(&mut self) {
@@ -2421,7 +2420,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("A", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, false);
+        self.regs
+            .set_flags((result as u8) == 0, false, false, false);
     }
 
     fn xAD(&mut self) {
@@ -2432,7 +2432,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("A", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, false);
+        self.regs
+            .set_flags((result as u8) == 0, false, false, false);
     }
 
     fn xAE(&mut self) {
@@ -2443,7 +2444,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("A", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, false);
+        self.regs
+            .set_flags((result as u8) == 0, false, false, false);
     }
 
     fn xAF(&mut self) {
@@ -2454,7 +2456,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("A", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, false);
+        self.regs
+            .set_flags((result as u8) == 0, false, false, false);
     }
 
     fn xB0(&mut self) {
@@ -2465,7 +2468,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("A", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, false);
+        self.regs
+            .set_flags((result as u8) == 0, false, false, false);
     }
 
     fn xB1(&mut self) {
@@ -2476,7 +2480,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("A", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, false);
+        self.regs
+            .set_flags((result as u8) == 0, false, false, false);
     }
 
     fn xB2(&mut self) {
@@ -2487,7 +2492,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("A", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, false);
+        self.regs
+            .set_flags((result as u8) == 0, false, false, false);
     }
 
     fn xB3(&mut self) {
@@ -2498,7 +2504,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("A", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, false);
+        self.regs
+            .set_flags((result as u8) == 0, false, false, false);
     }
 
     fn xB4(&mut self) {
@@ -2509,7 +2516,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("A", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, false);
+        self.regs
+            .set_flags((result as u8) == 0, false, false, false);
     }
 
     fn xB5(&mut self) {
@@ -2520,7 +2528,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("A", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, false);
+        self.regs
+            .set_flags((result as u8) == 0, false, false, false);
     }
 
     fn xB6(&mut self) {
@@ -2531,7 +2540,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("A", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, false);
+        self.regs
+            .set_flags((result as u8) == 0, false, false, false);
     }
 
     fn xB7(&mut self) {
@@ -2542,7 +2552,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("A", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, false);
+        self.regs
+            .set_flags((result as u8) == 0, false, false, false);
     }
 
     fn xB8(&mut self) {
@@ -2716,7 +2727,9 @@ impl<M: Memory> CPU<M> {
         self.store_result("PC", op1, false);
     }
 
-    fn xCB(&mut self) { panic!("wtf?") }
+    fn xCB(&mut self) {
+        panic!("wtf?")
+    }
 
     fn xCC(&mut self) {
         let op1 = self.get_operand_value("a16");
@@ -2955,17 +2968,11 @@ impl<M: Memory> CPU<M> {
         self.store_result("(a16)", op1, true);
     }
 
-    fn xEB(&mut self) {
+    fn xEB(&mut self) {}
 
-    }
+    fn xEC(&mut self) {}
 
-    fn xEC(&mut self) {
-
-    }
-
-    fn xED(&mut self) {
-
-    }
+    fn xED(&mut self) {}
 
     fn xEE(&mut self) {
         let op1 = self.get_operand_value("A");
@@ -2975,7 +2982,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("A", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, false);
+        self.regs
+            .set_flags((result as u8) == 0, false, false, false);
     }
 
     fn xEF(&mut self) {
@@ -3003,9 +3011,7 @@ impl<M: Memory> CPU<M> {
         self.interrupt_master_enable = false
     }
 
-    fn xF4(&mut self) {
-
-    }
+    fn xF4(&mut self) {}
 
     fn xF5(&mut self) {
         let op1 = self.get_operand_value("AF");
@@ -3020,7 +3026,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("A", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, false);
+        self.regs
+            .set_flags((result as u8) == 0, false, false, false);
     }
 
     fn xF7(&mut self) {
@@ -3054,13 +3061,9 @@ impl<M: Memory> CPU<M> {
         self.schedule_interrupt_enable = true;
     }
 
-    fn xFC(&mut self) {
+    fn xFC(&mut self) {}
 
-    }
-
-    fn xFD(&mut self) {
-
-    }
+    fn xFD(&mut self) {}
 
     fn xFE(&mut self) {
         let op1 = self.get_operand_value("A");
@@ -3085,7 +3088,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("B", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB01(&mut self) {
@@ -3096,7 +3100,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("C", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB02(&mut self) {
@@ -3107,7 +3112,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("D", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB03(&mut self) {
@@ -3118,7 +3124,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("E", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB04(&mut self) {
@@ -3129,7 +3136,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("H", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB05(&mut self) {
@@ -3140,7 +3148,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("L", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB06(&mut self) {
@@ -3151,7 +3160,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("(HL)", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB07(&mut self) {
@@ -3162,7 +3172,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("A", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB08(&mut self) {
@@ -3173,7 +3184,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("B", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB09(&mut self) {
@@ -3184,7 +3196,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("C", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB0A(&mut self) {
@@ -3195,7 +3208,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("D", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB0B(&mut self) {
@@ -3206,7 +3220,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("E", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB0C(&mut self) {
@@ -3217,7 +3232,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("H", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB0D(&mut self) {
@@ -3228,7 +3244,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("L", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB0E(&mut self) {
@@ -3239,7 +3256,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("(HL)", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB0F(&mut self) {
@@ -3250,217 +3268,233 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("A", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB10(&mut self) {
         let op1 = self.get_operand_value("B");
 
-        let (_, _, _, prev_c) =  self.regs.get_flags();
+        let (_, _, _, prev_c) = self.regs.get_flags();
 
         let result = ((op1 as u8) << 1 | u8::from(prev_c)) as u16;
         let new_carry = (op1 & 0x80) != 0;
 
         self.store_result("B", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB11(&mut self) {
         let op1 = self.get_operand_value("C");
 
-        let (_, _, _, prev_c) =  self.regs.get_flags();
+        let (_, _, _, prev_c) = self.regs.get_flags();
 
         let result = ((op1 as u8) << 1 | u8::from(prev_c)) as u16;
         let new_carry = (op1 & 0x80) != 0;
 
         self.store_result("C", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB12(&mut self) {
         let op1 = self.get_operand_value("D");
 
-        let (_, _, _, prev_c) =  self.regs.get_flags();
+        let (_, _, _, prev_c) = self.regs.get_flags();
 
         let result = ((op1 as u8) << 1 | u8::from(prev_c)) as u16;
         let new_carry = (op1 & 0x80) != 0;
 
         self.store_result("D", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB13(&mut self) {
         let op1 = self.get_operand_value("E");
 
-        let (_, _, _, prev_c) =  self.regs.get_flags();
+        let (_, _, _, prev_c) = self.regs.get_flags();
 
         let result = ((op1 as u8) << 1 | u8::from(prev_c)) as u16;
         let new_carry = (op1 & 0x80) != 0;
 
         self.store_result("E", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB14(&mut self) {
         let op1 = self.get_operand_value("H");
 
-        let (_, _, _, prev_c) =  self.regs.get_flags();
+        let (_, _, _, prev_c) = self.regs.get_flags();
 
         let result = ((op1 as u8) << 1 | u8::from(prev_c)) as u16;
         let new_carry = (op1 & 0x80) != 0;
 
         self.store_result("H", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB15(&mut self) {
         let op1 = self.get_operand_value("L");
 
-        let (_, _, _, prev_c) =  self.regs.get_flags();
+        let (_, _, _, prev_c) = self.regs.get_flags();
 
         let result = ((op1 as u8) << 1 | u8::from(prev_c)) as u16;
         let new_carry = (op1 & 0x80) != 0;
 
         self.store_result("L", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB16(&mut self) {
         let op1 = self.get_operand_value("(HL)");
 
-        let (_, _, _, prev_c) =  self.regs.get_flags();
+        let (_, _, _, prev_c) = self.regs.get_flags();
 
         let result = ((op1 as u8) << 1 | u8::from(prev_c)) as u16;
         let new_carry = (op1 & 0x80) != 0;
 
         self.store_result("(HL)", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB17(&mut self) {
         let op1 = self.get_operand_value("A");
 
-        let (_, _, _, prev_c) =  self.regs.get_flags();
+        let (_, _, _, prev_c) = self.regs.get_flags();
 
         let result = ((op1 as u8) << 1 | u8::from(prev_c)) as u16;
         let new_carry = (op1 & 0x80) != 0;
 
         self.store_result("A", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB18(&mut self) {
         let op1 = self.get_operand_value("B");
 
-        let (_, _, _, prev_c) =  self.regs.get_flags();
+        let (_, _, _, prev_c) = self.regs.get_flags();
 
         let result = ((op1 as u8) >> 1 | (u8::from(prev_c) << 7)) as u16;
         let new_carry = (op1 & 1) != 0;
 
         self.store_result("B", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB19(&mut self) {
         let op1 = self.get_operand_value("C");
 
-        let (_, _, _, prev_c) =  self.regs.get_flags();
+        let (_, _, _, prev_c) = self.regs.get_flags();
 
         let result = ((op1 as u8) >> 1 | (u8::from(prev_c) << 7)) as u16;
         let new_carry = (op1 & 1) != 0;
 
         self.store_result("C", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB1A(&mut self) {
         let op1 = self.get_operand_value("D");
 
-        let (_, _, _, prev_c) =  self.regs.get_flags();
+        let (_, _, _, prev_c) = self.regs.get_flags();
 
         let result = ((op1 as u8) >> 1 | (u8::from(prev_c) << 7)) as u16;
         let new_carry = (op1 & 1) != 0;
 
         self.store_result("D", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB1B(&mut self) {
         let op1 = self.get_operand_value("E");
 
-        let (_, _, _, prev_c) =  self.regs.get_flags();
+        let (_, _, _, prev_c) = self.regs.get_flags();
 
         let result = ((op1 as u8) >> 1 | (u8::from(prev_c) << 7)) as u16;
         let new_carry = (op1 & 1) != 0;
 
         self.store_result("E", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB1C(&mut self) {
         let op1 = self.get_operand_value("H");
 
-        let (_, _, _, prev_c) =  self.regs.get_flags();
+        let (_, _, _, prev_c) = self.regs.get_flags();
 
         let result = ((op1 as u8) >> 1 | (u8::from(prev_c) << 7)) as u16;
         let new_carry = (op1 & 1) != 0;
 
         self.store_result("H", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB1D(&mut self) {
         let op1 = self.get_operand_value("L");
 
-        let (_, _, _, prev_c) =  self.regs.get_flags();
+        let (_, _, _, prev_c) = self.regs.get_flags();
 
         let result = ((op1 as u8) >> 1 | (u8::from(prev_c) << 7)) as u16;
         let new_carry = (op1 & 1) != 0;
 
         self.store_result("L", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB1E(&mut self) {
         let op1 = self.get_operand_value("(HL)");
 
-        let (_, _, _, prev_c) =  self.regs.get_flags();
+        let (_, _, _, prev_c) = self.regs.get_flags();
 
         let result = ((op1 as u8) >> 1 | (u8::from(prev_c) << 7)) as u16;
         let new_carry = (op1 & 1) != 0;
 
         self.store_result("(HL)", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB1F(&mut self) {
         let op1 = self.get_operand_value("A");
 
-        let (_, _, _, prev_c) =  self.regs.get_flags();
+        let (_, _, _, prev_c) = self.regs.get_flags();
 
         let result = ((op1 as u8) >> 1 | (u8::from(prev_c) << 7)) as u16;
         let new_carry = (op1 & 1) != 0;
 
         self.store_result("A", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
-
 
     fn xCB20(&mut self) {
         let op1 = self.get_operand_value("B");
@@ -3470,7 +3504,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("B", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB21(&mut self) {
@@ -3481,7 +3516,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("C", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB22(&mut self) {
@@ -3492,7 +3528,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("D", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB23(&mut self) {
@@ -3503,7 +3540,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("E", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB24(&mut self) {
@@ -3514,7 +3552,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("H", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB25(&mut self) {
@@ -3525,7 +3564,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("L", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB26(&mut self) {
@@ -3536,7 +3576,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("(HL)", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB27(&mut self) {
@@ -3547,7 +3588,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("A", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB28(&mut self) {
@@ -3558,7 +3600,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("B", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB29(&mut self) {
@@ -3569,7 +3612,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("C", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB2A(&mut self) {
@@ -3580,7 +3624,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("D", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB2B(&mut self) {
@@ -3591,7 +3636,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("E", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB2C(&mut self) {
@@ -3602,7 +3648,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("H", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB2D(&mut self) {
@@ -3613,7 +3660,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("L", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB2E(&mut self) {
@@ -3624,7 +3672,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("(HL)", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB2F(&mut self) {
@@ -3635,7 +3684,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("A", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry)
     }
 
     fn xCB30(&mut self) {
@@ -3645,7 +3695,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("B", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, false)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, false)
     }
 
     fn xCB31(&mut self) {
@@ -3655,7 +3706,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("C", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, false)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, false)
     }
 
     fn xCB32(&mut self) {
@@ -3665,7 +3717,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("D", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, false)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, false)
     }
 
     fn xCB33(&mut self) {
@@ -3675,7 +3728,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("E", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, false)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, false)
     }
 
     fn xCB34(&mut self) {
@@ -3685,7 +3739,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("H", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, false)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, false)
     }
 
     fn xCB35(&mut self) {
@@ -3695,7 +3750,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("L", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, false)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, false)
     }
 
     fn xCB36(&mut self) {
@@ -3705,7 +3761,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("(HL)", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, false)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, false)
     }
 
     fn xCB37(&mut self) {
@@ -3715,7 +3772,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("A", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, false)
+        self.regs
+            .set_flags((result as u8) == 0, false, false, false)
     }
 
     fn xCB38(&mut self) {
@@ -3726,7 +3784,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("B", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry);
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry);
     }
 
     fn xCB39(&mut self) {
@@ -3737,7 +3796,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("C", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry);
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry);
     }
 
     fn xCB3A(&mut self) {
@@ -3748,7 +3808,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("D", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry);
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry);
     }
 
     fn xCB3B(&mut self) {
@@ -3759,7 +3820,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("E", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry);
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry);
     }
 
     fn xCB3C(&mut self) {
@@ -3770,7 +3832,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("H", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry);
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry);
     }
 
     fn xCB3D(&mut self) {
@@ -3781,7 +3844,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("L", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry);
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry);
     }
 
     fn xCB3E(&mut self) {
@@ -3792,7 +3856,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("(HL)", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry);
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry);
     }
 
     fn xCB3F(&mut self) {
@@ -3803,7 +3868,8 @@ impl<M: Memory> CPU<M> {
 
         self.store_result("A", result, true);
 
-        self.regs.set_flags((result as u8) == 0, false, false, new_carry);
+        self.regs
+            .set_flags((result as u8) == 0, false, false, new_carry);
     }
 
     fn xCB40(&mut self) {

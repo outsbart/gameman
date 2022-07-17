@@ -4,7 +4,7 @@ enum TimerSpeed {
     Speed0 = 0,
     Speed1 = 1,
     Speed2 = 2,
-    Speed3 = 3
+    Speed3 = 3,
 }
 
 impl TimerSpeed {
@@ -14,7 +14,9 @@ impl TimerSpeed {
             0b01 => TimerSpeed::Speed1,
             0b10 => TimerSpeed::Speed2,
             0b11 => TimerSpeed::Speed3,
-            _ => { panic!("Unable to set timer speed"); }
+            _ => {
+                panic!("Unable to set timer speed");
+            }
         }
     }
 }
@@ -25,11 +27,10 @@ impl Into<u8> for TimerSpeed {
             TimerSpeed::Speed0 => 0,
             TimerSpeed::Speed1 => 1,
             TimerSpeed::Speed2 => 0b10,
-            TimerSpeed::Speed3 => 0b11
+            TimerSpeed::Speed3 => 0b11,
         }
     }
 }
-
 
 pub struct Timers {
     main: u8,
@@ -56,7 +57,7 @@ impl Timers {
             counter: 0,
             modulo: 0,
             speed: TimerSpeed::Speed0,
-            running: false
+            running: false,
         }
     }
 
@@ -77,17 +78,21 @@ impl Timers {
         }
 
         // check if enabled
-        if !self.running { return false; }
+        if !self.running {
+            return false;
+        }
 
         let threshold = match self.speed {
             TimerSpeed::Speed0 => 64,
             TimerSpeed::Speed1 => 1,
             TimerSpeed::Speed2 => 4,
-            TimerSpeed::Speed3 => 16
+            TimerSpeed::Speed3 => 16,
         };
 
         // no need to send timer forward
-        if self.main < threshold { return false; }
+        if self.main < threshold {
+            return false;
+        }
 
         self.main = 0;
         self.counter = self.counter.wrapping_add(1);
@@ -140,11 +145,9 @@ impl Timers {
 
     // when reading from 0xFF07
     pub fn read_control(&self) -> u8 {
-        (if self.running { 0b100 } else { 0 } ) | (self.speed as u8)
+        (if self.running { 0b100 } else { 0 }) | (self.speed as u8)
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {

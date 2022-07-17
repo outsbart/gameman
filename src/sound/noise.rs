@@ -1,14 +1,14 @@
-use sound::{Sample, Timer, Voltage};
 use sound::envelope::Envelope;
 use sound::length::{Length, MaxLength};
+use sound::{Sample, Timer, Voltage};
 
 pub struct NoiseChannel {
     length: Length,
     envelope: Envelope,
 
     timer: Timer,
-    lfsr: u16, // linear feedback shift register, 15 bits
-    clock_shift: u8,  // used to shift the divisor when restarting the clock/timer
+    lfsr: u16,       // linear feedback shift register, 15 bits
+    clock_shift: u8, // used to shift the divisor when restarting the clock/timer
     lfsr_width_mode: u8,
     divisor_code: u8,
 
@@ -33,7 +33,7 @@ impl NoiseChannel {
 
     pub fn tick(&mut self) {
         if !self.timer.tick() {
-            return
+            return;
         }
         // When clocked by the frequency timer, the low two bits (0 and 1) are XORed, all bits are
         // shifted right by one, and the result of the XOR is put into the
@@ -56,7 +56,9 @@ impl NoiseChannel {
     }
 
     fn sample(&mut self) -> Sample {
-        if !self.is_running() || !self.dac_enabled() { return Sample(0) }
+        if !self.is_running() || !self.dac_enabled() {
+            return Sample(0);
+        }
 
         // The waveform output is bit 0 of the LFSR, INVERTED
         if self.lfsr & 1 != 0 {
@@ -110,14 +112,14 @@ impl NoiseChannel {
 
     fn get_divisor(&self) -> u8 {
         match self.divisor_code {
-            1 => { 16 },
-            2 => { 32 },
-            3 => { 48 },
-            4 => { 64 },
-            5 => { 80 },
-            6 => { 96 },
-            7 => { 112 },
-            _ => { 8 }
+            1 => 16,
+            2 => 32,
+            3 => 48,
+            4 => 64,
+            5 => 80,
+            6 => 96,
+            7 => 112,
+            _ => 8,
         }
     }
 
@@ -175,8 +177,12 @@ impl NoiseChannel {
     }
 
     pub fn read_register_4(&self) -> u8 {
-        0b1011_1111 |
-        (if self.length.enabled() { 0b0100_0000 } else { 0 })
+        0b1011_1111
+            | (if self.length.enabled() {
+                0b0100_0000
+            } else {
+                0
+            })
     }
 }
 
