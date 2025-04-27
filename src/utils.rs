@@ -1,6 +1,5 @@
 use std::fs::File;
 use std::io::Read;
-use std::mem;
 
 pub fn load_boot_rom() -> [u8; 0x0100] {
     // TODO: make a generic function for loading roms
@@ -20,11 +19,11 @@ pub fn load_boot_rom() -> [u8; 0x0100] {
 }
 
 pub fn u16_to_i16(unsigned: u16) -> i16 {
-    unsafe { mem::transmute::<u16, i16>(unsigned) }
+    u16::cast_signed(unsigned)
 }
 
 pub fn u8_to_i8(unsigned: u8) -> i8 {
-    unsafe { mem::transmute::<u8, i8>(unsigned) }
+    u8::cast_signed(unsigned)
 }
 
 pub fn rotate_left(unsigned: u8) -> u16 {

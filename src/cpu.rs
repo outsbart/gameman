@@ -161,45 +161,6 @@ impl<M: Memory> CPU<M> {
         word
     }
 
-    // fetch the operation, decodes it, and executes it.
-    // returns the address of the executed instruction, and t cycles passed during this step
-    pub fn step(&mut self) -> (u16, u8) {
-        let line_number = self.get_registry_value("PC");
-
-        let mut cycles_this_step: u8 = 0;
-
-        if !self.halted {
-            let mut prefixed = false;
-            let mut byte = self.read_byte();
-
-            if byte == 0xcb {
-                byte = self.read_byte();
-
-                prefixed = true;
-            }
-
-            if self.schedule_interrupt_enable {
-                self.interrupt_master_enable = true;
-                self.schedule_interrupt_enable = false;
-            }
-            self.execute(byte, prefixed);
-        } else {
-            self.regs.write_byte(REG_T, 4);
-        }
-
-        cycles_this_step += self.regs.read_byte(REG_T);
-
-        self.tick_timers();
-
-        self.handle_interrupts();
-
-        cycles_this_step += self.regs.read_byte(REG_T);
-
-        self.tick_timers();
-
-        (line_number, cycles_this_step)
-    }
-
     fn registry_name_to_index(&mut self, registry: &str) -> u16 {
         match registry {
             "A" | "AF" => 0,
@@ -311,10 +272,33 @@ impl<M: Memory> CPU<M> {
 
     // update timers relative to cpu clock
     // this function might request a timer Interrupt
-    fn tick_timers(&mut self) {
-        let cycles = self.regs.read_byte(REG_T);
-
+    pub fn tick_timers(&mut self, cycles: u8) {
         self.mmu.tick(cycles);
+    }
+
+    // executes the next instruction
+    // returns cycles taken
+    pub fn step(&mut self) -> u8 {
+        if !self.halted {
+            let mut prefixed = false;
+            let mut byte = self.read_byte();
+
+            if byte == 0xcb {
+                byte = self.read_byte();
+
+                prefixed = true;
+            }
+
+            if self.schedule_interrupt_enable {
+                self.interrupt_master_enable = true;
+                self.schedule_interrupt_enable = false;
+            }
+            self.execute(byte, prefixed);
+        } else {
+            self.regs.write_byte(REG_T, 4);
+        }
+
+        self.regs.read_byte(REG_T)
     }
 
     // return IE & IF
@@ -324,7 +308,7 @@ impl<M: Memory> CPU<M> {
         interrupt_enable & interrupt_flags
     }
 
-    fn handle_interrupts(&mut self) {
+    pub fn handle_interrupts(&mut self) -> u8 {
         let mut interrupt_cycles_t: u8 = 0;
         let interrupts = self.interrupts_to_handle();
 
@@ -393,6 +377,8 @@ impl<M: Memory> CPU<M> {
 
         // todo: on button press resume from stop
         self.regs.write_byte(REG_T, interrupt_cycles_t);
+
+        interrupt_cycles_t
     }
 
     pub fn execute(&mut self, opcode: u8, cb: bool) {

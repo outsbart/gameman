@@ -26,17 +26,17 @@ const FPS: u32 = 60;
 const CLOCKS_IN_A_FRAME: u32 = 70224;
 const DELAY_EVERY_FRAME: u32 = 1000 / FPS;
 
-pub struct Emulator {
+pub struct Gameboy {
     cpu: CPU<MMU<GPU>>,
 }
 
-impl Emulator {
-    pub fn new(path: &str) -> Emulator {
+impl Gameboy {
+    pub fn new(path: &str) -> Gameboy {
         let cartridge = load_rom(path);
         let mmu = MMU::new(GPU::new(), cartridge);
         let cpu = CPU::new(mmu);
 
-        Emulator { cpu }
+        Gameboy { cpu }
     }
 
     pub fn load_bios(&mut self) {
@@ -44,12 +44,30 @@ impl Emulator {
         self.cpu.set_registry_value("PC", 0);
     }
 
+    // fetch the operation, decodes it, and executes it.
+    // returns the address of the executed instruction, and t cycles passed during this step
+    pub fn cpu_step(&mut self) -> (u16, u8) {
+        let line_number = self.cpu.get_registry_value("PC");
+
+        let mut cycles_this_step: u8 = self.cpu.step();
+
+        self.cpu.tick_timers(cycles_this_step);
+
+        let interrupt_cycles = self.cpu.handle_interrupts();
+
+        self.cpu.tick_timers(interrupt_cycles);
+
+        cycles_this_step += interrupt_cycles;
+
+        (line_number, cycles_this_step)
+    }
+
     fn step(&mut self) {
         let mut clocks_this_frame = 0u32;
 
         // step a frame forward!
         loop {
-            let (_line, t) = self.cpu.step();
+            let (_line, t) = self.cpu_step();
 
             clocks_this_frame += t as u32;
 

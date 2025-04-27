@@ -8,7 +8,7 @@ extern crate serde_derive;
 
 pub mod cartridge;
 pub mod cpu;
-pub mod emu;
+pub mod gameboy;
 pub mod gpu;
 pub mod keypad;
 pub mod link;
