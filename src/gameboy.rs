@@ -2,12 +2,12 @@
 
 extern crate sdl2;
 
-use keypad::Button;
+use crate::keypad::Button;
 
 use crate::cartridge::load_rom;
 use crate::cpu::CPU;
 use crate::gpu::GPU;
-use crate::mem::{Memory, MMU};
+use crate::mem::{MMU, Memory};
 use crate::sound::AUDIO_BUFFER_SIZE;
 
 use self::sdl2::audio::AudioSpecDesired;
@@ -15,8 +15,8 @@ use self::sdl2::event::Event;
 use self::sdl2::keyboard::Keycode;
 use self::sdl2::pixels::PixelFormatEnum;
 use self::sdl2::rect::Rect;
+use crate::sound::SAMPLE_RATE;
 use crate::utils::load_boot_rom;
-use sound::SAMPLE_RATE;
 use std::{thread, time};
 
 const SCREEN_SIZE_MULTIPLIER: u32 = 3;
@@ -341,7 +341,7 @@ impl Gameboy {
                     thread::sleep(time::Duration::from_millis(1));
                 }
 
-                device.queue(&audio_buffer[0..]);
+                device.queue_audio(&audio_buffer[0..]);
 
                 device.resume();
             }

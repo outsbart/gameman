@@ -1,8 +1,8 @@
-use cpu::is_bit_set;
-use sound::envelope::Envelope;
-use sound::length::MaxLength;
-use sound::sweep::Sweep;
-use sound::{Length, Sample, Timer, Voltage, DUTY_PATTERNS_LENGTH};
+use crate::cpu::is_bit_set;
+use crate::sound::envelope::Envelope;
+use crate::sound::length::MaxLength;
+use crate::sound::sweep::Sweep;
+use crate::sound::{DUTY_PATTERNS_LENGTH, Length, Sample, Timer, Voltage};
 
 pub struct SquareChannel {
     sweep: Sweep,

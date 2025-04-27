@@ -1,6 +1,6 @@
-use sound::envelope::Envelope;
-use sound::length::{Length, MaxLength};
-use sound::{Sample, Timer, Voltage};
+use crate::sound::envelope::Envelope;
+use crate::sound::length::{Length, MaxLength};
+use crate::sound::{Sample, Timer, Voltage};
 
 pub struct NoiseChannel {
     length: Length,

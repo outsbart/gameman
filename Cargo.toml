@@ -2,11 +2,11 @@
 name = "gameman"
 version = "0.1.0"
 authors = ["Bart Merenda <outsbart@gmail.com>"]
+edition = "2024"
 
 [dependencies]
 log = "0.4.6"
-sdl2 = "0.32.2"
-serde = "1.0.91"
+sdl2 = "0.38.0"
 serde_derive = "1.0.91"
 csv = "1.0.7"
 lazy_static = "1.3.0"

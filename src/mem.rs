@@ -1,9 +1,9 @@
+use crate::cartridge::CartridgeAccess;
 use crate::gpu::GPUMemoriesAccess;
 use crate::keypad::Key;
 use crate::link::Link;
 use crate::sound::Sound;
 use crate::timers::Timers;
-use cartridge::CartridgeAccess;
 
 pub struct MMU<M: GPUMemoriesAccess> {
     still_bios: bool,
@@ -248,7 +248,7 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cartridge::load_rom;
+    use crate::cartridge::load_rom;
 
     struct DummyGPU {
         vram: [u8; 65536],

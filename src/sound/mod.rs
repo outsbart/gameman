@@ -1,12 +1,12 @@
 use std::ops::{Add, AddAssign};
 
-use cpu::CPU_FREQ;
-use mem::Memory;
-use sound::envelope::Envelope;
-use sound::length::Length;
-use sound::noise::NoiseChannel;
-use sound::square::SquareChannel;
-use sound::wave::WaveChannel;
+use crate::cpu::CPU_FREQ;
+use crate::mem::Memory;
+use crate::sound::envelope::Envelope;
+use crate::sound::length::Length;
+use crate::sound::noise::NoiseChannel;
+use crate::sound::square::SquareChannel;
+use crate::sound::wave::WaveChannel;
 
 pub mod envelope;
 pub mod length;
@@ -900,11 +900,7 @@ impl TimerDefaultPeriod {
     }
 
     pub fn get_period(&self) -> usize {
-        if self.period != 0 {
-            self.period
-        } else {
-            8
-        }
+        if self.period != 0 { self.period } else { 8 }
     }
 
     pub fn set_period(&mut self, period: usize) {

@@ -1,4 +1,4 @@
-use sound::TimerDefaultPeriod;
+use crate::sound::TimerDefaultPeriod;
 use std::ops::{Add, Sub};
 
 pub struct Sweep {

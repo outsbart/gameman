@@ -1,4 +1,4 @@
-use cartridge::{Cartridge, CartridgeAccess};
+use crate::cartridge::{Cartridge, CartridgeAccess};
 
 pub struct CartridgeNoMBC {
     cart: Cartridge,

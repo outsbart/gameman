@@ -1,5 +1,5 @@
-use sound::length::{Length, MaxLength};
-use sound::{Sample, Timer, Voltage};
+use crate::sound::length::{Length, MaxLength};
+use crate::sound::{Sample, Timer, Voltage};
 
 const WAVE_RAM_SAMPLES: u8 = 32;
 

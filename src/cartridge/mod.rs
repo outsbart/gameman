@@ -3,10 +3,10 @@ pub mod mbc3;
 pub mod mbc5;
 pub mod nombc;
 
-use cartridge::mbc1::CartridgeMBC1;
-use cartridge::mbc3::CartridgeMBC3;
-use cartridge::mbc5::CartridgeMBC5;
-use cartridge::nombc::CartridgeNoMBC;
+use crate::cartridge::mbc1::CartridgeMBC1;
+use crate::cartridge::mbc3::CartridgeMBC3;
+use crate::cartridge::mbc5::CartridgeMBC5;
+use crate::cartridge::nombc::CartridgeNoMBC;
 
 use std::fs::{File, OpenOptions};
 use std::io;

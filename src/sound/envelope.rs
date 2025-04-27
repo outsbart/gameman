@@ -1,4 +1,4 @@
-use sound::{Sample, TimerDefaultPeriod};
+use crate::sound::{Sample, TimerDefaultPeriod};
 
 // every tick, increases or decreases volume
 #[derive(Clone, Copy)]
