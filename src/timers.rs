@@ -100,11 +100,18 @@ impl Timers {
 
         // overflow
         if self.counter == 0 {
-            self.counter = self.modulo;
+            // schedule an interrupt
+            // after 1 cycle (4 clocks) the interrupt should be requested
+            // and tima_interrupt_requested should be called
             return true;
         }
 
         false
+    }
+
+    // called when the interrupt has been requested
+    pub fn tima_interrupt_requested(&mut self) {
+        self.counter = self.modulo;
     }
 
     // when writing to 0xFF04

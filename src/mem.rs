@@ -23,6 +23,9 @@ pub struct MMU<M: GPUMemoriesAccess> {
     pub gpu: M,
     pub key: Key,
     pub link: Link,
+
+    // true if a tima interrupt is scheduled after 1 cycle (4 clocks)
+    tima_interrupt_scheduled: bool,
 }
 
 impl<M: GPUMemoriesAccess> MMU<M> {
@@ -46,16 +49,14 @@ impl<M: GPUMemoriesAccess> MMU<M> {
             gpu,
             key: Key::new(),
             link: Link::new(),
+
+            tima_interrupt_scheduled: false,
         }
     }
 
     pub fn set_bios(&mut self, bios: [u8; 0x0100]) {
         self.bios = bios;
         self.still_bios = true; // TODO: move this into a reset fn
-    }
-
-    pub fn tick_timers(&mut self, cycles: u8) {
-        self.timers.tick(cycles);
     }
 }
 
@@ -236,11 +237,17 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
     }
 
     fn tick(&mut self, cpu_cycles: u8) {
-        let raise_interrupt = self.timers.tick(cpu_cycles);
+        if self.tima_interrupt_scheduled {
+            self.tima_interrupt_scheduled = false;
 
-        if raise_interrupt {
             let interrupt_flags = self.read_byte(0xFF0F);
             self.write_byte(0xFF0F, interrupt_flags | 4);
+            self.timers.tima_interrupt_requested();
+        }
+
+        // schedule an interrupt next time this func is called
+        if self.timers.tick(cpu_cycles) {
+            self.tima_interrupt_scheduled = true;
         }
     }
 }

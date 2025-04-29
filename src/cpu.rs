@@ -289,16 +289,20 @@ impl<M: Memory> CPU<M> {
                 prefixed = true;
             }
 
-            if self.schedule_interrupt_enable {
-                self.interrupt_master_enable = true;
-                self.schedule_interrupt_enable = false;
-            }
+            self.enable_ime_if_scheduled();
             self.execute(byte, prefixed);
         } else {
             self.regs.write_byte(REG_T, 4);
         }
 
         self.regs.read_byte(REG_T)
+    }
+
+    pub fn enable_ime_if_scheduled(&mut self) {
+        if self.schedule_interrupt_enable {
+            self.interrupt_master_enable = true;
+            self.schedule_interrupt_enable = false;
+        }
     }
 
     // return IE & IF
