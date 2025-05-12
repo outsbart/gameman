@@ -45,11 +45,12 @@ impl Gameboy {
     }
 
     // fetch the operation, decodes it, and executes it.
-    // returns the address of the executed instruction, and t cycles passed during this step
-    pub fn cpu_step(&mut self) -> (u16, u8) {
+    // returns the address of the executed instruction, the instruction opcode,
+    // and t cycles passed during this step
+    pub fn cpu_step(&mut self) -> (u16, u16, u8) {
         let line_number = self.cpu.get_registry_value("PC");
 
-        let mut cycles_this_step: u8 = self.cpu.step();
+        let (instr, mut cycles_this_step) = self.cpu.step();
 
         self.cpu.tick_timers(cycles_this_step);
 
@@ -59,15 +60,17 @@ impl Gameboy {
 
         cycles_this_step += interrupt_cycles;
 
-        (line_number, cycles_this_step)
+        (line_number, instr, cycles_this_step)
     }
+
+    fn step_everything_else(&mut self) {}
 
     fn step(&mut self) {
         let mut clocks_this_frame = 0u32;
 
         // step a frame forward!
         loop {
-            let (_line, t) = self.cpu_step();
+            let (_line, _opcode, t) = self.cpu_step();
 
             clocks_this_frame += t as u32;
 
@@ -101,6 +104,51 @@ impl Gameboy {
                 if failed {
                     return false;
                 }
+            }
+        }
+    }
+
+    pub fn mooneye_step(&mut self) -> u8 {
+        let mut clocks_this_frame = 0u32;
+
+        // how many time was LD B,B executed?
+        let mut ld_b_b: u8 = 0;
+
+        // step a frame forward!
+        loop {
+            let (_line, opcode, t) = self.cpu_step();
+
+            if opcode == 0x40 {
+                ld_b_b += 1;
+            }
+
+            clocks_this_frame += t as u32;
+
+            let (vblank_interrupt, stat_interrupt) = self.cpu.mmu.gpu.step(t);
+            if vblank_interrupt {
+                self.request_vblank_interrupt();
+            }
+            if stat_interrupt {
+                self.request_stat_interrupt();
+            }
+            self.cpu.mmu.sound.tick(t);
+
+            if clocks_this_frame >= CLOCKS_IN_A_FRAME {
+                break;
+            }
+        }
+
+        ld_b_b
+    }
+
+    pub fn passes_mooneye_test_rom(&mut self) -> bool {
+        let mut ld_b_b = 0;
+
+        loop {
+            ld_b_b += self.mooneye_step();
+
+            if ld_b_b > 1 {
+                return self.cpu.get_registry_value("B") == 3;
             }
         }
     }

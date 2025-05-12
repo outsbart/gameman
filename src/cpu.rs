@@ -277,16 +277,21 @@ impl<M: Memory> CPU<M> {
     }
 
     // executes the next instruction
-    // returns cycles taken
-    pub fn step(&mut self) -> u8 {
+    // returns instruction executed and cycles taken
+    pub fn step(&mut self) -> (u16, u8) {
+        let mut instr: u16 = 0;
+
         if !self.halted {
             let mut prefixed = false;
             let mut byte = self.read_byte();
 
             if byte == 0xcb {
                 byte = self.read_byte();
+                instr = 0xcb00 | (byte as u16);
 
                 prefixed = true;
+            } else {
+                instr = byte as u16;
             }
 
             self.enable_ime_if_scheduled();
@@ -295,7 +300,7 @@ impl<M: Memory> CPU<M> {
             self.regs.write_byte(REG_T, 4);
         }
 
-        self.regs.read_byte(REG_T)
+        (instr, self.regs.read_byte(REG_T))
     }
 
     pub fn enable_ime_if_scheduled(&mut self) {
