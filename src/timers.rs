@@ -45,6 +45,8 @@ pub struct Timers {
     divider: u8,
     counter: u8,
     modulo: u8,
+
+    cycles_until_reloading_tima: u8,
 }
 
 impl Timers {
@@ -59,6 +61,8 @@ impl Timers {
             modulo: 0,
             speed: TimerSpeed::Speed0,
             running: false,
+
+            cycles_until_reloading_tima: 0,
         }
     }
 
@@ -77,6 +81,8 @@ impl Timers {
                 self.div = 0;
             }
         }
+
+        self.reload_tima_if_necessary(cycles);
 
         // check if enabled
         if !self.running {
@@ -100,18 +106,25 @@ impl Timers {
 
         // overflow
         if self.counter == 0 {
+            self.cycles_until_reloading_tima = 4;
+
             // schedule an interrupt
-            // after 1 cycle (4 clocks) the interrupt should be requested
-            // and tima_interrupt_requested should be called
             return true;
         }
 
         false
     }
 
-    // called when the interrupt has been requested
-    pub fn tima_interrupt_requested(&mut self) {
-        self.counter = self.modulo;
+    fn reload_tima_if_necessary(&mut self, cycles: u8) {
+        // tima should be reloaded after 4 cycles
+        if self.cycles_until_reloading_tima > 0 {
+            self.cycles_until_reloading_tima =
+                self.cycles_until_reloading_tima.wrapping_sub(cycles);
+
+            if self.cycles_until_reloading_tima == 0 {
+                self.counter = self.modulo;
+            }
+        }
     }
 
     // when writing to 0xFF04

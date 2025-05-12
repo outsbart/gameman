@@ -31,3 +31,9 @@ fn tim11() {
     let mut emulator = Gameboy::new("tests/timer/tim11.gb");
     assert!(emulator.passes_mooneye_test_rom());
 }
+
+#[test]
+fn tima_reload() {
+    let mut emulator = Gameboy::new("tests/timer/tima_reload.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
