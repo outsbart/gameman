@@ -117,6 +117,9 @@ impl Timers {
     // when writing to 0xFF04
     pub fn change_divider(&mut self, _byte: u8) {
         // always resets
+        self.div = 0;
+        self.main = 0;
+        self.sub = 0;
         self.divider = 0;
     }
 
