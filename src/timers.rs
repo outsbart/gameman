@@ -33,6 +33,74 @@ impl From<u8> for TimerSpeed {
     }
 }
 
+#[derive(PartialEq)]
+enum TimaStatus {
+    Reloading,
+    JustReloaded,
+    Ok,
+}
+
+#[derive(Default)]
+struct Tima {
+    cycles: u8,
+    _value: u8,
+}
+
+impl Tima {
+    fn get_status(&self) -> TimaStatus {
+        if self.cycles > 0 && self.cycles <= 4 {
+            return TimaStatus::Reloading;
+        }
+        if self.cycles > 4 && self.cycles <= 8 {
+            return TimaStatus::JustReloaded;
+        }
+        TimaStatus::Ok
+    }
+
+    fn tick(&mut self, tma: u8) -> bool {
+        // returns true if tima got reloaded
+        if self.cycles > 0 {
+            self.cycles = self.cycles.wrapping_sub(1);
+        }
+
+        if self.cycles == 4 {
+            self._value = tma;
+            return true;
+        }
+
+        false
+    }
+
+    fn increase(&mut self) {
+        self._value = self._value.wrapping_add(1);
+
+        // overflow
+        if self._value == 0 {
+            // for 4 cycles tima is 0, then it is reloaded from tma
+            self.cycles = 8;
+        }
+    }
+
+    fn get_value(&self) -> u8 {
+        self._value
+    }
+
+    fn set_value(&mut self, value: u8) {
+        match self.get_status() {
+            TimaStatus::Reloading => {
+                // ignore the value when reloading
+                return;
+            }
+            TimaStatus::JustReloaded => {
+                self.cycles = 0;
+            }
+            TimaStatus::Ok => {}
+        }
+
+        self._value = value;
+    }
+}
+
 pub struct Timers {
     // tac
     speed: TimerSpeed,
@@ -40,24 +108,23 @@ pub struct Timers {
 
     // registers
     divider: u16,
-    tima: u8, // counter
-    tma: u8,  // modulo
+    tma: u8, // modulo
+    tima: Tima,
 
     prev_signal: bool, // falling edge detector
-    cycles_until_reloading_tima: u8,
 }
 
 impl Timers {
     pub fn new() -> Self {
         Timers {
             divider: 0,
-            tima: 0,
             tma: 0,
             speed: TimerSpeed::Speed0,
             running: false,
 
+            tima: Tima::default(),
+
             prev_signal: false,
-            cycles_until_reloading_tima: 0,
         }
     }
 
@@ -68,14 +135,9 @@ impl Timers {
         for _ in 0..cycles {
             self.divider = self.divider.wrapping_add(1);
 
-            if self.cycles_until_reloading_tima > 0 {
-                self.cycles_until_reloading_tima = self.cycles_until_reloading_tima.wrapping_sub(1);
-            }
+            interrupt |= self.tima.tick(self.tma);
 
-            interrupt |= self.reload_tima_if_necessary();
-
-            // no need to check edge detector
-            if self.cycles_until_reloading_tima > 0 {
+            if self.tima.cycles > 0 {
                 continue;
             }
 
@@ -97,27 +159,10 @@ impl Timers {
 
         // falling edge detector
         if (self.prev_signal == true) && !signal {
-            self.tima = self.tima.wrapping_add(1);
-
-            // tima overflowed
-            if self.tima == 0 {
-                // for 4 cycles tima is 0, then it is reloaded from tma
-                self.cycles_until_reloading_tima = 8;
-            }
+            self.tima.increase();
         }
 
         self.prev_signal = signal;
-    }
-
-    fn reload_tima_if_necessary(&mut self) -> bool {
-        // returns true if interrupt should be triggered
-        // tima should be reloaded after 4 cycles
-        if self.cycles_until_reloading_tima == 4 {
-            self.tima = self.tma;
-            return true;
-        }
-
-        false
     }
 
     // when writing to 0xFF04
@@ -128,22 +173,14 @@ impl Timers {
 
     // when writing to 0xFF05
     pub fn write_tima(&mut self, byte: u8) {
-        if self.cycles_until_reloading_tima > 0 && self.cycles_until_reloading_tima <= 4 {
-            return;
-        }
-
-        if self.cycles_until_reloading_tima > 4 && self.cycles_until_reloading_tima <= 8 {
-            self.cycles_until_reloading_tima = 0;
-        }
-
-        self.tima = byte;
+        self.tima.set_value(byte);
     }
 
     // when writing to 0xFF06
     pub fn write_tma(&mut self, byte: u8) {
-        // load tima to if already reloading tima
-        if self.cycles_until_reloading_tima > 0 && self.cycles_until_reloading_tima <= 4 {
-            self.tima = byte;
+        // load tima too if already reloading tima
+        if self.tima.get_status() == TimaStatus::Reloading {
+            self.tima._value = byte;
         }
 
         self.tma = byte;
@@ -162,7 +199,7 @@ impl Timers {
 
     // when writing to 0xFF05
     pub fn read_tima(&self) -> u8 {
-        self.tima
+        self.tima.get_value()
     }
 
     // when reading from 0xFF06
@@ -191,7 +228,7 @@ mod tests {
         let timers = Timers::new();
 
         assert_eq!(timers.divider, 0);
-        assert_eq!(timers.tima, 0);
+        assert_eq!(timers.tima.get_value(), 0);
         assert_eq!(timers.tma, 0);
         assert_eq!(timers.speed as u8, 0);
         assert!(!timers.running);
