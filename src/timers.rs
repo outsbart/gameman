@@ -106,9 +106,11 @@ impl Timers {
 
     fn tima_reloader_tick(&mut self) -> bool {
         // returns true if tima got reloaded
-        if self.tima_reload_cycle > 0 {
-            self.tima_reload_cycle = self.tima_reload_cycle.wrapping_sub(1);
+        if self.tima_reload_cycle == 0 {
+            return false;
         }
+
+        self.tima_reload_cycle = self.tima_reload_cycle.wrapping_sub(1);
 
         if self.tima_reload_cycle == 4 {
             self.tima.value = self.tma;
