@@ -122,9 +122,9 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                                     1 => self.link.get_data(),
                                     2 => self.link.get_control(),
                                     4 => self.timers.read_divider(),
-                                    5 => self.timers.read_counter(),
-                                    6 => self.timers.read_modulo(),
-                                    7 => self.timers.read_control(),
+                                    5 => self.timers.read_tima(),
+                                    6 => self.timers.read_tma(),
+                                    7 => self.timers.read_tac(),
                                     0xF => self.interrupt_flags,
                                     _ => 0,
                                 },
@@ -199,11 +199,11 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                         } else if addr == 0xFF04 {
                             self.timers.change_divider(byte);
                         } else if addr == 0xFF05 {
-                            self.timers.change_counter(byte);
+                            self.timers.write_tima(byte);
                         } else if addr == 0xFF06 {
-                            self.timers.change_modulo(byte);
+                            self.timers.write_tma(byte);
                         } else if addr == 0xFF07 {
-                            self.timers.change_control(byte);
+                            self.timers.write_tac(byte);
                         } else if addr >= 0xFF80 {
                             self.zram[(addr & 0x007F) as usize] = byte;
                         } else if addr >= 0xFF40 {

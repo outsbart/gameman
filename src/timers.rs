@@ -34,141 +34,122 @@ impl From<u8> for TimerSpeed {
 }
 
 pub struct Timers {
-    main: u8,
-    sub: u8,
-    div: u8,
-
+    // tac
     speed: TimerSpeed,
     running: bool, // true if enabled
 
     // registers
-    divider: u8,
-    counter: u8,
-    modulo: u8,
+    divider: u16,
+    tima: u8, // counter
+    tma: u8,  // modulo
 
+    prev_signal: bool, // falling edge detector
     cycles_until_reloading_tima: u8,
 }
 
 impl Timers {
     pub fn new() -> Self {
         Timers {
-            main: 0,
-            sub: 0,
-            div: 0,
-
             divider: 0,
-            counter: 0,
-            modulo: 0,
+            tima: 0,
+            tma: 0,
             speed: TimerSpeed::Speed0,
             running: false,
 
+            prev_signal: false,
             cycles_until_reloading_tima: 0,
         }
     }
 
     // send the timers forward; returns true if timer interrupt should be triggered
     pub fn tick(&mut self, cycles: u8) -> bool {
-        let m = cycles / 4;
-        self.sub = self.sub.wrapping_add(m);
+        let mut interrupt = false;
 
-        if self.sub >= 4 {
-            self.main = self.main.wrapping_add(1);
-            self.sub = self.sub.wrapping_sub(4);
+        for _ in 0..cycles {
+            self.divider = self.divider.wrapping_add(1);
 
-            self.div = self.div.wrapping_add(1);
-            if self.div == 16 {
-                self.divider = self.divider.wrapping_add(1);
-                self.div = 0;
+            interrupt |= self.reload_tima_if_necessary();
+
+            let bit_to_check: u16 = match self.speed {
+                TimerSpeed::Speed0 => 0b1000000000,
+                TimerSpeed::Speed1 => 0b1000,
+                TimerSpeed::Speed2 => 0b100000,
+                TimerSpeed::Speed3 => 0b10000000,
+            };
+
+            let signal = self.running && (self.divider & bit_to_check != 0);
+
+            // falling edge detector
+            if (self.prev_signal == true) && !signal {
+                // increase!!
+                self.tima = self.tima.wrapping_add(1);
+
+                // tima overflowed
+                if self.tima == 0 {
+                    // for 4 cycles tima is 0, then it is reloaded from tma
+                    self.cycles_until_reloading_tima = 4;
+                }
             }
+
+            self.prev_signal = signal;
         }
 
-        self.reload_tima_if_necessary(cycles);
-
-        // check if enabled
-        if !self.running {
-            return false;
-        }
-
-        let threshold = match self.speed {
-            TimerSpeed::Speed0 => 64,
-            TimerSpeed::Speed1 => 1,
-            TimerSpeed::Speed2 => 4,
-            TimerSpeed::Speed3 => 16,
-        };
-
-        // no need to send timer forward
-        if self.main < threshold {
-            return false;
-        }
-
-        self.main = 0;
-        self.counter = self.counter.wrapping_add(1);
-
-        // overflow
-        if self.counter == 0 {
-            self.cycles_until_reloading_tima = 4;
-
-            // schedule an interrupt
-            return true;
-        }
-
-        false
+        interrupt
     }
 
-    fn reload_tima_if_necessary(&mut self, cycles: u8) {
+    fn reload_tima_if_necessary(&mut self) -> bool {
+        // returns true if interrupt should be triggered
         // tima should be reloaded after 4 cycles
         if self.cycles_until_reloading_tima > 0 {
-            self.cycles_until_reloading_tima =
-                self.cycles_until_reloading_tima.wrapping_sub(cycles);
+            self.cycles_until_reloading_tima = self.cycles_until_reloading_tima.wrapping_sub(1);
 
             if self.cycles_until_reloading_tima == 0 {
-                self.counter = self.modulo;
+                self.tima = self.tma;
+                return true;
             }
         }
+        false
     }
 
     // when writing to 0xFF04
     pub fn change_divider(&mut self, _byte: u8) {
         // always resets
-        self.div = 0;
-        self.main = 0;
-        self.sub = 0;
         self.divider = 0;
     }
 
     // when writing to 0xFF05
-    pub fn change_counter(&mut self, byte: u8) {
-        self.counter = byte;
+    pub fn write_tima(&mut self, byte: u8) {
+        self.tima = byte;
     }
 
     // when writing to 0xFF06
-    pub fn change_modulo(&mut self, byte: u8) {
-        self.modulo = byte;
+    pub fn write_tma(&mut self, byte: u8) {
+        self.tma = byte;
     }
 
     // when writing to 0xFF07
-    pub fn change_control(&mut self, byte: u8) {
+    pub fn write_tac(&mut self, byte: u8) {
         self.speed = TimerSpeed::from_u8(byte & 0b0000_0011);
         self.running = ((byte & 0b0000_0100) >> 2) == 1;
     }
 
     // when reading from 0xFF04
     pub fn read_divider(&self) -> u8 {
-        self.divider
+        (self.divider >> 8) as u8
     }
 
     // when writing to 0xFF05
-    pub fn read_counter(&self) -> u8 {
-        self.counter
+    pub fn read_tima(&self) -> u8 {
+        self.tima
     }
 
     // when reading from 0xFF06
-    pub fn read_modulo(&self) -> u8 {
-        self.modulo
+    pub fn read_tma(&self) -> u8 {
+        self.tma
     }
 
     // when reading from 0xFF07
-    pub fn read_control(&self) -> u8 {
+    pub fn read_tac(&self) -> u8 {
         (if self.running { 0b100 } else { 0 }) | (self.speed as u8)
     }
 }
@@ -188,8 +169,8 @@ mod tests {
         let timers = Timers::new();
 
         assert_eq!(timers.divider, 0);
-        assert_eq!(timers.counter, 0);
-        assert_eq!(timers.modulo, 0);
+        assert_eq!(timers.tima, 0);
+        assert_eq!(timers.tma, 0);
         assert_eq!(timers.speed as u8, 0);
         assert!(!timers.running);
     }
@@ -208,29 +189,29 @@ mod tests {
     fn test_counter_access() {
         let mut timers = Timers::new();
 
-        timers.change_counter(4);
+        timers.write_tima(4);
 
-        assert_eq!(timers.read_counter(), 4)
+        assert_eq!(timers.read_tima(), 4)
     }
 
     #[test]
     fn test_modulo_access() {
         let mut timers = Timers::new();
 
-        timers.change_modulo(5);
+        timers.write_tma(5);
 
-        assert_eq!(timers.read_modulo(), 5)
+        assert_eq!(timers.read_tma(), 5)
     }
 
     #[test]
     fn test_timer_control_access() {
         let mut timers = Timers::new();
 
-        timers.change_control(0b0000_0111);
+        timers.write_tac(0b0000_0111);
 
         assert!(timers.running);
         assert_eq!(timers.speed as u8, 0b11);
 
-        assert_eq!(timers.read_control(), 0b0000_0111);
+        assert_eq!(timers.read_tac(), 0b0000_0111);
     }
 }
