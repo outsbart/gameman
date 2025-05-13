@@ -65,13 +65,6 @@ impl Timers {
     pub fn tick(&mut self, cycles: u8) -> bool {
         let mut interrupt = false;
 
-        let bit_to_check: u16 = match self.speed {
-            TimerSpeed::Speed0 => 0b1000000000,
-            TimerSpeed::Speed1 => 0b1000,
-            TimerSpeed::Speed2 => 0b100000,
-            TimerSpeed::Speed3 => 0b10000000,
-        };
-
         for _ in 0..cycles {
             self.divider = self.divider.wrapping_add(1);
 
@@ -86,23 +79,34 @@ impl Timers {
                 continue;
             }
 
-            let signal = self.running && (self.divider & bit_to_check != 0);
-
-            // falling edge detector
-            if (self.prev_signal == true) && !signal {
-                self.tima = self.tima.wrapping_add(1);
-
-                // tima overflowed
-                if self.tima == 0 {
-                    // for 4 cycles tima is 0, then it is reloaded from tma
-                    self.cycles_until_reloading_tima = 8;
-                }
-            }
-
-            self.prev_signal = signal;
+            self.increase_tima_if_necessary();
         }
 
         interrupt
+    }
+
+    fn increase_tima_if_necessary(&mut self) {
+        let bit_to_check: u16 = match self.speed {
+            TimerSpeed::Speed0 => 0b1000000000,
+            TimerSpeed::Speed1 => 0b1000,
+            TimerSpeed::Speed2 => 0b100000,
+            TimerSpeed::Speed3 => 0b10000000,
+        };
+
+        let signal = self.running && (self.divider & bit_to_check != 0);
+
+        // falling edge detector
+        if (self.prev_signal == true) && !signal {
+            self.tima = self.tima.wrapping_add(1);
+
+            // tima overflowed
+            if self.tima == 0 {
+                // for 4 cycles tima is 0, then it is reloaded from tma
+                self.cycles_until_reloading_tima = 8;
+            }
+        }
+
+        self.prev_signal = signal;
     }
 
     fn reload_tima_if_necessary(&mut self) -> bool {
@@ -128,16 +132,16 @@ impl Timers {
             return;
         }
 
-        // if self.cycles_until_reloading_tima > 4 && self.cycles_until_reloading_tima <= 8 {
-        //     self.cycles_until_reloading_tima = 0;
-        //     return;
-        // }
+        if self.cycles_until_reloading_tima > 4 && self.cycles_until_reloading_tima <= 8 {
+            self.cycles_until_reloading_tima = 0;
+        }
 
         self.tima = byte;
     }
 
     // when writing to 0xFF06
     pub fn write_tma(&mut self, byte: u8) {
+        // load tima to if already reloading tima
         if self.cycles_until_reloading_tima > 0 && self.cycles_until_reloading_tima <= 4 {
             self.tima = byte;
         }
