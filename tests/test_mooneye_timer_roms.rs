@@ -33,7 +33,43 @@ fn tim11() {
 }
 
 #[test]
+fn tim00_div_trigger() {
+    let mut emulator = Gameboy::new("tests/timer/tim00_div_trigger.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn tim01_div_trigger() {
+    let mut emulator = Gameboy::new("tests/timer/tim01_div_trigger.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn tim10_div_trigger() {
+    let mut emulator = Gameboy::new("tests/timer/tim10_div_trigger.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn tim11_div_trigger() {
+    let mut emulator = Gameboy::new("tests/timer/tim11_div_trigger.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
 fn tima_reload() {
     let mut emulator = Gameboy::new("tests/timer/tima_reload.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn tma_write_reloading() {
+    let mut emulator = Gameboy::new("tests/timer/tma_write_reloading.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn rapid_toggle() {
+    let mut emulator = Gameboy::new("tests/timer/rapid_toggle.gb");
     assert!(emulator.passes_mooneye_test_rom());
 }
