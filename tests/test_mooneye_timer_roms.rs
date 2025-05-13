@@ -69,6 +69,12 @@ fn tma_write_reloading() {
 }
 
 #[test]
+fn tima_write_reloading() {
+    let mut emulator = Gameboy::new("tests/timer/tima_write_reloading.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
 fn rapid_toggle() {
     let mut emulator = Gameboy::new("tests/timer/rapid_toggle.gb");
     assert!(emulator.passes_mooneye_test_rom());
