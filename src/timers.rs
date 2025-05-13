@@ -42,8 +42,8 @@ enum TimaStatus {
 
 #[derive(Default)]
 struct Tima {
-    cycles: u8, // keep track of the status after overflowing
-    _value: u8,
+    cycles: u8, // keep track of the status of reloading after overflowing
+    value: u8,
 }
 
 #[derive(Default)]
@@ -82,47 +82,14 @@ impl Tima {
         TimaStatus::NotBusy
     }
 
-    fn tick(&mut self, tma: u8) -> bool {
-        // returns true if tima got reloaded
-        if self.cycles > 0 {
-            self.cycles = self.cycles.wrapping_sub(1);
-        }
-
-        if self.cycles == 4 {
-            self._value = tma;
-            return true;
-        }
-
-        false
-    }
-
     fn increase(&mut self) {
-        self._value = self._value.wrapping_add(1);
+        self.value = self.value.wrapping_add(1);
 
         // overflow
-        if self._value == 0 {
+        if self.value == 0 {
             // for 4 cycles tima is 0, then it is reloaded from tma
             self.cycles = 8;
         }
-    }
-
-    fn get_value(&self) -> u8 {
-        self._value
-    }
-
-    fn set_value(&mut self, value: u8) {
-        match self.get_status() {
-            TimaStatus::BeingReloaded => {
-                // ignore the value when reloading
-                return;
-            }
-            TimaStatus::JustReloaded => {
-                self.cycles = 0;
-            }
-            TimaStatus::NotBusy => {}
-        }
-
-        self._value = value;
     }
 }
 
@@ -153,6 +120,20 @@ impl Timers {
         }
     }
 
+    fn tick_tima(&mut self) -> bool {
+        // returns true if tima got reloaded
+        if self.tima.cycles > 0 {
+            self.tima.cycles = self.tima.cycles.wrapping_sub(1);
+        }
+
+        if self.tima.cycles == 4 {
+            self.tima.value = self.tma;
+            return true;
+        }
+
+        false
+    }
+
     // send the timers forward; returns true if timer interrupt should be triggered
     pub fn tick(&mut self, cycles: u8) -> bool {
         let mut interrupt = false;
@@ -160,7 +141,7 @@ impl Timers {
         for _ in 0..cycles {
             self.divider = self.divider.wrapping_add(1);
 
-            interrupt |= self.tima.tick(self.tma);
+            interrupt |= self.tick_tima();
 
             if self.tima.get_status() != TimaStatus::NotBusy {
                 continue;
@@ -185,14 +166,25 @@ impl Timers {
 
     // when writing to 0xFF05
     pub fn write_tima(&mut self, byte: u8) {
-        self.tima.set_value(byte);
+        match self.tima.get_status() {
+            TimaStatus::BeingReloaded => {
+                // ignore the value when reloading
+                return;
+            }
+            TimaStatus::JustReloaded => {
+                self.tima.cycles = 0;
+            }
+            TimaStatus::NotBusy => {}
+        }
+
+        self.tima.value = byte;
     }
 
     // when writing to 0xFF06
     pub fn write_tma(&mut self, byte: u8) {
         // load tima too if already reloading tima
         if self.tima.get_status() == TimaStatus::BeingReloaded {
-            self.tima._value = byte;
+            self.tima.value = byte;
         }
 
         self.tma = byte;
@@ -211,7 +203,7 @@ impl Timers {
 
     // when writing to 0xFF05
     pub fn read_tima(&self) -> u8 {
-        self.tima.get_value()
+        self.tima.value
     }
 
     // when reading from 0xFF06
@@ -240,7 +232,7 @@ mod tests {
         let timers = Timers::new();
 
         assert_eq!(timers.divider, 0);
-        assert_eq!(timers.tima.get_value(), 0);
+        assert_eq!(timers.tima.value, 0);
         assert_eq!(timers.tma, 0);
         assert_eq!(timers.speed as u8, 0);
         assert!(!timers.running);
