@@ -35,26 +35,51 @@ impl From<u8> for TimerSpeed {
 
 #[derive(PartialEq)]
 enum TimaStatus {
-    Reloading,
+    BeingReloaded,
     JustReloaded,
-    Ok,
+    NotBusy,
 }
 
 #[derive(Default)]
 struct Tima {
-    cycles: u8,
+    cycles: u8, // keep track of the status after overflowing
     _value: u8,
+}
+
+#[derive(Default)]
+struct FallingEdgeDetector {
+    prev_signal: bool,
+    curr_signal: bool,
+}
+
+impl FallingEdgeDetector {
+    fn triggered(&mut self) -> bool {
+        // returns true if the value changed from true to false
+        (self.prev_signal == true) && !self.curr_signal
+    }
+
+    fn compute_signal(&mut self, speed: TimerSpeed, running: bool, divider: u16) {
+        let bit_to_check: u16 = match speed {
+            TimerSpeed::Speed0 => 0b1000000000,
+            TimerSpeed::Speed1 => 0b1000,
+            TimerSpeed::Speed2 => 0b100000,
+            TimerSpeed::Speed3 => 0b10000000,
+        };
+
+        self.prev_signal = self.curr_signal;
+        self.curr_signal = running && (divider & bit_to_check != 0);
+    }
 }
 
 impl Tima {
     fn get_status(&self) -> TimaStatus {
         if self.cycles > 0 && self.cycles <= 4 {
-            return TimaStatus::Reloading;
+            return TimaStatus::BeingReloaded;
         }
         if self.cycles > 4 && self.cycles <= 8 {
             return TimaStatus::JustReloaded;
         }
-        TimaStatus::Ok
+        TimaStatus::NotBusy
     }
 
     fn tick(&mut self, tma: u8) -> bool {
@@ -87,14 +112,14 @@ impl Tima {
 
     fn set_value(&mut self, value: u8) {
         match self.get_status() {
-            TimaStatus::Reloading => {
+            TimaStatus::BeingReloaded => {
                 // ignore the value when reloading
                 return;
             }
             TimaStatus::JustReloaded => {
                 self.cycles = 0;
             }
-            TimaStatus::Ok => {}
+            TimaStatus::NotBusy => {}
         }
 
         self._value = value;
@@ -111,7 +136,7 @@ pub struct Timers {
     tma: u8, // modulo
     tima: Tima,
 
-    prev_signal: bool, // falling edge detector
+    falling_edge_detector: FallingEdgeDetector,
 }
 
 impl Timers {
@@ -124,7 +149,7 @@ impl Timers {
 
             tima: Tima::default(),
 
-            prev_signal: false,
+            falling_edge_detector: FallingEdgeDetector::default(),
         }
     }
 
@@ -137,32 +162,19 @@ impl Timers {
 
             interrupt |= self.tima.tick(self.tma);
 
-            if self.tima.cycles > 0 {
+            if self.tima.get_status() != TimaStatus::NotBusy {
                 continue;
             }
 
-            self.increase_tima_if_necessary();
+            self.falling_edge_detector
+                .compute_signal(self.speed, self.running, self.divider);
+
+            if self.falling_edge_detector.triggered() {
+                self.tima.increase(); // can overflow
+            }
         }
 
         interrupt
-    }
-
-    fn increase_tima_if_necessary(&mut self) {
-        let bit_to_check: u16 = match self.speed {
-            TimerSpeed::Speed0 => 0b1000000000,
-            TimerSpeed::Speed1 => 0b1000,
-            TimerSpeed::Speed2 => 0b100000,
-            TimerSpeed::Speed3 => 0b10000000,
-        };
-
-        let signal = self.running && (self.divider & bit_to_check != 0);
-
-        // falling edge detector
-        if (self.prev_signal == true) && !signal {
-            self.tima.increase();
-        }
-
-        self.prev_signal = signal;
     }
 
     // when writing to 0xFF04
@@ -179,7 +191,7 @@ impl Timers {
     // when writing to 0xFF06
     pub fn write_tma(&mut self, byte: u8) {
         // load tima too if already reloading tima
-        if self.tima.get_status() == TimaStatus::Reloading {
+        if self.tima.get_status() == TimaStatus::BeingReloaded {
             self.tima._value = byte;
         }
 
