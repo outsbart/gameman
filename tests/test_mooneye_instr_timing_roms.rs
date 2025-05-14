@@ -2,8 +2,6 @@ extern crate gameman;
 
 use gameman::gameboy::Gameboy;
 
-// These timing tests use the DIV register approach (no OAM DMA bus blocking needed).
-
 #[test]
 fn pop_timing() {
     let mut emulator = Gameboy::new("tests/pop_timing.gb");
@@ -19,5 +17,41 @@ fn div_timing() {
 #[test]
 fn ei_timing() {
     let mut emulator = Gameboy::new("tests/ei_timing.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn di_timing() {
+    let mut emulator = Gameboy::new("tests/di_timing-GS.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn halt_ime0_ei() {
+    let mut emulator = Gameboy::new("tests/halt_ime0_ei.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn halt_ime0_nointr_timing() {
+    let mut emulator = Gameboy::new("tests/halt_ime0_nointr_timing.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn halt_ime1_timing() {
+    let mut emulator = Gameboy::new("tests/halt_ime1_timing.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn halt_ime1_timing2() {
+    let mut emulator = Gameboy::new("tests/halt_ime1_timing2-GS.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn if_ie_registers() {
+    let mut emulator = Gameboy::new("tests/if_ie_registers.gb");
     assert!(emulator.passes_mooneye_test_rom());
 }

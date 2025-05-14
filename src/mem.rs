@@ -125,7 +125,7 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                                     5 => self.timers.read_tima(),
                                     6 => self.timers.read_tma(),
                                     7 => self.timers.read_tac(),
-                                    0xF => self.interrupt_flags,
+                                    0xF => self.interrupt_flags | 0xE0,
                                     _ => 0,
                                 },
                                 0x10 | 0x20 | 0x30 => self.sound.read_byte(addr),
