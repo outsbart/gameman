@@ -232,9 +232,18 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
     }
 
     fn tick(&mut self, cpu_cycles: u8) {
-        if self.timers.tick(cpu_cycles) {
-            let interrupt_flags = self.read_byte(0xFF0F);
-            self.write_byte(0xFF0F, interrupt_flags | 4);
+        for _ in 0..(cpu_cycles / 4) {
+            if self.timers.tick(4) {
+                self.interrupt_flags |= 4;
+            }
+            let (vblank, stat) = self.gpu.step(4);
+            if vblank {
+                self.interrupt_flags |= 1;
+            }
+            if stat {
+                self.interrupt_flags |= 2;
+            }
+            self.sound.tick(4);
         }
     }
 }
@@ -285,6 +294,9 @@ mod tests {
         }
         fn write_byte(&mut self, addr: u16, byte: u8) {
             self.registers[addr as usize] = byte;
+        }
+        fn step(&mut self, _t: u8) -> (bool, bool) {
+            (false, false)
         }
     }
 

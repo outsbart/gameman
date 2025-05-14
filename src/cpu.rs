@@ -145,20 +145,20 @@ impl<M: Memory> CPU<M> {
         //TODO: set all registry to zero. RAM as well
     }
 
-    // fetches the next byte from the ram
+    // fetches the next byte from the ram, advancing one M-cycle
     fn fetch_next_byte(&mut self) -> u8 {
-        let byte = self.mmu.read_byte(self.regs.read_word(REG_PC));
-        let pc_value = self.regs.read_word(REG_PC);
-        self.regs.write_word(REG_PC, pc_value.wrapping_add(1));
+        let pc = self.regs.read_word(REG_PC);
+        let byte = self.mmu.read_byte(pc);
+        self.regs.write_word(REG_PC, pc.wrapping_add(1));
+        self.mmu.tick(4);
         byte
     }
 
-    // fetches the next word from the ram
+    // fetches the next word from the ram (two M-cycles)
     fn fetch_next_word(&mut self) -> u16 {
-        let word = self.mmu.read_word(self.regs.read_word(REG_PC));
-        let pc_value = self.regs.read_word(REG_PC);
-        self.regs.write_word(REG_PC, pc_value.wrapping_add(2));
-        word
+        let low = self.fetch_next_byte() as u16;
+        let high = self.fetch_next_byte() as u16;
+        low | (high << 8)
     }
 
     fn registry_name_to_index(&mut self, registry: &str) -> u16 {
@@ -218,9 +218,13 @@ impl<M: Memory> CPU<M> {
             _ => panic!("cant write to {} yet!!!", into),
         };
         if is_byte {
-            self.mmu.write_byte(addr, value as u8)
+            self.mmu.write_byte(addr, value as u8);
+            self.mmu.tick(4);
         } else {
-            self.mmu.write_word(addr, value)
+            self.mmu.write_byte(addr, (value & 0xFF) as u8);
+            self.mmu.tick(4);
+            self.mmu.write_byte(addr.wrapping_add(1), ((value >> 8) & 0xFF) as u8);
+            self.mmu.tick(4);
         }
     }
 
@@ -229,23 +233,30 @@ impl<M: Memory> CPU<M> {
             "(BC)" | "(DE)" | "(HL)" | "(PC)" | "(SP)" => {
                 let reg = operand[1..operand.len() - 1].as_ref();
                 let addr = self.get_registry_value(reg);
-                self.mmu.read_byte(addr) as u16
+                let val = self.mmu.read_byte(addr) as u16;
+                self.mmu.tick(4);
+                val
             }
             "BC" | "DE" | "HL" | "PC" | "SP" | "AF" | "A" | "B" | "C" | "D" | "E" | "H" | "L" => {
                 self.get_registry_value(operand)
             }
             "(a8)" => {
                 let addr = 0xFF00 + u16::from(self.fetch_next_byte());
-                u16::from(self.mmu.read_byte(addr))
-                //                info!("Reading input from 0x{:x} --> 0b{:b}", addr, res);
+                let val = u16::from(self.mmu.read_byte(addr));
+                self.mmu.tick(4);
+                val
             }
             "(C)" => {
                 let addr = 0xFF00 + self.get_registry_value("C");
-                u16::from(self.mmu.read_byte(addr))
+                let val = u16::from(self.mmu.read_byte(addr));
+                self.mmu.tick(4);
+                val
             }
             "(a16)" => {
                 let addr = self.fetch_next_word();
-                self.mmu.read_byte(addr) as u16
+                let val = self.mmu.read_byte(addr) as u16;
+                self.mmu.tick(4);
+                val
             }
             "d16" | "a16" => self.fetch_next_word(),
             "d8" | "r8" => self.fetch_next_byte() as u16,
@@ -259,15 +270,21 @@ impl<M: Memory> CPU<M> {
 
     pub fn push(&mut self, value: u16) {
         let sp = self.get_registry_value("SP");
-        self.set_registry_value("SP", sp - 2);
-        self.store_result("(SP)", value, false);
+        self.mmu.write_byte(sp.wrapping_sub(1), ((value >> 8) & 0xFF) as u8);
+        self.mmu.tick(4);
+        self.mmu.write_byte(sp.wrapping_sub(2), (value & 0xFF) as u8);
+        self.mmu.tick(4);
+        self.set_registry_value("SP", sp.wrapping_sub(2));
     }
 
     pub fn pop(&mut self) -> u16 {
         let sp = self.get_registry_value("SP");
-        let value = self.mmu.read_word(sp);
-        self.set_registry_value("SP", sp + 2);
-        value
+        let low = self.mmu.read_byte(sp) as u16;
+        self.mmu.tick(4);
+        let high = self.mmu.read_byte(sp.wrapping_add(1)) as u16;
+        self.mmu.tick(4);
+        self.set_registry_value("SP", sp.wrapping_add(2));
+        low | (high << 8)
     }
 
     // update timers relative to cpu clock
@@ -297,6 +314,7 @@ impl<M: Memory> CPU<M> {
             self.enable_ime_if_scheduled();
             self.execute(byte, prefixed);
         } else {
+            self.mmu.tick(4);
             self.regs.write_byte(REG_T, 4);
         }
 
@@ -318,7 +336,6 @@ impl<M: Memory> CPU<M> {
     }
 
     pub fn handle_interrupts(&mut self) -> u8 {
-        let mut interrupt_cycles_t: u8 = 0;
         let interrupts = self.interrupts_to_handle();
 
         // wake up cpu if there is an interrupt, even if ime = 0
@@ -331,63 +348,36 @@ impl<M: Memory> CPU<M> {
             // only one interrupt handling at a time
             self.interrupt_master_enable = false;
 
-            // put current instruction on the stack, handle interrupt immediately
+            // 2 internal M-cycles (pipeline flush), then push PC, then 1 internal (load vector)
+            self.mmu.tick(4);
+            self.mmu.tick(4);
             let value = self.get_registry_value("PC");
             self.push(value);
-
-            interrupt_cycles_t = 12;
+            self.mmu.tick(4);
 
             let interrupt_flags = self.mmu.read_byte(0xFF0F);
 
-            // vblank
             if (interrupts & 0x1) != 0 {
-                // turn interrupt flag off cause we are handling it now
-                self.mmu
-                    .write_byte(0xFF0F, reset_bit(0, interrupt_flags) as u8);
-
+                self.mmu.write_byte(0xFF0F, reset_bit(0, interrupt_flags) as u8);
                 self.set_registry_value("PC", 0x0040);
-            }
-            // lcd status triggers
-            else if (interrupts & 0x2) != 0 {
-                self.mmu
-                    .write_byte(0xFF0F, reset_bit(1, interrupt_flags) as u8);
-
+            } else if (interrupts & 0x2) != 0 {
+                self.mmu.write_byte(0xFF0F, reset_bit(1, interrupt_flags) as u8);
                 self.set_registry_value("PC", 0x0048);
-            }
-
-            // timer
-            if (interrupts & 0x4) != 0 {
-                println!("Handling timer");
-
-                self.mmu
-                    .write_byte(0xFF0F, reset_bit(2, interrupt_flags) as u8);
-
+            } else if (interrupts & 0x4) != 0 {
+                self.mmu.write_byte(0xFF0F, reset_bit(2, interrupt_flags) as u8);
                 self.set_registry_value("PC", 0x0050);
-            }
-            // serial
-            else if (interrupts & 0b1000) != 0 {
-                println!("Handling serial");
-
-                self.mmu
-                    .write_byte(0xFF0F, reset_bit(3, interrupt_flags) as u8);
-
+            } else if (interrupts & 0b1000) != 0 {
+                self.mmu.write_byte(0xFF0F, reset_bit(3, interrupt_flags) as u8);
                 self.set_registry_value("PC", 0x0058);
-            }
-            // joypad
-            else if (interrupts & 0b10000) != 0 {
-                println!("Handling joypad");
-
-                self.mmu
-                    .write_byte(0xFF0F, reset_bit(4, interrupt_flags) as u8);
-
+            } else if (interrupts & 0b10000) != 0 {
+                self.mmu.write_byte(0xFF0F, reset_bit(4, interrupt_flags) as u8);
                 self.set_registry_value("PC", 0x0060);
             }
+
+            return 20;
         }
 
-        // todo: on button press resume from stop
-        self.regs.write_byte(REG_T, interrupt_cycles_t);
-
-        interrupt_cycles_t
+        0
     }
 
     pub fn execute(&mut self, opcode: u8, cb: bool) {
@@ -936,6 +926,7 @@ impl<M: Memory> CPU<M> {
         let (result, _, _) = add_words(op1, 1, 0);
 
         self.store_result("BC", result, false);
+        self.mmu.tick(4);
 
         self.regs.write_byte(REG_T, 8);
     }
@@ -1004,6 +995,7 @@ impl<M: Memory> CPU<M> {
         let (result, c, h) = add_words(op1, op2, 0);
 
         self.store_result("HL", result, false);
+        self.mmu.tick(4);
 
         self.regs.set_flags(old_z, false, h, c);
 
@@ -1023,6 +1015,7 @@ impl<M: Memory> CPU<M> {
         let (result, _, _) = sub_bytes(op1, 1, 0);
 
         self.store_result("BC", result, false);
+        self.mmu.tick(4);
 
         self.regs.write_byte(REG_T, 8);
     }
@@ -1101,6 +1094,7 @@ impl<M: Memory> CPU<M> {
         let (result, _, _) = add_words(op1, 1, 0);
 
         self.store_result("DE", result, false);
+        self.mmu.tick(4);
 
         self.regs.write_byte(REG_T, 8);
     }
@@ -1161,6 +1155,7 @@ impl<M: Memory> CPU<M> {
 
         let result = (op1 as i16).wrapping_add(op2 as i8 as i16).wrapping_add(1) as u16;
 
+        self.mmu.tick(4);
         self.store_result("PC", result, false);
 
         self.regs.write_byte(REG_T, 12);
@@ -1175,6 +1170,7 @@ impl<M: Memory> CPU<M> {
         let (result, c, h) = add_words(op1, op2, 0);
 
         self.store_result("HL", result, false);
+        self.mmu.tick(4);
 
         self.regs.set_flags(old_z, false, h, c);
 
@@ -1193,6 +1189,7 @@ impl<M: Memory> CPU<M> {
         let (result, _, _) = sub_bytes(op1, 1, 0);
 
         self.store_result("DE", result, false);
+        self.mmu.tick(4);
         self.regs.write_byte(REG_T, 8);
     }
 
@@ -1255,6 +1252,7 @@ impl<M: Memory> CPU<M> {
 
         let result = (op1 as i16).wrapping_add(op2 as i8 as i16).wrapping_add(1) as u16;
 
+        self.mmu.tick(4);
         self.store_result("PC", result, false);
         self.regs.write_byte(REG_T, 12);
     }
@@ -1280,6 +1278,7 @@ impl<M: Memory> CPU<M> {
         let (result, _, _) = add_words(op1, 1, 0);
 
         self.store_result("HL", result, false);
+        self.mmu.tick(4);
         self.regs.write_byte(REG_T, 8);
     }
 
@@ -1367,6 +1366,7 @@ impl<M: Memory> CPU<M> {
 
         let result = (op1 as i16).wrapping_add(op2 as i8 as i16).wrapping_add(1) as u16;
 
+        self.mmu.tick(4);
         self.store_result("PC", result, false);
         self.regs.write_byte(REG_T, 12);
     }
@@ -1380,6 +1380,7 @@ impl<M: Memory> CPU<M> {
         let (result, c, h) = add_words(op1, op2, 0);
 
         self.store_result("HL", result, false);
+        self.mmu.tick(4);
 
         self.regs.set_flags(old_z, false, h, c);
         self.regs.write_byte(REG_T, 8);
@@ -1400,6 +1401,7 @@ impl<M: Memory> CPU<M> {
         let (result, _, _) = sub_bytes(op1, 1, 0);
 
         self.store_result("HL", result, false);
+        self.mmu.tick(4);
         self.regs.write_byte(REG_T, 8);
     }
 
@@ -1456,6 +1458,7 @@ impl<M: Memory> CPU<M> {
 
         let result = (op1 as i16).wrapping_add(op2 as i8 as i16).wrapping_add(1) as u16;
 
+        self.mmu.tick(4);
         self.store_result("PC", result, false);
         self.regs.write_byte(REG_T, 12);
     }
@@ -1481,6 +1484,7 @@ impl<M: Memory> CPU<M> {
         let (result, _, _) = add_words(op1, 1, 0);
 
         self.store_result("SP", result, false);
+        self.mmu.tick(4);
         self.regs.write_byte(REG_T, 8);
     }
 
@@ -1535,6 +1539,7 @@ impl<M: Memory> CPU<M> {
 
         let result = (op1 as i16).wrapping_add(op2 as i8 as i16).wrapping_add(1) as u16;
 
+        self.mmu.tick(4);
         self.store_result("PC", result, false);
         self.regs.write_byte(REG_T, 12);
     }
@@ -1548,6 +1553,7 @@ impl<M: Memory> CPU<M> {
         let (result, c, h) = add_words(op1, op2, 0);
 
         self.store_result("HL", result, false);
+        self.mmu.tick(4);
 
         self.regs.set_flags(old_z, false, h, c);
         self.regs.write_byte(REG_T, 8);
@@ -1568,6 +1574,7 @@ impl<M: Memory> CPU<M> {
         let (result, _, _) = sub_bytes(op1, 1, 0);
 
         self.store_result("SP", result, false);
+        self.mmu.tick(4);
         self.regs.write_byte(REG_T, 8);
     }
 
@@ -2771,6 +2778,7 @@ impl<M: Memory> CPU<M> {
     }
 
     fn xC0(&mut self) {
+        self.mmu.tick(4);
         let cond = self.get_operand_value("NZ");
         if cond == 0 {
             self.regs.write_byte(REG_T, 8);
@@ -2778,6 +2786,7 @@ impl<M: Memory> CPU<M> {
         }
 
         let op1 = self.pop();
+        self.mmu.tick(4);
         self.store_result("PC", op1, false);
         self.regs.write_byte(REG_T, 20);
     }
@@ -2797,12 +2806,14 @@ impl<M: Memory> CPU<M> {
             return;
         }
 
+        self.mmu.tick(4);
         self.store_result("PC", op1, false);
         self.regs.write_byte(REG_T, 16);
     }
 
     fn xC3(&mut self) {
         let op1 = self.get_operand_value("a16");
+        self.mmu.tick(4);
         self.store_result("PC", op1, false);
         self.regs.write_byte(REG_T, 16);
     }
@@ -2817,6 +2828,7 @@ impl<M: Memory> CPU<M> {
         }
 
         let value = self.get_registry_value("PC");
+        self.mmu.tick(4);
         self.push(value);
 
         self.store_result("PC", op1, false);
@@ -2825,6 +2837,7 @@ impl<M: Memory> CPU<M> {
 
     fn xC5(&mut self) {
         let op1 = self.get_operand_value("BC");
+        self.mmu.tick(4);
         self.push(op1);
         self.regs.write_byte(REG_T, 16);
     }
@@ -2843,12 +2856,14 @@ impl<M: Memory> CPU<M> {
 
     fn xC7(&mut self) {
         let value = self.get_registry_value("PC");
+        self.mmu.tick(4);
         self.push(value);
         self.store_result("PC", 0x00, false);
         self.regs.write_byte(REG_T, 16);
     }
 
     fn xC8(&mut self) {
+        self.mmu.tick(4);
         let cond = self.get_operand_value("Z");
 
         if cond == 0 {
@@ -2857,12 +2872,14 @@ impl<M: Memory> CPU<M> {
         }
 
         let op1 = self.pop();
+        self.mmu.tick(4);
         self.store_result("PC", op1, false);
         self.regs.write_byte(REG_T, 20);
     }
 
     fn xC9(&mut self) {
         let op1 = self.pop();
+        self.mmu.tick(4);
         self.store_result("PC", op1, false);
         self.regs.write_byte(REG_T, 16);
     }
@@ -2876,6 +2893,7 @@ impl<M: Memory> CPU<M> {
             return;
         }
 
+        self.mmu.tick(4);
         self.store_result("PC", op1, false);
         self.regs.write_byte(REG_T, 16);
     }
@@ -2894,6 +2912,7 @@ impl<M: Memory> CPU<M> {
         }
 
         let value = self.get_registry_value("PC");
+        self.mmu.tick(4);
         self.push(value);
 
         self.store_result("PC", op1, false);
@@ -2904,6 +2923,7 @@ impl<M: Memory> CPU<M> {
         let op1 = self.get_operand_value("a16");
 
         let value = self.get_registry_value("PC");
+        self.mmu.tick(4);
         self.push(value);
 
         self.store_result("PC", op1, false);
@@ -2926,12 +2946,14 @@ impl<M: Memory> CPU<M> {
 
     fn xCF(&mut self) {
         let value = self.get_registry_value("PC");
+        self.mmu.tick(4);
         self.push(value);
         self.store_result("PC", 0x08, false);
         self.regs.write_byte(REG_T, 16);
     }
 
     fn xD0(&mut self) {
+        self.mmu.tick(4);
         let cond = self.get_operand_value("NC");
         if cond == 0 {
             self.regs.write_byte(REG_T, 8);
@@ -2939,6 +2961,7 @@ impl<M: Memory> CPU<M> {
         }
 
         let op1 = self.pop();
+        self.mmu.tick(4);
         self.store_result("PC", op1, false);
         self.regs.write_byte(REG_T, 20);
     }
@@ -2958,6 +2981,7 @@ impl<M: Memory> CPU<M> {
             return;
         }
 
+        self.mmu.tick(4);
         self.store_result("PC", op1, false);
         self.regs.write_byte(REG_T, 16);
     }
@@ -2974,6 +2998,7 @@ impl<M: Memory> CPU<M> {
         }
 
         let value = self.get_registry_value("PC");
+        self.mmu.tick(4);
         self.push(value);
 
         self.store_result("PC", op1, false);
@@ -2982,6 +3007,7 @@ impl<M: Memory> CPU<M> {
 
     fn xD5(&mut self) {
         let op1 = self.get_operand_value("DE");
+        self.mmu.tick(4);
         self.push(op1);
         self.regs.write_byte(REG_T, 16);
     }
@@ -2999,12 +3025,14 @@ impl<M: Memory> CPU<M> {
 
     fn xD7(&mut self) {
         let value = self.get_registry_value("PC");
+        self.mmu.tick(4);
         self.push(value);
         self.store_result("PC", 0x10, false);
         self.regs.write_byte(REG_T, 16);
     }
 
     fn xD8(&mut self) {
+        self.mmu.tick(4);
         let cond = self.get_operand_value("CA");
         if cond == 0 {
             self.regs.write_byte(REG_T, 8);
@@ -3012,12 +3040,14 @@ impl<M: Memory> CPU<M> {
         }
 
         let op1 = self.pop();
+        self.mmu.tick(4);
         self.store_result("PC", op1, false);
         self.regs.write_byte(REG_T, 20);
     }
 
     fn xD9(&mut self) {
         let op1 = self.pop();
+        self.mmu.tick(4);
         self.store_result("PC", op1, false);
 
         self.interrupt_master_enable = true;
@@ -3033,6 +3063,7 @@ impl<M: Memory> CPU<M> {
             return;
         }
 
+        self.mmu.tick(4);
         self.store_result("PC", op1, false);
         self.regs.write_byte(REG_T, 16);
     }
@@ -3049,6 +3080,7 @@ impl<M: Memory> CPU<M> {
         }
 
         let value = self.get_registry_value("PC");
+        self.mmu.tick(4);
         self.push(value);
 
         self.store_result("PC", op1, false);
@@ -3071,6 +3103,7 @@ impl<M: Memory> CPU<M> {
 
     fn xDF(&mut self) {
         let value = self.get_registry_value("PC");
+        self.mmu.tick(4);
         self.push(value);
         self.store_result("PC", 0x18, false);
         self.regs.write_byte(REG_T, 16);
@@ -3100,6 +3133,7 @@ impl<M: Memory> CPU<M> {
 
     fn xE5(&mut self) {
         let op1 = self.get_operand_value("HL");
+        self.mmu.tick(4);
         self.push(op1);
         self.regs.write_byte(REG_T, 16);
     }
@@ -3118,6 +3152,7 @@ impl<M: Memory> CPU<M> {
 
     fn xE7(&mut self) {
         let value = self.get_registry_value("PC");
+        self.mmu.tick(4);
         self.push(value);
         self.store_result("PC", 0x20, false);
         self.regs.write_byte(REG_T, 16);
@@ -3130,6 +3165,8 @@ impl<M: Memory> CPU<M> {
         let (result, c, h) = add_word_with_signed(op1, op2, 0);
 
         self.store_result("SP", result, false);
+        self.mmu.tick(4);
+        self.mmu.tick(4);
 
         self.regs.set_flags(false, false, h, c);
         self.regs.write_byte(REG_T, 16);
@@ -3168,6 +3205,7 @@ impl<M: Memory> CPU<M> {
 
     fn xEF(&mut self) {
         let value = self.get_registry_value("PC");
+        self.mmu.tick(4);
         self.push(value);
         self.store_result("PC", 0x28, false);
         self.regs.write_byte(REG_T, 16);
@@ -3200,6 +3238,7 @@ impl<M: Memory> CPU<M> {
 
     fn xF5(&mut self) {
         let op1 = self.get_operand_value("AF");
+        self.mmu.tick(4);
         self.push(op1);
         self.regs.write_byte(REG_T, 16);
     }
@@ -3220,6 +3259,7 @@ impl<M: Memory> CPU<M> {
 
     fn xF7(&mut self) {
         let value = self.get_registry_value("PC");
+        self.mmu.tick(4);
         self.push(value);
         self.store_result("PC", 0x30, false);
         self.regs.write_byte(REG_T, 16);
@@ -3232,6 +3272,7 @@ impl<M: Memory> CPU<M> {
         let (result, c, h) = add_word_with_signed(op1, op2, 0);
 
         self.store_result("HL", result, false);
+        self.mmu.tick(4);
 
         self.regs.set_flags(false, false, h, c);
         self.regs.write_byte(REG_T, 12);
@@ -3240,6 +3281,7 @@ impl<M: Memory> CPU<M> {
     fn xF9(&mut self) {
         let op1 = self.get_operand_value("HL");
         self.store_result("SP", op1, false);
+        self.mmu.tick(4);
         self.regs.write_byte(REG_T, 8);
     }
 
@@ -3270,6 +3312,7 @@ impl<M: Memory> CPU<M> {
 
     fn xFF(&mut self) {
         let value = self.get_registry_value("PC");
+        self.mmu.tick(4);
         self.push(value);
         self.store_result("PC", 0x38, false);
         self.regs.write_byte(REG_T, 16);

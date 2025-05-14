@@ -22,6 +22,7 @@ pub trait GPUMemoriesAccess {
     fn write_vram(&mut self, addr: u16, byte: u8);
     fn read_byte(&mut self, addr: u16) -> u8;
     fn write_byte(&mut self, addr: u16, byte: u8);
+    fn step(&mut self, t: u8) -> (bool, bool);
 }
 
 #[derive(Clone, Copy)]
@@ -299,6 +300,9 @@ impl GPUMemoriesAccess for GPU {
             }
             _ => {}
         }
+    }
+    fn step(&mut self, t: u8) -> (bool, bool) {
+        GPU::step(self, t)
     }
 }
 

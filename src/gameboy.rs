@@ -50,17 +50,11 @@ impl Gameboy {
     pub fn cpu_step(&mut self) -> (u16, u16, u8) {
         let line_number = self.cpu.get_registry_value("PC");
 
-        let (instr, mut cycles_this_step) = self.cpu.step();
-
-        self.cpu.tick_timers(cycles_this_step);
+        let (instr, cycles_this_step) = self.cpu.step();
 
         let interrupt_cycles = self.cpu.handle_interrupts();
 
-        self.cpu.tick_timers(interrupt_cycles);
-
-        cycles_this_step += interrupt_cycles;
-
-        (line_number, instr, cycles_this_step)
+        (line_number, instr, cycles_this_step + interrupt_cycles)
     }
 
     fn step_everything_else(&mut self) {}
@@ -73,15 +67,6 @@ impl Gameboy {
             let (_line, _opcode, t) = self.cpu_step();
 
             clocks_this_frame += t as u32;
-
-            let (vblank_interrupt, stat_interrupt) = self.cpu.mmu.gpu.step(t);
-            if vblank_interrupt {
-                self.request_vblank_interrupt();
-            }
-            if stat_interrupt {
-                self.request_stat_interrupt();
-            }
-            self.cpu.mmu.sound.tick(t);
 
             if clocks_this_frame >= CLOCKS_IN_A_FRAME {
                 break;
@@ -123,15 +108,6 @@ impl Gameboy {
             }
 
             clocks_this_frame += t as u32;
-
-            let (vblank_interrupt, stat_interrupt) = self.cpu.mmu.gpu.step(t);
-            if vblank_interrupt {
-                self.request_vblank_interrupt();
-            }
-            if stat_interrupt {
-                self.request_stat_interrupt();
-            }
-            self.cpu.mmu.sound.tick(t);
 
             if clocks_this_frame >= CLOCKS_IN_A_FRAME {
                 break;
