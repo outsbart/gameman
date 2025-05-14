@@ -55,3 +55,27 @@ fn if_ie_registers() {
     let mut emulator = Gameboy::new("tests/if_ie_registers.gb");
     assert!(emulator.passes_mooneye_test_rom());
 }
+
+#[test]
+fn ei_sequence() {
+    let mut emulator = Gameboy::new("tests/ei_sequence.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn rapid_di_ei() {
+    let mut emulator = Gameboy::new("tests/rapid_di_ei.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn intr_timing() {
+    let mut emulator = Gameboy::new("tests/intr_timing.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn reti_intr_timing() {
+    let mut emulator = Gameboy::new("tests/reti_intr_timing.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
