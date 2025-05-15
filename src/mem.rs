@@ -20,6 +20,8 @@ pub struct MMU<M: GPUMemoriesAccess> {
     pub interrupt_flags: u8,
 
     pub oam_dma_source: u8,
+    oam_dma_remaining: u16,
+    oam_dma_startup: u8,
     pub gpu: M,
     pub key: Key,
     pub link: Link,
@@ -43,6 +45,8 @@ impl<M: GPUMemoriesAccess> MMU<M> {
             interrupt_flags: 0xe0,
 
             oam_dma_source: 0,
+            oam_dma_remaining: 0,
+            oam_dma_startup: 0,
             gpu,
             key: Key::new(),
             link: Link::new(),
@@ -72,6 +76,9 @@ pub trait Memory {
 
 impl<M: GPUMemoriesAccess> Memory for MMU<M> {
     fn read_byte(&mut self, addr: u16) -> u8 {
+        if self.oam_dma_remaining > 0 && (0xFE00..=0xFE9F).contains(&addr) {
+            return 0xFF;
+        }
         // TODO: once everything works and is tested, refactor using actual ranges
         match addr & 0xF000 {
             // BIOS
@@ -176,7 +183,10 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                     0x0E00 => {
                         // Sprite Attribute Table (OAM - Object Attribute Memory) at $FE00-FE9F
                         if addr & 0x00FF < 0xA0 {
-                            self.gpu.write_oam(addr & 0xFF, byte);
+                            if self.oam_dma_remaining == 0 {
+                                self.gpu.write_oam(addr & 0xFF, byte);
+                            }
+                            // CPU writes to OAM are blocked while DMA is active
                         } else {
                             // 0xFEA0 <= addr <= 0xFEFF, unused memory area
                         }
@@ -208,13 +218,10 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                             self.zram[(addr & 0x007F) as usize] = byte;
                         } else if addr >= 0xFF40 {
                             if addr == 0xFF46 {
-                                // OAM DMA transfer
                                 self.oam_dma_source = byte;
-                                let start: u16 = (byte as u16) << 8;
-                                for i in 0u16..160 {
-                                    let to_be_copied = self.read_byte(start + i);
-                                    self.gpu.write_oam(i, to_be_copied);
-                                }
+                                // M=1 after write: old OAM still accessible.
+                                // M=2: DMA starts, copy fires in tick when startup expires.
+                                self.oam_dma_startup = 2;
                                 return;
                             }
                             self.gpu.write_byte(addr, byte);
@@ -233,6 +240,22 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
 
     fn tick(&mut self, cpu_cycles: u8) {
         for _ in 0..(cpu_cycles / 4) {
+            if self.oam_dma_startup > 0 {
+                self.oam_dma_startup -= 1;
+                if self.oam_dma_startup == 0 {
+                    // DMA starts at M=2: copy source to OAM now, then block for 160 cycles.
+                    // Disable blocking during copy so reads from source address work.
+                    let start: u16 = (self.oam_dma_source as u16) << 8;
+                    self.oam_dma_remaining = 0;
+                    for i in 0u16..160 {
+                        let byte = self.read_byte(start + i);
+                        self.gpu.write_oam(i, byte);
+                    }
+                    self.oam_dma_remaining = 160;
+                }
+            } else if self.oam_dma_remaining > 0 {
+                self.oam_dma_remaining -= 1;
+            }
             if self.timers.tick(4) {
                 self.interrupt_flags |= 4;
             }
@@ -485,6 +508,9 @@ mod tests {
         let mut mmu = MMU::new(DummyGPU::new(), load_rom("tests/cpu_instrs/01-special.gb"));
 
         for i in 0u16..64u16 {
+            if 0xFF40 + i == 0xFF46 {
+                continue;
+            } // skip OAM DMA trigger
             mmu.write_byte(0xFF40 + i, 1);
         }
 
@@ -494,6 +520,9 @@ mod tests {
         assert_eq!(mmu.gpu.registers[0xFF80], 0);
 
         for i in 0u16..64u16 {
+            if 0xFF40 + i == 0xFF46 {
+                continue;
+            } // skip OAM DMA trigger
             assert_eq!(mmu.read_byte(0xFF40 + i), 1);
         }
     }

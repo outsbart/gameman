@@ -223,7 +223,8 @@ impl<M: Memory> CPU<M> {
         } else {
             self.mmu.write_byte(addr, (value & 0xFF) as u8);
             self.mmu.tick(4);
-            self.mmu.write_byte(addr.wrapping_add(1), ((value >> 8) & 0xFF) as u8);
+            self.mmu
+                .write_byte(addr.wrapping_add(1), ((value >> 8) & 0xFF) as u8);
             self.mmu.tick(4);
         }
     }
@@ -270,9 +271,11 @@ impl<M: Memory> CPU<M> {
 
     pub fn push(&mut self, value: u16) {
         let sp = self.get_registry_value("SP");
-        self.mmu.write_byte(sp.wrapping_sub(1), ((value >> 8) & 0xFF) as u8);
+        self.mmu
+            .write_byte(sp.wrapping_sub(1), ((value >> 8) & 0xFF) as u8);
         self.mmu.tick(4);
-        self.mmu.write_byte(sp.wrapping_sub(2), (value & 0xFF) as u8);
+        self.mmu
+            .write_byte(sp.wrapping_sub(2), (value & 0xFF) as u8);
         self.mmu.tick(4);
         self.set_registry_value("SP", sp.wrapping_sub(2));
     }
@@ -285,12 +288,6 @@ impl<M: Memory> CPU<M> {
         self.mmu.tick(4);
         self.set_registry_value("SP", sp.wrapping_add(2));
         low | (high << 8)
-    }
-
-    // update timers relative to cpu clock
-    // this function might request a timer Interrupt
-    pub fn tick_timers(&mut self, cycles: u8) {
-        self.mmu.tick(cycles);
     }
 
     // executes the next instruction
@@ -358,19 +355,24 @@ impl<M: Memory> CPU<M> {
             let interrupt_flags = self.mmu.read_byte(0xFF0F);
 
             if (interrupts & 0x1) != 0 {
-                self.mmu.write_byte(0xFF0F, reset_bit(0, interrupt_flags) as u8);
+                self.mmu
+                    .write_byte(0xFF0F, reset_bit(0, interrupt_flags) as u8);
                 self.set_registry_value("PC", 0x0040);
             } else if (interrupts & 0x2) != 0 {
-                self.mmu.write_byte(0xFF0F, reset_bit(1, interrupt_flags) as u8);
+                self.mmu
+                    .write_byte(0xFF0F, reset_bit(1, interrupt_flags) as u8);
                 self.set_registry_value("PC", 0x0048);
             } else if (interrupts & 0x4) != 0 {
-                self.mmu.write_byte(0xFF0F, reset_bit(2, interrupt_flags) as u8);
+                self.mmu
+                    .write_byte(0xFF0F, reset_bit(2, interrupt_flags) as u8);
                 self.set_registry_value("PC", 0x0050);
             } else if (interrupts & 0b1000) != 0 {
-                self.mmu.write_byte(0xFF0F, reset_bit(3, interrupt_flags) as u8);
+                self.mmu
+                    .write_byte(0xFF0F, reset_bit(3, interrupt_flags) as u8);
                 self.set_registry_value("PC", 0x0058);
             } else if (interrupts & 0b10000) != 0 {
-                self.mmu.write_byte(0xFF0F, reset_bit(4, interrupt_flags) as u8);
+                self.mmu
+                    .write_byte(0xFF0F, reset_bit(4, interrupt_flags) as u8);
                 self.set_registry_value("PC", 0x0060);
             }
 

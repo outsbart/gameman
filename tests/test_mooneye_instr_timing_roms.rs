@@ -79,3 +79,99 @@ fn reti_intr_timing() {
     let mut emulator = Gameboy::new("tests/reti_intr_timing.gb");
     assert!(emulator.passes_mooneye_test_rom());
 }
+
+#[test]
+fn oam_dma_start() {
+    let mut emulator = Gameboy::new("tests/oam_dma_start.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn oam_dma_timing() {
+    let mut emulator = Gameboy::new("tests/oam_dma_timing.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn oam_dma_restart() {
+    let mut emulator = Gameboy::new("tests/oam_dma_restart.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn call_timing() {
+    let mut emulator = Gameboy::new("tests/call_timing.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn call_timing2() {
+    let mut emulator = Gameboy::new("tests/call_timing2.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn call_cc_timing() {
+    let mut emulator = Gameboy::new("tests/call_cc_timing.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn call_cc_timing2() {
+    let mut emulator = Gameboy::new("tests/call_cc_timing2.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn ret_timing() {
+    let mut emulator = Gameboy::new("tests/ret_timing.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn ret_cc_timing() {
+    let mut emulator = Gameboy::new("tests/ret_cc_timing.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn reti_timing() {
+    let mut emulator = Gameboy::new("tests/reti_timing.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn jp_timing() {
+    let mut emulator = Gameboy::new("tests/jp_timing.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn jp_cc_timing() {
+    let mut emulator = Gameboy::new("tests/jp_cc_timing.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn push_timing() {
+    let mut emulator = Gameboy::new("tests/push_timing.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn rst_timing() {
+    let mut emulator = Gameboy::new("tests/rst_timing.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn add_sp_e_timing() {
+    let mut emulator = Gameboy::new("tests/add_sp_e_timing.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}
+
+#[test]
+fn ld_hl_sp_e_timing() {
+    let mut emulator = Gameboy::new("tests/ld_hl_sp_e_timing.gb");
+    assert!(emulator.passes_mooneye_test_rom());
+}

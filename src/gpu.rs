@@ -95,6 +95,7 @@ impl Palette {
 }
 
 struct SpriteOptions {
+    raw: u8,
     z: bool,       // 0 = above background, 1 = below background (unless colour is 0)
     flip_y: bool,  // 1 = flipped vertically
     flip_x: bool,  // 1 = flipped horizontally
@@ -104,6 +105,7 @@ struct SpriteOptions {
 impl SpriteOptions {
     pub fn new() -> Self {
         SpriteOptions {
+            raw: 0,
             z: false,
             flip_y: false,
             flip_x: false,
@@ -112,6 +114,7 @@ impl SpriteOptions {
     }
 
     pub fn update(&mut self, value: u8) {
+        self.raw = value;
         self.palette = (value & 0x10) != 0;
         self.flip_x = (value & 0x20) != 0;
         self.flip_y = (value & 0x40) != 0;
@@ -119,10 +122,7 @@ impl SpriteOptions {
     }
 
     pub fn byte(&self) -> u8 {
-        (if self.palette { 0x10 } else { 0 })
-            | (if self.flip_x { 0x20 } else { 0 })
-            | (if self.flip_y { 0x40 } else { 0 })
-            | (if self.z { 0x80 } else { 0 })
+        self.raw
     }
 }
 

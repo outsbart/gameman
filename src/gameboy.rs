@@ -117,14 +117,32 @@ impl Gameboy {
         ld_b_b
     }
 
+    pub fn passes_blargg_ram_test_rom(&mut self) -> bool {
+        for _ in 0..3600 {
+            self.step();
+            match self.cpu.mmu.read_byte(0xA000) {
+                0x80 | 0xFF => continue, // $80 = running, $FF = RAM not yet enabled
+                0 => return true,
+                _ => return false,
+            }
+        }
+        false
+    }
+
     pub fn passes_mooneye_test_rom(&mut self) -> bool {
         let mut ld_b_b = 0;
+        let mut frames = 0u32;
 
         loop {
             ld_b_b += self.mooneye_step();
+            frames += 1;
 
             if ld_b_b > 1 {
                 return self.cpu.get_registry_value("B") == 3;
+            }
+
+            if frames > 300 {
+                return false;
             }
         }
     }
