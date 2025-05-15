@@ -110,7 +110,8 @@ pub struct CPU<M: Memory> {
     interrupt_master_enable: bool,
     schedule_interrupt_enable: bool, // if set to true, next step interrupt_master_enable will be set to 1
     stopped: bool,
-    halted: bool, // used for HALT
+    halted: bool,
+    halt_bug: bool, // HALT with IME=0 + pending interrupt: next opcode byte is read twice
 }
 
 impl<M: Memory> ByteStream for CPU<M> {
@@ -132,6 +133,7 @@ impl<M: Memory> CPU<M> {
             schedule_interrupt_enable: false,
             stopped: false,
             halted: false,
+            halt_bug: false,
         };
         cpu.reset();
         cpu
@@ -301,6 +303,13 @@ impl<M: Memory> CPU<M> {
         if !self.halted {
             let mut prefixed = false;
             let mut byte = self.read_byte();
+
+            if self.halt_bug {
+                // Rewind PC: the byte after HALT gets used as both opcode and first operand
+                let pc = self.regs.read_word(REG_PC);
+                self.regs.write_word(REG_PC, pc.wrapping_sub(1));
+                self.halt_bug = false;
+            }
 
             if byte == 0xcb {
                 byte = self.read_byte();
@@ -1947,8 +1956,12 @@ impl<M: Memory> CPU<M> {
     }
 
     fn x76(&mut self) {
-        // todo: implement halt bug
-        self.halted = true;
+        let pending = self.mmu.read_byte(0xFFFF) & self.mmu.read_byte(0xFF0F) & 0x1F;
+        if !self.interrupt_master_enable && pending != 0 {
+            self.halt_bug = true;
+        } else {
+            self.halted = true;
+        }
         self.regs.write_byte(REG_T, 4);
     }
 
