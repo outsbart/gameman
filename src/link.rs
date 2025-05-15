@@ -13,7 +13,7 @@ impl Link {
             buffer_out: [char::from(32); 256],
             buffer_index: 0,
             data: 0,
-            control: 0,
+            control: 0x7E,
         }
     }
 

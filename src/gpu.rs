@@ -23,6 +23,7 @@ pub trait GPUMemoriesAccess {
     fn read_byte(&mut self, addr: u16) -> u8;
     fn write_byte(&mut self, addr: u16, byte: u8);
     fn step(&mut self, t: u8) -> (bool, bool);
+    fn post_boot_init(&mut self) {}
 }
 
 #[derive(Clone, Copy)]
@@ -236,7 +237,9 @@ impl GPUMemoriesAccess for GPU {
                     | (if self.lcd_enabled { 0x80 } else { 0 })
             }
             0xFF41 => {
-                (if self.compare_enabled { 0x20 } else { 0 })
+                0x80
+                    | (self.mode & 0x03)
+                    | (if self.compare_enabled { 0x20 } else { 0 })
                     | (if self.compare() { 0x04 } else { 0 })
             }
             0xFF42 => self.scroll_y,
@@ -248,7 +251,7 @@ impl GPUMemoriesAccess for GPU {
             0xFF49 => self.obj_palette_1.byte,
             0xFF4A => self.window_y,
             0xFF4B => self.window_x,
-            _ => 0,
+            _ => 0xFF,
         }
     }
     fn write_byte(&mut self, addr: u16, byte: u8) {
@@ -275,7 +278,6 @@ impl GPUMemoriesAccess for GPU {
             }
             0xFF44 => {
                 self.line = 0;
-                println!("line reset");
             }
             0xFF45 => {
                 self.compare_line = byte;
@@ -303,6 +305,11 @@ impl GPUMemoriesAccess for GPU {
     }
     fn step(&mut self, t: u8) -> (bool, bool) {
         GPU::step(self, t)
+    }
+    fn post_boot_init(&mut self) {
+        self.mode = 1;
+        self.line = 153;
+        self.modeclock = 396;
     }
 }
 
@@ -334,6 +341,7 @@ impl GPU {
             window_y: 0,
         }
     }
+
 
     fn compare(&self) -> bool {
         self.line == self.compare_line

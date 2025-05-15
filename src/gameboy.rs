@@ -74,6 +74,10 @@ impl Gameboy {
         }
     }
 
+    pub fn read_byte(&mut self, addr: u16) -> u8 {
+        self.cpu.mmu.read_byte(addr)
+    }
+
     pub fn passes_test_rom(&mut self) -> bool {
         loop {
             self.step();

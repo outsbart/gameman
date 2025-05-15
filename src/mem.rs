@@ -29,7 +29,7 @@ pub struct MMU<M: GPUMemoriesAccess> {
 
 impl<M: GPUMemoriesAccess> MMU<M> {
     pub fn new(gpu: M, cartridge: Box<dyn CartridgeAccess>) -> MMU<M> {
-        MMU {
+        let mut mmu = MMU {
             still_bios: false,
             bios: [0; 0x0100],
 
@@ -42,7 +42,7 @@ impl<M: GPUMemoriesAccess> MMU<M> {
             timers: Timers::new(),
 
             interrupt_enable: 0,
-            interrupt_flags: 0xe0,
+            interrupt_flags: 0x01,
 
             oam_dma_source: 0,
             oam_dma_remaining: 0,
@@ -50,7 +50,23 @@ impl<M: GPUMemoriesAccess> MMU<M> {
             gpu,
             key: Key::new(),
             link: Link::new(),
-        }
+        };
+        mmu.post_boot_init();
+        mmu
+    }
+
+    fn post_boot_init(&mut self) {
+        self.sound.set_nr52(0x80);
+        self.sound.set_nr11(0xBF);
+        self.sound.set_nr12(0xF3);
+        self.sound.set_nr14(0xBF);
+        self.sound.set_nr21(0x3F);
+        self.sound.set_nr50(0x77);
+        self.sound.set_nr51(0xF3);
+
+        self.gpu.write_byte(0xFF40, 0x91);
+        self.gpu.write_byte(0xFF47, 0xFC);
+        self.gpu.post_boot_init();
     }
 
     pub fn set_bios(&mut self, bios: [u8; 0x0100]) {
@@ -133,7 +149,7 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                                     6 => self.timers.read_tma(),
                                     7 => self.timers.read_tac(),
                                     0xF => self.interrupt_flags | 0xE0,
-                                    _ => 0,
+                                    _ => 0xFF,
                                 },
                                 0x10 | 0x20 | 0x30 => self.sound.read_byte(addr),
                                 0x40 | 0x50 | 0x60 | 0x70 => {

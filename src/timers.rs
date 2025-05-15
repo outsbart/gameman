@@ -108,7 +108,7 @@ pub struct Timers {
 impl Timers {
     pub fn new() -> Self {
         Timers {
-            divider: 0,
+            divider: 0xABCC,
             tma: 0,
             speed: TimerSpeed::Speed0,
             running: false,
@@ -234,7 +234,7 @@ impl Timers {
 
     // when reading from 0xFF07
     pub fn read_tac(&self) -> u8 {
-        (if self.running { 0b100 } else { 0 }) | (self.speed as u8)
+        0xF8 | (if self.running { 0b100 } else { 0 }) | (self.speed as u8)
     }
 }
 
@@ -252,7 +252,7 @@ mod tests {
     fn test_timers_initialization() {
         let timers = Timers::new();
 
-        assert_eq!(timers.divider, 0);
+        assert_eq!(timers.divider, 0xABCC);
         assert_eq!(timers.tima.value, 0);
         assert_eq!(timers.tma, 0);
         assert_eq!(timers.speed as u8, 0);
@@ -296,6 +296,6 @@ mod tests {
         assert!(timers.running);
         assert_eq!(timers.speed as u8, 0b11);
 
-        assert_eq!(timers.read_tac(), 0b0000_0111);
+        assert_eq!(timers.read_tac(), 0b1111_1111);
     }
 }

@@ -139,10 +139,13 @@ impl<M: Memory> CPU<M> {
 
     // initalize
     fn reset(&mut self) {
+        self.set_registry_value("AF", 0x01B0);
+        self.set_registry_value("BC", 0x0013);
+        self.set_registry_value("DE", 0x00D8);
+        self.set_registry_value("HL", 0x014D);
         self.set_registry_value("SP", 0xFFFE);
         self.set_registry_value("PC", 0x100);
         self.interrupt_master_enable = true;
-        //TODO: set all registry to zero. RAM as well
     }
 
     // fetches the next byte from the ram, advancing one M-cycle
@@ -5746,14 +5749,14 @@ mod tests {
         assert_eq!(clks.m, 0);
         assert_eq!(clks.t, 0);
 
-        assert_eq!(regs.read_byte(REG_A), 0);
-        assert_eq!(regs.read_byte(REG_B), 0);
-        assert_eq!(regs.read_byte(REG_C), 0);
-        assert_eq!(regs.read_byte(REG_D), 0);
-        assert_eq!(regs.read_byte(REG_E), 0);
-        assert_eq!(regs.read_byte(REG_H), 0);
-        assert_eq!(regs.read_byte(REG_L), 0);
-        assert_eq!(regs.read_byte(REG_F), 0);
+        assert_eq!(regs.read_byte(REG_A), 0x01);
+        assert_eq!(regs.read_byte(REG_B), 0x00);
+        assert_eq!(regs.read_byte(REG_C), 0x13);
+        assert_eq!(regs.read_byte(REG_D), 0x00);
+        assert_eq!(regs.read_byte(REG_E), 0xD8);
+        assert_eq!(regs.read_byte(REG_H), 0x01);
+        assert_eq!(regs.read_byte(REG_L), 0x4D);
+        assert_eq!(regs.read_byte(REG_F), 0xB0);
         assert_eq!(regs.read_word(REG_PC), 0x100);
         assert_eq!(regs.read_word(REG_SP), 0xFFFE);
         assert_eq!(regs.read_byte(REG_M), 0);
