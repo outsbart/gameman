@@ -22,6 +22,7 @@ pub struct MMU<M: GPUMemoriesAccess> {
     pub oam_dma_source: u8,
     oam_dma_remaining: u16,
     oam_dma_startup: u8,
+    t_sub: u8, // T-cycle sub-counter within current M-cycle (0–3)
     pub gpu: M,
     pub key: Key,
     pub link: Link,
@@ -47,6 +48,7 @@ impl<M: GPUMemoriesAccess> MMU<M> {
             oam_dma_source: 0,
             oam_dma_remaining: 0,
             oam_dma_startup: 0,
+            t_sub: 0,
             gpu,
             key: Key::new(),
             link: Link::new(),
@@ -88,6 +90,10 @@ pub trait Memory {
         self.write_byte(addr + 1, ((word & 0xFF00) >> 8) as u8);
     }
     fn tick(&mut self, _cpu_cycles: u8) {}
+    fn tick_t(&mut self) {}
+    fn gpu_mode(&mut self) -> u8 { 0 }
+    fn oam_scan_row(&mut self) -> u8 { 0 }
+    fn apply_oam_corruption(&mut self, _row: u8) {}
 }
 
 impl<M: GPUMemoriesAccess> Memory for MMU<M> {
@@ -199,10 +205,11 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                     0x0E00 => {
                         // Sprite Attribute Table (OAM - Object Attribute Memory) at $FE00-FE9F
                         if addr & 0x00FF < 0xA0 {
-                            if self.oam_dma_remaining == 0 {
+                            let mode = self.gpu.gpu_mode();
+                            let lcd_enabled = self.gpu.is_lcd_enabled();
+                            if self.oam_dma_remaining == 0 && (!lcd_enabled || (mode != 2 && mode != 3)) {
                                 self.gpu.write_oam(addr & 0xFF, byte);
                             }
-                            // CPU writes to OAM are blocked while DMA is active
                         } else {
                             // 0xFEA0 <= addr <= 0xFEFF, unused memory area
                         }
@@ -254,13 +261,14 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
         }
     }
 
-    fn tick(&mut self, cpu_cycles: u8) {
-        for _ in 0..(cpu_cycles / 4) {
+    fn tick_t(&mut self) {
+        // DMA and sound are M-cycle gated: run their logic once every 4 T-cycles.
+        self.t_sub += 1;
+        if self.t_sub == 4 {
+            self.t_sub = 0;
             if self.oam_dma_startup > 0 {
                 self.oam_dma_startup -= 1;
                 if self.oam_dma_startup == 0 {
-                    // DMA starts at M=2: copy source to OAM now, then block for 160 cycles.
-                    // Disable blocking during copy so reads from source address work.
                     let start: u16 = (self.oam_dma_source as u16) << 8;
                     self.oam_dma_remaining = 0;
                     for i in 0u16..160 {
@@ -272,18 +280,43 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
             } else if self.oam_dma_remaining > 0 {
                 self.oam_dma_remaining -= 1;
             }
-            if self.timers.tick(4) {
-                self.interrupt_flags |= 4;
-            }
-            let (vblank, stat) = self.gpu.step(4);
-            if vblank {
-                self.interrupt_flags |= 1;
-            }
-            if stat {
-                self.interrupt_flags |= 2;
-            }
             self.sound.tick(4);
         }
+        // Timers and GPU advance every T-cycle.
+        if self.timers.tick(1) {
+            self.interrupt_flags |= 4;
+        }
+        let (vblank, stat) = self.gpu.step(1);
+        if vblank {
+            self.interrupt_flags |= 1;
+        }
+        if stat {
+            self.interrupt_flags |= 2;
+        }
+    }
+
+    fn tick(&mut self, cpu_cycles: u8) {
+        for _ in 0..(cpu_cycles / 4) {
+            self.tick_t();
+            self.tick_t();
+            self.tick_t();
+            self.tick_t();
+        }
+    }
+    fn gpu_mode(&mut self) -> u8 {
+        self.gpu.gpu_mode()
+    }
+    fn oam_scan_row(&mut self) -> u8 {
+        self.gpu.oam_scan_row()
+    }
+    fn apply_oam_corruption(&mut self, row: u8) {
+        self.gpu.apply_oam_corruption(row);
+    }
+}
+
+impl<M: GPUMemoriesAccess> MMU<M> {
+    pub fn gpu_line(&self) -> u8 {
+        self.gpu.get_line()
     }
 }
 
