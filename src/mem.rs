@@ -23,6 +23,8 @@ pub struct MMU<M: GPUMemoriesAccess> {
     oam_dma_remaining: u16,
     oam_dma_startup: u8,
     t_sub: u8, // T-cycle sub-counter within current M-cycle (0–3)
+    oam_mode_before: u8,
+    oam_row_before: u8,
     pub gpu: M,
     pub key: Key,
     pub link: Link,
@@ -49,6 +51,8 @@ impl<M: GPUMemoriesAccess> MMU<M> {
             oam_dma_remaining: 0,
             oam_dma_startup: 0,
             t_sub: 0,
+            oam_mode_before: 0,
+            oam_row_before: 0,
             gpu,
             key: Key::new(),
             link: Link::new(),
@@ -89,11 +93,9 @@ pub trait Memory {
         self.write_byte(addr, (word & 0x00FF) as u8);
         self.write_byte(addr + 1, ((word & 0xFF00) >> 8) as u8);
     }
-    fn tick(&mut self, _cpu_cycles: u8) {}
     fn tick_t(&mut self) {}
-    fn gpu_mode(&mut self) -> u8 { 0 }
-    fn oam_scan_row(&mut self) -> u8 { 0 }
-    fn apply_oam_corruption(&mut self, _row: u8) {}
+    fn before_fetch(&mut self) {}
+    fn handle_oam_corruption(&mut self, _opcode: u8, _rr: u16) {}
 }
 
 impl<M: GPUMemoriesAccess> Memory for MMU<M> {
@@ -130,16 +132,9 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
 
                     // GPU OAM
                     0x0E00 => {
-                        if addr & 0xFF < 0xA0 {
-                            let mode = self.gpu.gpu_mode();
-                            let lcd_enabled = self.gpu.is_lcd_enabled();
-                            if lcd_enabled && (mode == 2 || mode == 3) {
-                                0xFF
-                            } else {
-                                self.gpu.read_oam(addr & 0xFF)
-                            }
+                        if addr & 0xFF < 0xA0 && self.gpu.oam_accessible() {
+                            self.gpu.read_oam(addr & 0xFF)
                         } else {
-                            // 0xFEA0 <= addr <= 0xFEFF, unused memory area
                             0xFF
                         }
                     }
@@ -301,22 +296,46 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
         }
     }
 
-    fn tick(&mut self, cpu_cycles: u8) {
-        for _ in 0..(cpu_cycles / 4) {
-            self.tick_t();
-            self.tick_t();
-            self.tick_t();
-            self.tick_t();
+    fn before_fetch(&mut self) {
+        self.oam_mode_before = self.gpu.gpu_mode();
+        self.oam_row_before = self.gpu.oam_scan_row();
+    }
+    fn handle_oam_corruption(&mut self, opcode: u8, rr: u16) {
+        if self.oam_mode_before != 2 {
+            return;
         }
-    }
-    fn gpu_mode(&mut self) -> u8 {
-        self.gpu.gpu_mode()
-    }
-    fn oam_scan_row(&mut self) -> u8 {
-        self.gpu.oam_scan_row()
-    }
-    fn apply_oam_corruption(&mut self, row: u8) {
-        self.gpu.apply_oam_corruption(row);
+        let row = self.oam_row_before;
+        let in_oam_bus = |addr: u16| (addr >> 8) == 0xFE;
+        match opcode {
+            // INC/DEC rr, LD A,(HL±): M1 bus conflict at row+1
+            0x03 | 0x0B | 0x13 | 0x1B | 0x23 | 0x2B | 0x33 | 0x3B | 0x2A | 0x3A => {
+                if in_oam_bus(rr) {
+                    self.gpu.apply_oam_corruption(row + 1);
+                }
+            }
+            // POP rr: M2 reads SP (row+1), M3 reads SP+1 (row+2)
+            0xC1 | 0xD1 | 0xE1 | 0xF1 => {
+                if row < 19 && in_oam_bus(rr) {
+                    self.gpu.apply_oam_corruption(row + 1);
+                }
+                if row < 18 && in_oam_bus(rr.wrapping_add(1)) {
+                    self.gpu.apply_oam_corruption(row + 2);
+                }
+            }
+            // PUSH rr: M2 internal (row+1), M3 writes SP-1 (row+2), M4 writes SP-2 (row+3)
+            0xC5 | 0xD5 | 0xE5 | 0xF5 => {
+                if row < 19 && in_oam_bus(rr) {
+                    self.gpu.apply_oam_corruption(row + 1);
+                }
+                if row < 18 && in_oam_bus(rr.wrapping_sub(1)) {
+                    self.gpu.apply_oam_corruption(row + 2);
+                }
+                if row < 17 && in_oam_bus(rr.wrapping_sub(2)) {
+                    self.gpu.apply_oam_corruption(row + 3);
+                }
+            }
+            _ => {}
+        }
     }
 }
 

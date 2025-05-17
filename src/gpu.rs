@@ -23,11 +23,22 @@ pub trait GPUMemoriesAccess {
     fn write_byte(&mut self, addr: u16, byte: u8);
     fn step(&mut self, t: u8) -> (bool, bool);
     fn post_boot_init(&mut self) {}
-    fn gpu_mode(&self) -> u8 { 0 }
-    fn oam_scan_row(&self) -> u8 { 0 }
+    fn gpu_mode(&self) -> u8 {
+        0
+    }
+    fn oam_scan_row(&self) -> u8 {
+        0
+    }
     fn apply_oam_corruption(&mut self, _row: u8) {}
-    fn get_line(&self) -> u8 { 0 }
-    fn is_lcd_enabled(&self) -> bool { false }
+    fn get_line(&self) -> u8 {
+        0
+    }
+    fn is_lcd_enabled(&self) -> bool {
+        false
+    }
+    fn oam_accessible(&self) -> bool {
+        true
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -99,7 +110,6 @@ impl Palette {
     }
 }
 
-
 pub struct GPU {
     vram: [u8; 8192],
     oam: [u8; 160],
@@ -118,9 +128,9 @@ pub struct GPU {
     window_map: bool,     // which tilemap use for the window?
     lcd_enabled: bool,
 
-    compare_enabled: bool,    // stat reg. Should compare with compare line?
-    compare_line: u8,         // when line == compare_line an interrupt is triggered
-    mode2_int_enabled: bool,  // stat reg. Fire STAT interrupt on mode 2 start?
+    compare_enabled: bool,   // stat reg. Should compare with compare line?
+    compare_line: u8,        // when line == compare_line an interrupt is triggered
+    mode2_int_enabled: bool, // stat reg. Fire STAT interrupt on mode 2 start?
 
     scroll_x: u8,
     scroll_y: u8,
@@ -150,6 +160,9 @@ impl GPUMemoriesAccess for GPU {
     fn is_lcd_enabled(&self) -> bool {
         self.lcd_enabled
     }
+    fn oam_accessible(&self) -> bool {
+        !self.lcd_enabled || (self.mode != 2 && self.mode != 3)
+    }
     fn apply_oam_corruption(&mut self, row: u8) {
         if !self.lcd_enabled {
             return;
@@ -159,15 +172,14 @@ impl GPUMemoriesAccess for GPU {
             return;
         }
         let r = n * 8;
-        // Bytes 0–1: bitwise_glitch((a^c)&(b^c))^c
-        // a = current row, b = prev row bytes 0–1, c = prev row bytes 4–5
+        // Row bytes 0-1 get a bitwise glitch using the previous row as source,
+        // bytes 2-7 are overwritten with the previous row's bytes 2-7.
         for i in 0..2usize {
             let a = self.oam[r + i];
             let b = self.oam[r - 8 + i];
             let c = self.oam[r - 4 + i];
             self.oam[r + i] = ((a ^ c) & (b ^ c)) ^ c;
         }
-        // Bytes 2–7: copy from previous row
         for i in 2..8usize {
             self.oam[r + i] = self.oam[r - 8 + i];
         }
@@ -191,8 +203,7 @@ impl GPUMemoriesAccess for GPU {
                     | (if self.lcd_enabled { 0x80 } else { 0 })
             }
             0xFF41 => {
-                0x80
-                    | (self.mode & 0x03)
+                0x80 | (self.mode & 0x03)
                     | (if self.compare_enabled { 0x40 } else { 0 })
                     | (if self.mode2_int_enabled { 0x20 } else { 0 })
                     | (if self.compare() { 0x04 } else { 0 })
@@ -225,7 +236,7 @@ impl GPUMemoriesAccess for GPU {
                 if !was_enabled && self.lcd_enabled {
                     self.mode = 2;
                     self.line = 0;
-                    self.modeclock = 4;
+                    self.modeclock = 4; // hardware starts mode 2 ~1 M-cycle in, not at T=0
                 } else if was_enabled && !self.lcd_enabled {
                     self.mode = 0;
                     self.line = 0;
@@ -308,7 +319,6 @@ impl GPU {
             window_y: 0,
         }
     }
-
 
     fn compare(&self) -> bool {
         self.line == self.compare_line
@@ -455,14 +465,14 @@ impl GPU {
 
             for sprite_num in 0..40usize {
                 let base = sprite_num * 4;
-                let y   = self.oam[base].wrapping_sub(16);
-                let x   = self.oam[base + 1].wrapping_sub(8);
+                let y = self.oam[base].wrapping_sub(16);
+                let x = self.oam[base + 1].wrapping_sub(8);
                 let pos_base = self.oam[base + 2];
                 let opt = self.oam[base + 3];
 
-                let flip_y  = (opt & 0x40) != 0;
-                let flip_x  = (opt & 0x20) != 0;
-                let z       = (opt & 0x80) != 0;
+                let flip_y = (opt & 0x40) != 0;
+                let flip_x = (opt & 0x20) != 0;
+                let z = (opt & 0x80) != 0;
                 let palette = (opt & 0x10) != 0;
 
                 // not intersecting with scanline, don't draw
@@ -578,7 +588,9 @@ impl GPU {
                         vblank_interrupt = true;
                     } else {
                         self.mode = 2;
-                        if self.mode2_int_enabled { compare_interrupt = true; }
+                        if self.mode2_int_enabled {
+                            compare_interrupt = true;
+                        }
                     }
 
                     compare_interrupt |= self.check_compare_int();
@@ -594,7 +606,9 @@ impl GPU {
                     if self.line > 153 {
                         self.mode = 2;
                         self.line = 0;
-                        if self.mode2_int_enabled { compare_interrupt = true; }
+                        if self.mode2_int_enabled {
+                            compare_interrupt = true;
+                        }
                     }
 
                     compare_interrupt |= self.check_compare_int();

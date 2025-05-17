@@ -309,11 +309,8 @@ impl<M: Memory> CPU<M> {
 
         if !self.halted {
             let mut prefixed = false;
-            // Both row_before and mode_before are sampled BEFORE the opcode fetch tick (M1).
-            // This lets INC/DEC at T=76 (last M-cycle of mode 2) correctly trigger corruption,
-            // since mode is still 2 at fetch time even though the tick will transition it to 3.
-            let row_before = self.mmu.oam_scan_row();
-            let mode_before = self.mmu.gpu_mode();
+            // Snapshot GPU mode/row before the opcode fetch ticks the GPU.
+            self.mmu.before_fetch();
             let mut byte = self.read_byte();
 
             if self.halt_bug {
@@ -331,14 +328,16 @@ impl<M: Memory> CPU<M> {
             } else {
                 instr = byte as u16;
             }
-            let oam_check: Option<(u8, u16)> = if mode_before == 2 && !prefixed {
+            // Capture register value pre-execute: INC/DEC changes the register,
+            // so we need the bus address as it was at M1, not after the instruction.
+            let oam_rr: Option<u16> = if !prefixed {
                 match byte {
-                    0x03 | 0x0B => Some((byte, self.get_registry_value("BC"))),
-                    0x13 | 0x1B => Some((byte, self.get_registry_value("DE"))),
-                    0x23 | 0x2B | 0x2A | 0x3A => Some((byte, self.get_registry_value("HL"))),
-                    0x33 | 0x3B => Some((byte, self.get_registry_value("SP"))),
+                    0x03 | 0x0B => Some(self.get_registry_value("BC")),
+                    0x13 | 0x1B => Some(self.get_registry_value("DE")),
+                    0x23 | 0x2B | 0x2A | 0x3A => Some(self.get_registry_value("HL")),
+                    0x33 | 0x3B => Some(self.get_registry_value("SP")),
                     0xC1 | 0xD1 | 0xE1 | 0xF1 | 0xC5 | 0xD5 | 0xE5 | 0xF5 => {
-                        Some((byte, self.get_registry_value("SP")))
+                        Some(self.get_registry_value("SP"))
                     }
                     _ => None,
                 }
@@ -349,43 +348,8 @@ impl<M: Memory> CPU<M> {
             self.enable_ime_if_scheduled();
             self.execute(byte, prefixed);
 
-            // Trigger OAM corruption if the instruction was a 16-bit inc/dec with a value in
-            // $FE00-$FEFF (per Blargg readme), during mode 2 of a visible scanline.
-            // row_before is the scan row BEFORE the opcode fetch (M1), so bus conflicts are at:
-            // INC/DEC rr / LD A,(HL+/-): M1 conflict = row_before.
-            // POP rr: M2 reads SP (row+1), M3 reads SP+1 (row+2).
-            // PUSH rr: M3 writes SP-1 (row+2), M4 writes SP-2 (row+3).
-            let in_oam_bus = |addr: u16| (addr >> 8) == 0xFE;
-            if let Some((opcode, rr)) = oam_check {
-                match opcode {
-                    0x03 | 0x0B | 0x13 | 0x1B | 0x23 | 0x2B | 0x33 | 0x3B | 0x2A | 0x3A => {
-                        if in_oam_bus(rr) {
-                            self.mmu.apply_oam_corruption(row_before + 1);
-                        }
-                    }
-                    0xC1 | 0xD1 | 0xE1 | 0xF1 => {
-                        // POP: M2 reads SP (row+1), M3 reads SP+1 (row+2)
-                        if row_before < 19 && in_oam_bus(rr) {
-                            self.mmu.apply_oam_corruption(row_before + 1);
-                        }
-                        if row_before < 18 && in_oam_bus(rr.wrapping_add(1)) {
-                            self.mmu.apply_oam_corruption(row_before + 2);
-                        }
-                    }
-                    0xC5 | 0xD5 | 0xE5 | 0xF5 => {
-                        // PUSH: M2 internal reads SP (row+1), M3 writes SP-1 (row+2), M4 writes SP-2 (row+3)
-                        if row_before < 19 && in_oam_bus(rr) {
-                            self.mmu.apply_oam_corruption(row_before + 1);
-                        }
-                        if row_before < 18 && in_oam_bus(rr.wrapping_sub(1)) {
-                            self.mmu.apply_oam_corruption(row_before + 2);
-                        }
-                        if row_before < 17 && in_oam_bus(rr.wrapping_sub(2)) {
-                            self.mmu.apply_oam_corruption(row_before + 3);
-                        }
-                    }
-                    _ => {}
-                }
+            if let Some(rr) = oam_rr {
+                self.mmu.handle_oam_corruption(byte, rr);
             }
         } else {
             self.tick_m();
