@@ -131,7 +131,13 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                     // GPU OAM
                     0x0E00 => {
                         if addr & 0xFF < 0xA0 {
-                            self.gpu.read_oam(addr & 0xFF)
+                            let mode = self.gpu.gpu_mode();
+                            let lcd_enabled = self.gpu.is_lcd_enabled();
+                            if lcd_enabled && (mode == 2 || mode == 3) {
+                                0xFF
+                            } else {
+                                self.gpu.read_oam(addr & 0xFF)
+                            }
                         } else {
                             // 0xFEA0 <= addr <= 0xFEFF, unused memory area
                             0xFF

@@ -158,13 +158,18 @@ impl GPUMemoriesAccess for GPU {
         if n == 0 || n >= 20 {
             return;
         }
-        let n1 = n - 1;
-        let n2 = n.saturating_sub(2);
-        for i in 0..8usize {
-            let a = self.oam[n * 8 + i];
-            let b = self.oam[n1 * 8 + i];
-            let c = self.oam[n2 * 8 + i];
-            self.oam[n * 8 + i] = (a ^ b) & (b ^ c) | b;
+        let r = n * 8;
+        // Bytes 0–1: bitwise_glitch((a^c)&(b^c))^c
+        // a = current row, b = prev row bytes 0–1, c = prev row bytes 4–5
+        for i in 0..2usize {
+            let a = self.oam[r + i];
+            let b = self.oam[r - 8 + i];
+            let c = self.oam[r - 4 + i];
+            self.oam[r + i] = ((a ^ c) & (b ^ c)) ^ c;
+        }
+        // Bytes 2–7: copy from previous row
+        for i in 2..8usize {
+            self.oam[r + i] = self.oam[r - 8 + i];
         }
     }
     fn read_vram(&mut self, addr: u16) -> u8 {
@@ -218,9 +223,6 @@ impl GPUMemoriesAccess for GPU {
                 let was_enabled = self.lcd_enabled;
                 self.lcd_enabled = (byte & 0x80) != 0;
                 if !was_enabled && self.lcd_enabled {
-                    // LCD turning on: reset PPU to start of frame with a small offset.
-                    // Hardware doesn't start mode 2 at exactly T=0; using modeclock=4
-                    // (1 M-cycle in) matches the observed timing in test 1.
                     self.mode = 2;
                     self.line = 0;
                     self.modeclock = 4;
@@ -537,6 +539,9 @@ impl GPU {
 
     // go forward based on the cpu's last operation clocks
     pub fn step(&mut self, t: u8) -> (bool, bool) {
+        if !self.lcd_enabled {
+            return (false, false);
+        }
         self.modeclock += t as u16;
 
         let mut vblank_interrupt: bool = false;

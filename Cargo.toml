@@ -17,6 +17,42 @@ name = "test_boot_roms"
 path = "tests/mooneye/test_boot_roms.rs"
 
 [[test]]
+name = "test_mooneye_bits_roms"
+path = "tests/mooneye/test_mooneye_bits_roms.rs"
+
+[[test]]
+name = "test_mooneye_instr_roms"
+path = "tests/mooneye/test_mooneye_instr_roms.rs"
+
+[[test]]
+name = "test_mooneye_interrupts_roms"
+path = "tests/mooneye/test_mooneye_interrupts_roms.rs"
+
+[[test]]
+name = "test_mooneye_oam_dma_roms"
+path = "tests/mooneye/test_mooneye_oam_dma_roms.rs"
+
+[[test]]
+name = "test_mooneye_ppu_roms"
+path = "tests/mooneye/test_mooneye_ppu_roms.rs"
+
+[[test]]
+name = "test_mooneye_serial_roms"
+path = "tests/mooneye/test_mooneye_serial_roms.rs"
+
+[[test]]
+name = "test_halt_bug_rom"
+path = "tests/blargg/test_halt_bug_rom.rs"
+
+[[test]]
+name = "test_interrupt_time_rom"
+path = "tests/blargg/test_interrupt_time_rom.rs"
+
+[[test]]
+name = "test_oam_bug_roms"
+path = "tests/blargg/test_oam_bug_roms.rs"
+
+[[test]]
 name = "test_cpu_instr_roms"
 path = "tests/blargg/test_cpu_instr_roms.rs"
 

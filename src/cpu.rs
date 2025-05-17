@@ -360,7 +360,7 @@ impl<M: Memory> CPU<M> {
                 match opcode {
                     0x03 | 0x0B | 0x13 | 0x1B | 0x23 | 0x2B | 0x33 | 0x3B | 0x2A | 0x3A => {
                         if in_oam_bus(rr) {
-                            self.mmu.apply_oam_corruption(row_before);
+                            self.mmu.apply_oam_corruption(row_before + 1);
                         }
                     }
                     0xC1 | 0xD1 | 0xE1 | 0xF1 => {

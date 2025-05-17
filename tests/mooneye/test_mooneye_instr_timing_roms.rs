@@ -175,10 +175,3 @@ fn ld_hl_sp_e_timing() {
     let mut emulator = Gameboy::new("tests/mooneye/roms/ld_hl_sp_e_timing.gb");
     assert!(emulator.passes_mooneye_test_rom());
 }
-
-#[test]
-#[ignore = "passes visually but completion signal mechanism is unknown — no source available"]
-fn halt_bug() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/halt_bug.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
