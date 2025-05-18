@@ -125,7 +125,7 @@ impl Gameboy {
         for _ in 0..3600 {
             self.step();
             match self.cpu.mmu.read_byte(0xA000) {
-                0x80 | 0xFF => continue, // $80 = running, $FF = RAM not yet enabled
+                0x80 | 0xFF => continue,
                 0 => return true,
                 _ => return false,
             }

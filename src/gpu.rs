@@ -30,6 +30,7 @@ pub trait GPUMemoriesAccess {
         0
     }
     fn apply_oam_corruption(&mut self, _row: u8) {}
+    fn apply_oam_read_corruption(&mut self, _row: u8) {}
     fn get_line(&self) -> u8 {
         0
     }
@@ -172,8 +173,6 @@ impl GPUMemoriesAccess for GPU {
             return;
         }
         let r = n * 8;
-        // Row bytes 0-1 get a bitwise glitch using the previous row as source,
-        // bytes 2-7 are overwritten with the previous row's bytes 2-7.
         for i in 0..2usize {
             let a = self.oam[r + i];
             let b = self.oam[r - 8 + i];
@@ -182,6 +181,81 @@ impl GPUMemoriesAccess for GPU {
         }
         for i in 2..8usize {
             self.oam[r + i] = self.oam[r - 8 + i];
+        }
+    }
+    // POP read corruption (GB_trigger_oam_bug_read in SameBoy).
+    // Each formula variant modifies the scan row (r-8), then scan row is always
+    // copied to the corrupted row (r) — matches the unconditional copy in SameBoy.
+    fn apply_oam_read_corruption(&mut self, row: u8) {
+        if !self.lcd_enabled {
+            return;
+        }
+        let n = row as usize;
+        if n == 0 || n >= 20 {
+            return;
+        }
+        let r = n * 8;
+        match r & 0x18 {
+            // Standard: b | (a & c) on scan row bytes 0-1
+            0x08 | 0x18 => {
+                for i in 0..2usize {
+                    let a = self.oam[r + i];
+                    let b = self.oam[r - 8 + i];
+                    let c = self.oam[r - 4 + i];
+                    self.oam[r - 8 + i] = b | (a & c);
+                }
+            }
+            // Secondary: formula on scan row bytes 0-1; copy scan row → prev2
+            0x10 => {
+                for i in 0..2usize {
+                    let a = self.oam[r - 16 + i];
+                    let b = self.oam[r - 8 + i];
+                    let c = self.oam[r + i];
+                    let d = self.oam[r - 4 + i];
+                    self.oam[r - 8 + i] = (b & (a | c | d)) | (a & c & d);
+                }
+                for i in 0..8usize {
+                    self.oam[r - 16 + i] = self.oam[r - 8 + i];
+                }
+            }
+            // Tertiary/quaternary: formula on scan row bytes 0-1; copy scan row → prev2 and prev4
+            0x00 => {
+                for i in 0..2usize {
+                    let a = self.oam[r + i];
+                    let b = self.oam[r - 4 + i];
+                    let c = self.oam[r - 8 + i];
+                    let d = self.oam[r - 16 + i];
+                    let e = self.oam[r - 32 + i];
+                    self.oam[r - 8 + i] = match r {
+                        0x20 => (c & (a | b | d | e)) | (a & b & d & e), // tertiary_2
+                        0x40 => {                                          // quaternary_dmg
+                            // SameBoy: (e & (h|g|(~d&f)|c|b)) | (c&g&h)
+                            // where b=oam[r+i], c=oam[r-4+i], d=oam[r-6+i], e=oam[r-8+i],
+                            //       f=oam[r-14+i], g=oam[r-16+i], h=oam[r-32+i]
+                            let sb_d = self.oam[r - 6 + i];
+                            let sb_f = self.oam[r - 14 + i];
+                            // my c=sb_e, my b=sb_c, my a=sb_b, my d=sb_g, my e=sb_h
+                            (c & (e | d | ((!sb_d) & sb_f) | b | a)) | (b & d & e)
+                        }
+                        0x60 => (c & (a | b | d | e)) | (b & d & e),     // tertiary_3
+                        _ => c | (a & b & d & e),                          // tertiary_1 (r==0x80)
+                    };
+                }
+                for i in 0..8usize {
+                    self.oam[r - 16 + i] = self.oam[r - 8 + i];
+                    self.oam[r - 32 + i] = self.oam[r - 8 + i];
+                }
+            }
+            _ => return,
+        }
+        // Always: copy (possibly modified) scan row → corrupted row
+        for i in 0..8usize {
+            self.oam[r + i] = self.oam[r - 8 + i];
+        }
+        if r == 0x80 {
+            for i in 0..8usize {
+                self.oam[i] = self.oam[0x80 + i];
+            }
         }
     }
     fn read_vram(&mut self, addr: u16) -> u8 {

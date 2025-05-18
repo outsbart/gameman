@@ -307,19 +307,25 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
         let row = self.oam_row_before;
         let in_oam_bus = |addr: u16| (addr >> 8) == 0xFE;
         match opcode {
-            // INC/DEC rr, LD A,(HL±): M1 bus conflict at row+1
-            0x03 | 0x0B | 0x13 | 0x1B | 0x23 | 0x2B | 0x33 | 0x3B | 0x2A | 0x3A => {
+            // INC/DEC rr: M1 bus conflict → write corruption at row+1
+            0x03 | 0x0B | 0x13 | 0x1B | 0x23 | 0x2B | 0x33 | 0x3B => {
                 if in_oam_bus(rr) {
                     self.gpu.apply_oam_corruption(row + 1);
                 }
             }
-            // POP rr: M2 reads SP (row+1), M3 reads SP+1 (row+2)
+            // LD A,(HL±): M2 memory read → read corruption at row+1 (same as POP M2)
+            0x2A | 0x3A => {
+                if in_oam_bus(rr) {
+                    self.gpu.apply_oam_read_corruption(row + 1);
+                }
+            }
+            // POP rr: M2 reads SP (row+1), M3 reads SP+1 (row+2) — uses read corruption
             0xC1 | 0xD1 | 0xE1 | 0xF1 => {
                 if row < 19 && in_oam_bus(rr) {
-                    self.gpu.apply_oam_corruption(row + 1);
+                    self.gpu.apply_oam_read_corruption(row + 1);
                 }
                 if row < 18 && in_oam_bus(rr.wrapping_add(1)) {
-                    self.gpu.apply_oam_corruption(row + 2);
+                    self.gpu.apply_oam_read_corruption(row + 2);
                 }
             }
             // PUSH rr: M2 internal (row+1), M3 writes SP-1 (row+2), M4 writes SP-2 (row+3)
