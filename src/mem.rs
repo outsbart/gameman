@@ -107,12 +107,11 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
         match addr & 0xF000 {
             // BIOS
             0x0000 => {
-                if self.still_bios {
-                    match addr {
-                        0x0100 => self.still_bios = false,
-                        0x0000..=0x00FF => return self.bios[addr as usize],
-                        _ => panic!("Unhandled memory access"),
-                    }
+                if self.still_bios && addr <= 0x00FF {
+                    return self.bios[addr as usize];
+                }
+                if self.still_bios && addr == 0x0100 {
+                    self.still_bios = false;
                 }
                 self.cartridge.read_rom(addr)
             }
@@ -132,8 +131,12 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
 
                     // GPU OAM
                     0x0E00 => {
-                        if addr & 0xFF < 0xA0 && self.gpu.oam_accessible() {
-                            self.gpu.read_oam(addr & 0xFF)
+                        if addr & 0xFF < 0xA0 {
+                            if self.gpu.oam_accessible() {
+                                self.gpu.read_oam(addr & 0xFF)
+                            } else {
+                                0xFF
+                            }
                         } else {
                             0xFF
                         }
@@ -304,40 +307,40 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
         if self.oam_mode_before != 2 {
             return;
         }
-        let row = self.oam_row_before;
+        let row = self.oam_row_before; // byte offset into OAM
         let in_oam_bus = |addr: u16| (addr >> 8) == 0xFE;
         match opcode {
-            // INC/DEC rr: M1 bus conflict → write corruption at row+1
+            // INC/DEC rr: bug fires after M1 (+4T = +8 bytes in OAM scan)
             0x03 | 0x0B | 0x13 | 0x1B | 0x23 | 0x2B | 0x33 | 0x3B => {
                 if in_oam_bus(rr) {
-                    self.gpu.apply_oam_corruption(row + 1);
+                    self.gpu.apply_oam_corruption(row.saturating_add(8));
                 }
             }
-            // LD A,(HL±): M2 memory read → read corruption at row+1 (same as POP M2)
+            // LD A,(HL±): M2 memory read → read corruption (+8 bytes)
             0x2A | 0x3A => {
                 if in_oam_bus(rr) {
-                    self.gpu.apply_oam_read_corruption(row + 1);
+                    self.gpu.apply_oam_read_corruption(row.saturating_add(8));
                 }
             }
-            // POP rr: M2 reads SP (row+1), M3 reads SP+1 (row+2) — uses read corruption
+            // POP rr: M2 reads SP (+8 bytes), M3 reads SP+1 (+16 bytes) — read corruption
             0xC1 | 0xD1 | 0xE1 | 0xF1 => {
-                if row < 19 && in_oam_bus(rr) {
-                    self.gpu.apply_oam_read_corruption(row + 1);
+                if in_oam_bus(rr) {
+                    self.gpu.apply_oam_read_corruption(row.saturating_add(8));
                 }
-                if row < 18 && in_oam_bus(rr.wrapping_add(1)) {
-                    self.gpu.apply_oam_read_corruption(row + 2);
+                if in_oam_bus(rr.wrapping_add(1)) {
+                    self.gpu.apply_oam_read_corruption(row.saturating_add(16));
                 }
             }
-            // PUSH rr: M2 internal (row+1), M3 writes SP-1 (row+2), M4 writes SP-2 (row+3)
+            // PUSH rr: M2 internal (+8), M3 writes SP-1 (+16), M4 writes SP-2 (+24)
             0xC5 | 0xD5 | 0xE5 | 0xF5 => {
-                if row < 19 && in_oam_bus(rr) {
-                    self.gpu.apply_oam_corruption(row + 1);
+                if in_oam_bus(rr) {
+                    self.gpu.apply_oam_corruption(row.saturating_add(8));
                 }
-                if row < 18 && in_oam_bus(rr.wrapping_sub(1)) {
-                    self.gpu.apply_oam_corruption(row + 2);
+                if in_oam_bus(rr.wrapping_sub(1)) {
+                    self.gpu.apply_oam_corruption(row.saturating_add(16));
                 }
-                if row < 17 && in_oam_bus(rr.wrapping_sub(2)) {
-                    self.gpu.apply_oam_corruption(row + 3);
+                if in_oam_bus(rr.wrapping_sub(2)) {
+                    self.gpu.apply_oam_corruption(row.saturating_add(24));
                 }
             }
             _ => {}

@@ -24,7 +24,7 @@ impl CartridgeAccess for CartridgeMBC1 {
         match addr & 0xF000 {
             0x0000 | 0x1000 => {
                 // enable eram
-                cartridge.ram_enabled = byte == 0x0A;
+                cartridge.ram_enabled = byte & 0x0F == 0x0A;
             }
             0x2000 | 0x3000 => {
                 // change rom bank

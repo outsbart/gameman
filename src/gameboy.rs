@@ -122,15 +122,24 @@ impl Gameboy {
     }
 
     pub fn passes_blargg_ram_test_rom(&mut self) -> bool {
-        for _ in 0..3600 {
-            self.step();
-            match self.cpu.mmu.read_byte(0xA000) {
-                0x80 | 0xFF => continue,
-                0 => return true,
-                _ => return false,
+        self.blargg_ram_test_result().map_or(false, |v| v == 0)
+    }
+
+    pub fn blargg_ram_test_result(&mut self) -> Option<u8> {
+        let mut clocks = 0u32;
+        loop {
+            let (_line, _opcode, t) = self.cpu_step();
+            clocks += t as u32;
+            let val = self.cpu.mmu.read_byte(0xA000);
+            match val {
+                0x80 | 0xFF => {}
+                v => return Some(v),
+            }
+            if clocks >= 3600 * 70224 {
+                break;
             }
         }
-        false
+        None
     }
 
     pub fn passes_mooneye_test_rom(&mut self) -> bool {

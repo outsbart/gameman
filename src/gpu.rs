@@ -132,6 +132,7 @@ pub struct GPU {
     compare_enabled: bool,   // stat reg. Should compare with compare line?
     compare_line: u8,        // when line == compare_line an interrupt is triggered
     mode2_int_enabled: bool, // stat reg. Fire STAT interrupt on mode 2 start?
+    accessed_oam_row: u8,    // byte offset into OAM being scanned; 0xFF outside mode 2
 
     scroll_x: u8,
     scroll_y: u8,
@@ -156,7 +157,7 @@ impl GPUMemoriesAccess for GPU {
         self.line
     }
     fn oam_scan_row(&self) -> u8 {
-        (self.modeclock / 4) as u8
+        self.accessed_oam_row
     }
     fn is_lcd_enabled(&self) -> bool {
         self.lcd_enabled
@@ -164,21 +165,20 @@ impl GPUMemoriesAccess for GPU {
     fn oam_accessible(&self) -> bool {
         !self.lcd_enabled || (self.mode != 2 && self.mode != 3)
     }
-    fn apply_oam_corruption(&mut self, row: u8) {
+    fn apply_oam_corruption(&mut self, r: u8) {
         if !self.lcd_enabled {
             return;
         }
-        let n = row as usize;
-        if n == 0 || n >= 20 {
+        let r = r as usize;
+        if r < 8 || r > 152 {
             return;
         }
-        let r = n * 8;
-        for i in 0..2usize {
-            let a = self.oam[r + i];
-            let b = self.oam[r - 8 + i];
-            let c = self.oam[r - 4 + i];
-            self.oam[r + i] = ((a ^ c) & (b ^ c)) ^ c;
-        }
+        let a = self.oam[r] as u16 | ((self.oam[r + 1] as u16) << 8);
+        let b = self.oam[r - 8] as u16 | ((self.oam[r - 7] as u16) << 8);
+        let c = self.oam[r - 4] as u16 | ((self.oam[r - 3] as u16) << 8);
+        let result = ((a ^ c) & (b ^ c)) ^ c;
+        self.oam[r] = result as u8;
+        self.oam[r + 1] = (result >> 8) as u8;
         for i in 2..8usize {
             self.oam[r + i] = self.oam[r - 8 + i];
         }
@@ -186,15 +186,14 @@ impl GPUMemoriesAccess for GPU {
     // POP read corruption (GB_trigger_oam_bug_read in SameBoy).
     // Each formula variant modifies the scan row (r-8), then scan row is always
     // copied to the corrupted row (r) — matches the unconditional copy in SameBoy.
-    fn apply_oam_read_corruption(&mut self, row: u8) {
+    fn apply_oam_read_corruption(&mut self, r: u8) {
         if !self.lcd_enabled {
             return;
         }
-        let n = row as usize;
-        if n == 0 || n >= 20 {
+        let r = r as usize;
+        if r < 8 || r > 152 {
             return;
         }
-        let r = n * 8;
         match r & 0x18 {
             // Standard: b | (a & c) on scan row bytes 0-1
             0x08 | 0x18 => {
@@ -384,6 +383,7 @@ impl GPU {
             compare_enabled: false,
             compare_line: 0,
             mode2_int_enabled: false,
+            accessed_oam_row: 0xFF,
             scroll_x: 0,
             scroll_y: 0,
             bg_palette: Palette::new(),
@@ -635,13 +635,16 @@ impl GPU {
         match self.mode {
             // scanline, oam read mode
             2 => {
+                self.accessed_oam_row = (self.modeclock / 4 * 8) as u8;
                 if self.modeclock >= 80 {
                     self.modeclock = 0;
                     self.mode = 3;
+                    self.accessed_oam_row = 0xFF;
                 }
             }
             // scanline, vram read mode
             3 => {
+                self.accessed_oam_row = 0xFF;
                 if self.modeclock >= 172 {
                     // enter hblank mode
                     self.modeclock = 0;
@@ -652,6 +655,7 @@ impl GPU {
             }
             // hblank
             0 => {
+                self.accessed_oam_row = 0xFF;
                 if self.modeclock >= 204 {
                     self.modeclock = 0;
                     self.line += 1;
@@ -662,6 +666,7 @@ impl GPU {
                         vblank_interrupt = true;
                     } else {
                         self.mode = 2;
+                        self.accessed_oam_row = 0; // start scanning from row 0
                         if self.mode2_int_enabled {
                             compare_interrupt = true;
                         }
@@ -672,6 +677,7 @@ impl GPU {
             }
             // vblank (10 lines)
             1 => {
+                self.accessed_oam_row = 0xFF;
                 if self.modeclock >= 456 {
                     self.modeclock = 0;
                     self.line += 1;
@@ -679,6 +685,7 @@ impl GPU {
                     // restart
                     if self.line > 153 {
                         self.mode = 2;
+                        self.accessed_oam_row = 0; // start scanning from row 0
                         self.line = 0;
                         if self.mode2_int_enabled {
                             compare_interrupt = true;
