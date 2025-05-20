@@ -1,4 +1,4 @@
-use crate::cartridge::{Cartridge, CartridgeAccess};
+use crate::cartridge::{Cartridge, CartridgeAccess, ROM_BANK_SIZE};
 
 pub struct CartridgeMBC5 {
     cart: Cartridge,
@@ -16,6 +16,22 @@ impl CartridgeAccess for CartridgeMBC5 {
     }
     fn cartridge_mut(&mut self) -> &mut Cartridge {
         &mut self.cart
+    }
+
+    fn read_rom(&self, addr: u16) -> u8 {
+        let cartridge = self.cartridge();
+
+        let abs_addr = match addr & 0xF000 {
+            0x0000 | 0x1000 | 0x2000 | 0x3000 => addr as usize,
+            0x4000 | 0x5000 | 0x6000 | 0x7000 => {
+                let num_banks = cartridge.rom.len() / ROM_BANK_SIZE;
+                let bank = cartridge.rom_bank as usize & (num_banks - 1);
+                bank * ROM_BANK_SIZE + (addr & 0x3FFF) as usize
+            }
+            _ => panic!("Unhandled ROM MBC5 read at addr {:x}", addr),
+        };
+
+        cartridge.rom[abs_addr]
     }
 
     fn write_rom(&mut self, addr: u16, byte: u8) {

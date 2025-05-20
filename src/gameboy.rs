@@ -35,8 +35,13 @@ impl Gameboy {
         let cartridge = load_rom(path);
         let mmu = MMU::new(GPU::new(), cartridge);
         let cpu = CPU::new(mmu);
-
         Gameboy { cpu }
+    }
+
+    pub fn new_clean(path: &str) -> Gameboy {
+        let sav_path = path.replacen(".gb", ".sav", 1);
+        let _ = std::fs::remove_file(&sav_path);
+        Self::new(path)
     }
 
     pub fn load_bios(&mut self) {
@@ -154,7 +159,7 @@ impl Gameboy {
                 return self.cpu.get_registry_value("B") == 3;
             }
 
-            if frames > 300 {
+            if frames > 500 {
                 return false;
             }
         }

@@ -68,6 +68,18 @@ path = "tests/blargg/test_sound_roms.rs"
 name = "test_mem_timing_roms"
 path = "tests/blargg/test_mem_timing_roms.rs"
 
+[[test]]
+name = "test_mooneye_mbc1_roms"
+path = "tests/mooneye/test_mooneye_mbc1_roms.rs"
+
+[[test]]
+name = "test_mooneye_mbc2_roms"
+path = "tests/mooneye/test_mooneye_mbc2_roms.rs"
+
+[[test]]
+name = "test_mooneye_mbc5_roms"
+path = "tests/mooneye/test_mooneye_mbc5_roms.rs"
+
 [dependencies]
 log = "0.4.6"
 sdl2 = "0.38.0"
