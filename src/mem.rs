@@ -290,6 +290,10 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
         if self.timers.tick(1) {
             self.interrupt_flags |= 4;
         }
+        // Serial clock derived from bit 8 of the divider (checked after timers.tick).
+        if self.link.tick(self.timers.divider()) {
+            self.interrupt_flags |= 8;
+        }
         let (vblank, stat) = self.gpu.step(1);
         if vblank {
             self.interrupt_flags |= 1;

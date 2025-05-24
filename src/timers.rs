@@ -217,6 +217,10 @@ impl Timers {
         }
     }
 
+    pub fn divider(&self) -> u16 {
+        self.divider
+    }
+
     // when reading from 0xFF04
     pub fn read_divider(&self) -> u8 {
         (self.divider >> 8) as u8

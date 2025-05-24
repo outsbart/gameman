@@ -131,8 +131,15 @@ pub struct GPU {
 
     compare_enabled: bool,   // stat reg. Should compare with compare line?
     compare_line: u8,        // when line == compare_line an interrupt is triggered
+    mode0_int_enabled: bool, // stat reg. Fire STAT interrupt on mode 0 (HBlank) start?
+    mode1_int_enabled: bool, // stat reg. Fire STAT interrupt on mode 1 (VBlank) start?
     mode2_int_enabled: bool, // stat reg. Fire STAT interrupt on mode 2 start?
     accessed_oam_row: u8,    // byte offset into OAM being scanned; 0xFF outside mode 2
+    mode3_extra: u16,        // extra T-cycles added to mode 3 by sprites (subtracted from mode 0)
+    stat_line: bool,         // current combined STAT interrupt line (for blocking logic)
+    pending_stat: bool,      // STAT interrupt triggered by a register write (FF41/FF45)
+    lyc_flag: bool,          // LY==LYC comparison result; frozen when LCD is disabled
+    lcd_startup_ticks: u8,   // T-cycles remaining in the mode-0 window right after LCD enable
 
     scroll_x: u8,
     scroll_y: u8,
@@ -276,10 +283,13 @@ impl GPUMemoriesAccess for GPU {
                     | (if self.lcd_enabled { 0x80 } else { 0 })
             }
             0xFF41 => {
-                0x80 | (self.mode & 0x03)
+                let mode_bits = if self.lcd_startup_ticks > 0 { 0 } else { self.mode & 0x03 };
+                0x80 | mode_bits
                     | (if self.compare_enabled { 0x40 } else { 0 })
                     | (if self.mode2_int_enabled { 0x20 } else { 0 })
-                    | (if self.compare() { 0x04 } else { 0 })
+                    | (if self.mode1_int_enabled { 0x10 } else { 0 })
+                    | (if self.mode0_int_enabled { 0x08 } else { 0 })
+                    | (if self.lyc_flag { 0x04 } else { 0 })
             }
             0xFF42 => self.scroll_y,
             0xFF43 => self.scroll_x,
@@ -310,15 +320,35 @@ impl GPUMemoriesAccess for GPU {
                     self.mode = 2;
                     self.line = 0;
                     self.modeclock = 4; // hardware starts mode 2 ~1 M-cycle in, not at T=0
+                    self.lyc_flag = self.line == self.compare_line;
+                    // 16T: compensates for the write firing "early" (at T1 of the write M-cycle)
+                    // rather than at T4, leaving the mode-0 window visible for the next STAT read.
+                    self.lcd_startup_ticks = 16;
+                    let new_stat = self.compute_stat_line();
+                    if !self.stat_line && new_stat {
+                        self.pending_stat = true;
+                    }
+                    self.stat_line = new_stat;
                 } else if was_enabled && !self.lcd_enabled {
                     self.mode = 0;
                     self.line = 0;
                     self.modeclock = 0;
+                    self.lcd_startup_ticks = 0;
+                    // lyc_flag intentionally NOT updated here — frozen at last value
+                    // stat_line = lyc_source only (mode sources gated by lcd_enabled)
+                    self.stat_line = self.compute_stat_line();
                 }
             }
             0xFF41 => {
+                let old_stat = self.stat_line;
                 self.compare_enabled = (byte & 0x40) != 0;
                 self.mode2_int_enabled = (byte & 0x20) != 0;
+                self.mode1_int_enabled = (byte & 0x10) != 0;
+                self.mode0_int_enabled = (byte & 0x08) != 0;
+                self.stat_line = self.compute_stat_line();
+                if !old_stat && self.stat_line {
+                    self.pending_stat = true;
+                }
             }
             0xFF42 => {
                 self.scroll_y = byte;
@@ -330,7 +360,15 @@ impl GPUMemoriesAccess for GPU {
                 self.line = 0;
             }
             0xFF45 => {
+                let old_stat = self.stat_line;
                 self.compare_line = byte;
+                if self.lcd_enabled {
+                    self.lyc_flag = self.line == self.compare_line;
+                }
+                self.stat_line = self.compute_stat_line();
+                if !old_stat && self.stat_line {
+                    self.pending_stat = true;
+                }
             }
             0xFF46 => {
                 // DMA transfer, handled from outside
@@ -360,6 +398,8 @@ impl GPUMemoriesAccess for GPU {
         self.mode = 1;
         self.line = 153;
         self.modeclock = 396;
+        self.lyc_flag = self.line == self.compare_line;
+        self.lcd_startup_ticks = 0;
     }
 }
 
@@ -382,8 +422,15 @@ impl GPU {
             lcd_enabled: false,
             compare_enabled: false,
             compare_line: 0,
+            mode0_int_enabled: false,
+            mode1_int_enabled: false,
             mode2_int_enabled: false,
             accessed_oam_row: 0xFF,
+            mode3_extra: 0,
+            stat_line: false,
+            pending_stat: false,
+            lyc_flag: false,
+            lcd_startup_ticks: 0,
             scroll_x: 0,
             scroll_y: 0,
             bg_palette: Palette::new(),
@@ -621,17 +668,54 @@ impl GPU {
         self.compare_enabled && self.compare()
     }
 
+    fn compute_stat_line(&self) -> bool {
+        // LYC source is NOT gated by lcd_enabled: it stays active even when LCD is off,
+        // so disabling/re-enabling LCD with the same lyc_flag doesn't cause a spurious
+        // 0→1 transition (and therefore no spurious STAT interrupt).
+        let lyc_source = self.compare_enabled && self.lyc_flag;
+        let mode_sources = self.lcd_enabled
+            && ((self.mode0_int_enabled && self.mode == 0)
+                || (self.mode1_int_enabled && self.mode == 1)
+                || (self.mode2_int_enabled && self.mode == 2));
+        lyc_source || mode_sources
+    }
+
+    fn count_scanline_sprites(&self) -> u16 {
+        if !self.obj_enabled {
+            return 0;
+        }
+        let sprite_height: u8 = if self.obj_size { 16 } else { 8 };
+        let mut count = 0u16;
+        for i in 0..40usize {
+            let y = self.oam[i * 4].wrapping_sub(16);
+            if self.line.wrapping_sub(y) < sprite_height {
+                count += 1;
+                if count >= 10 {
+                    break;
+                }
+            }
+        }
+        count
+    }
+
     // go forward based on the cpu's last operation clocks
     pub fn step(&mut self, t: u8) -> (bool, bool) {
         if !self.lcd_enabled {
             return (false, false);
         }
+        self.lcd_startup_ticks = self.lcd_startup_ticks.saturating_sub(t);
         self.modeclock += t as u16;
 
-        let mut vblank_interrupt: bool = false;
-        let mut compare_interrupt: bool = false;
+        let mut vblank_interrupt = false;
+        let mut stat_interrupt = false;
 
-        // todo: implement it as a state machine?
+        if self.pending_stat {
+            self.pending_stat = false;
+            stat_interrupt = true;
+        }
+
+        let old_stat = self.stat_line;
+
         match self.mode {
             // scanline, oam read mode
             2 => {
@@ -640,39 +724,33 @@ impl GPU {
                     self.modeclock = 0;
                     self.mode = 3;
                     self.accessed_oam_row = 0xFF;
+                    self.mode3_extra = self.count_scanline_sprites() * 11;
                 }
             }
             // scanline, vram read mode
             3 => {
                 self.accessed_oam_row = 0xFF;
-                if self.modeclock >= 172 {
-                    // enter hblank mode
+                if self.modeclock >= 172 + self.mode3_extra {
                     self.modeclock = 0;
                     self.mode = 0;
-
                     self.render_scan_to_buffer();
                 }
             }
             // hblank
             0 => {
                 self.accessed_oam_row = 0xFF;
-                if self.modeclock >= 204 {
+                if self.modeclock >= 204 - self.mode3_extra {
                     self.modeclock = 0;
                     self.line += 1;
+                    self.lyc_flag = self.line == self.compare_line;
 
                     if self.line == 144 {
-                        // enter vblank mode
                         self.mode = 1;
                         vblank_interrupt = true;
                     } else {
                         self.mode = 2;
-                        self.accessed_oam_row = 0; // start scanning from row 0
-                        if self.mode2_int_enabled {
-                            compare_interrupt = true;
-                        }
+                        self.accessed_oam_row = 0;
                     }
-
-                    compare_interrupt |= self.check_compare_int();
                 }
             }
             // vblank (10 lines)
@@ -682,23 +760,23 @@ impl GPU {
                     self.modeclock = 0;
                     self.line += 1;
 
-                    // restart
                     if self.line > 153 {
                         self.mode = 2;
-                        self.accessed_oam_row = 0; // start scanning from row 0
+                        self.accessed_oam_row = 0;
                         self.line = 0;
-                        if self.mode2_int_enabled {
-                            compare_interrupt = true;
-                        }
                     }
-
-                    compare_interrupt |= self.check_compare_int();
+                    self.lyc_flag = self.line == self.compare_line;
                 }
             }
             _ => panic!("Sorry what?"),
         }
 
-        (vblank_interrupt, compare_interrupt)
+        self.stat_line = self.compute_stat_line();
+        if !old_stat && self.stat_line {
+            stat_interrupt = true;
+        }
+
+        (vblank_interrupt, stat_interrupt)
     }
 }
 
