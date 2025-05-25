@@ -584,6 +584,8 @@ impl GPU {
         if self.obj_enabled {
             let sprite_height: u8 = if self.obj_size { 16 } else { 8 };
 
+            let mut sprite_occupied = [false; 160usize];
+
             for sprite_num in 0..40usize {
                 let base = sprite_num * 4;
                 let y = self.oam[base].wrapping_sub(16);
@@ -648,6 +650,12 @@ impl GPU {
                     if z && (rendering_row[curr_x as usize] != 0) {
                         continue;
                     }
+
+                    // lower OAM index wins over higher index
+                    if sprite_occupied[curr_x as usize] {
+                        continue;
+                    }
+                    sprite_occupied[curr_x as usize] = true;
 
                     let obj_palette = if palette {
                         &self.obj_palette_1

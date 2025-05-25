@@ -221,8 +221,8 @@ pub fn load_rom(path: &str) -> Box<dyn CartridgeAccess> {
             }
         }
         0x05 | 0x06 => Box::new(CartridgeMBC2::new(cart)),
-        0x13 => Box::new(CartridgeMBC3::new(cart)),
-        0x19 | 0x1b => Box::new(CartridgeMBC5::new(cart)),
+        0x0F | 0x10 | 0x11 | 0x12 | 0x13 => Box::new(CartridgeMBC3::new(cart)),
+        0x19 | 0x1A | 0x1B | 0x1C | 0x1D | 0x1E => Box::new(CartridgeMBC5::new(cart)),
         _ => panic!("Cartridge type {:x} not implemented", cart_type),
     }
 }
