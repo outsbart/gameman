@@ -1,4 +1,4 @@
-extern crate sdl2;
+extern crate sdl3;
 extern crate gameman;
 
 use gameman::gameboy::Gameboy;
@@ -6,11 +6,11 @@ use gameman::keypad::Button;
 use gameman::sound::AUDIO_BUFFER_SIZE;
 use gameman::sound::SAMPLE_RATE;
 
-use sdl2::audio::AudioSpecDesired;
-use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
-use sdl2::pixels::PixelFormatEnum;
-use sdl2::rect::Rect;
+use sdl3::audio::{AudioFormat, AudioSpec};
+use sdl3::event::Event;
+use sdl3::keyboard::Keycode;
+use sdl3::pixels::PixelFormat;
+use sdl3::render::{FRect, ScaleMode};
 
 use std::{thread, time};
 
@@ -27,33 +27,33 @@ fn main() {
 
     let mut gameboy = Gameboy::new(rom_path.as_str());
 
-    let sdl = sdl2::init().unwrap();
+    let sdl = sdl3::init().unwrap();
     let video_subsystem = sdl.video().unwrap();
     let audio_subsystem = sdl.audio().unwrap();
 
-    let desired_spec = AudioSpecDesired {
-        freq: Some(SAMPLE_RATE as i32),
-        channels: Some(1),
-        samples: Some(AUDIO_BUFFER_SIZE as u16),
-    };
+    let spec = AudioSpec::new(Some(SAMPLE_RATE as i32), Some(1), Some(AudioFormat::s16_sys()));
 
-    let device = audio_subsystem
-        .open_queue::<i16, _>(None, &desired_spec)
+    let stream = audio_subsystem
+        .open_playback_device(&spec)
+        .unwrap()
+        .open_device_stream(Some(&spec))
         .unwrap();
+
+    stream.resume().unwrap();
 
     let window = video_subsystem
         .window("gameman", SCREEN_WIDTH, SCREEN_HEIGHT)
         .position_centered()
-        .opengl()
         .build()
         .unwrap();
 
-    let mut canvas = window.into_canvas().build().unwrap();
+    let mut canvas = window.into_canvas();
     let texture_creator = canvas.texture_creator();
 
     let mut texture = texture_creator
-        .create_texture_streaming(PixelFormatEnum::RGB24, 160, 144)
+        .create_texture_streaming(PixelFormat::RGB24, 160, 144)
         .unwrap();
+    texture.set_scale_mode(ScaleMode::Nearest);
 
     let mut last_ticks = time::Instant::now();
     let mut pause = false;
@@ -160,17 +160,16 @@ fn main() {
             .unwrap();
 
         canvas
-            .copy(&texture, None, Some(Rect::new(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)))
+            .copy(&texture, None, FRect::new(0.0, 0.0, SCREEN_WIDTH as f32, SCREEN_HEIGHT as f32))
             .unwrap();
 
         canvas.present();
 
         if let Some(audio_buffer) = gameboy.get_audio_buffer() {
-            while device.size() > AUDIO_BUFFER_SIZE as u32 {
+            while stream.queued_bytes().unwrap() > AUDIO_BUFFER_SIZE as i32 * 2 {
                 thread::sleep(time::Duration::from_millis(1));
             }
-            let _ = device.queue_audio(&audio_buffer[0..]);
-            device.resume();
+            stream.put_data_i16(&audio_buffer[0..]).unwrap();
         }
 
         let ticks = time::Instant::now();
