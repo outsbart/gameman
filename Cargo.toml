@@ -1,3 +1,6 @@
+[workspace]
+members = [".", "gameman-libretro"]
+
 [package]
 name = "gameman"
 version = "0.1.0"

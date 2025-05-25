@@ -67,6 +67,10 @@ impl Gameboy {
         self.cpu.mmu.sound.get_audio_buffer()
     }
 
+    pub fn drain_audio(&mut self) -> Vec<i16> {
+        self.cpu.mmu.sound.drain_audio()
+    }
+
     pub fn press_button(&mut self, button: Button) {
         self.cpu.mmu.key.press(button);
         self.request_keypad_interrupt();

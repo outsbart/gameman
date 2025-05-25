@@ -358,6 +358,20 @@ impl OutputBuffer {
         self.audio_available = false;
         Some(&self.buffer_2)
     }
+
+    // drain all accumulated samples (complete buffer + partial), applying VOLUME_BOOST
+    pub fn drain_all(&mut self) -> Vec<i16> {
+        let mut out = Vec::new();
+        if self.audio_available {
+            out.extend_from_slice(&self.buffer_2);
+            self.audio_available = false;
+        }
+        for i in 0..self.buffer_index {
+            out.push(self.buffer[i] * VOLUME_BOOST as i16);
+        }
+        self.buffer_index = 0;
+        out
+    }
 }
 
 impl Default for OutputBuffer {
@@ -454,6 +468,10 @@ impl Sound {
 
     pub fn get_audio_buffer(&mut self) -> Option<&[AudioOutType; AUDIO_BUFFER_SIZE]> {
         self.left_sound_output.out_buffer.get_audio_buffer()
+    }
+
+    pub fn drain_audio(&mut self) -> Vec<i16> {
+        self.left_sound_output.out_buffer.drain_all()
     }
 
     // Square channel 1 sweep

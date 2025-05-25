@@ -1,0 +1,12 @@
+[package]
+name = "gameman-libretro"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "gameman_libretro"
+crate-type = ["cdylib"]
+
+[dependencies]
+gameman = { path = "..", default-features = false }
+libretro-backend = "0.2"
