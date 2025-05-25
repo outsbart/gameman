@@ -4,7 +4,6 @@ use crate::cartridge::load_rom;
 use crate::cpu::CPU;
 use crate::gpu::GPU;
 use crate::mem::{MMU, Memory};
-use crate::sound::AUDIO_BUFFER_SIZE;
 use crate::utils::load_boot_rom;
 
 const CLOCKS_IN_A_FRAME: u32 = 70224;
@@ -61,10 +60,6 @@ impl Gameboy {
 
     pub fn get_framebuffer(&self) -> &[u8; 160 * 144] {
         self.cpu.mmu.gpu.get_buffer()
-    }
-
-    pub fn get_audio_buffer(&mut self) -> Option<&[i16; AUDIO_BUFFER_SIZE]> {
-        self.cpu.mmu.sound.get_audio_buffer()
     }
 
     pub fn drain_audio(&mut self) -> Vec<i16> {

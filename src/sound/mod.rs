@@ -350,15 +350,6 @@ impl OutputBuffer {
         }
     }
 
-    // return the audio_buffer if it is filled
-    pub fn get_audio_buffer(&mut self) -> Option<&[AudioOutType; AUDIO_BUFFER_SIZE]> {
-        if !self.audio_available {
-            return None;
-        }
-        self.audio_available = false;
-        Some(&self.buffer_2)
-    }
-
     // drain all accumulated samples (complete buffer + partial), applying VOLUME_BOOST
     pub fn drain_all(&mut self) -> Vec<i16> {
         let mut out = Vec::new();
@@ -464,10 +455,6 @@ impl Sound {
 
         self.left_sound_output.receive(channel_outputs);
         // todo: what about right sound output?
-    }
-
-    pub fn get_audio_buffer(&mut self) -> Option<&[AudioOutType; AUDIO_BUFFER_SIZE]> {
-        self.left_sound_output.out_buffer.get_audio_buffer()
     }
 
     pub fn drain_audio(&mut self) -> Vec<i16> {

@@ -17,8 +17,8 @@ use std::{thread, time};
 const SCREEN_SIZE_MULTIPLIER: u32 = 3;
 const SCREEN_WIDTH: u32 = 160 * SCREEN_SIZE_MULTIPLIER;
 const SCREEN_HEIGHT: u32 = 144 * SCREEN_SIZE_MULTIPLIER;
-const FPS: u32 = 60;
-const DELAY_EVERY_FRAME: u32 = 1000 / FPS;
+const FPS: u64 = 60;
+const FRAME_DURATION: time::Duration = time::Duration::from_nanos(1_000_000_000 / FPS);
 
 fn main() {
     let rom_path = std::env::args()
@@ -55,7 +55,8 @@ fn main() {
         .unwrap();
     texture.set_scale_mode(ScaleMode::Nearest);
 
-    let mut last_ticks = time::Instant::now();
+    let mut pending_audio: Vec<i16> = Vec::new();
+    let mut next_frame = time::Instant::now();
     let mut pause = false;
 
     let mut event_pump = sdl.event_pump().unwrap();
@@ -165,22 +166,16 @@ fn main() {
 
         canvas.present();
 
-        if let Some(audio_buffer) = gameboy.get_audio_buffer() {
-            while stream.queued_bytes().unwrap() > AUDIO_BUFFER_SIZE as i32 * 2 {
-                thread::sleep(time::Duration::from_millis(1));
-            }
-            stream.put_data_i16(&audio_buffer[0..]).unwrap();
+        pending_audio.extend(gameboy.drain_audio());
+        while pending_audio.len() >= AUDIO_BUFFER_SIZE {
+            stream.put_data_i16(&pending_audio[..AUDIO_BUFFER_SIZE]).unwrap();
+            pending_audio.drain(..AUDIO_BUFFER_SIZE);
         }
 
-        let ticks = time::Instant::now();
-        let time_passed = (ticks - last_ticks).as_millis() as u32;
-
-        if time_passed < DELAY_EVERY_FRAME {
-            thread::sleep(time::Duration::from_millis(
-                (DELAY_EVERY_FRAME - time_passed) as u64,
-            ));
+        next_frame += FRAME_DURATION;
+        let now = time::Instant::now();
+        if now < next_frame {
+            thread::sleep(next_frame - now);
         }
-
-        last_ticks = ticks;
     }
 }
