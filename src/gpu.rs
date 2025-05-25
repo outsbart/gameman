@@ -680,22 +680,68 @@ impl GPU {
         lyc_source || mode_sources
     }
 
-    fn count_scanline_sprites(&self) -> u16 {
+    fn collect_scanline_sprite_xs(&self) -> ([u8; 10], usize) {
+        let mut xs = [0u8; 10];
+        let mut count = 0usize;
         if !self.obj_enabled {
-            return 0;
+            return (xs, 0);
         }
         let sprite_height: u8 = if self.obj_size { 16 } else { 8 };
-        let mut count = 0u16;
         for i in 0..40usize {
             let y = self.oam[i * 4].wrapping_sub(16);
             if self.line.wrapping_sub(y) < sprite_height {
-                count += 1;
-                if count >= 10 {
-                    break;
+                let x = self.oam[i * 4 + 1];
+                if x < 168 {
+                    xs[count] = x;
+                    count += 1;
+                    if count >= 10 {
+                        break;
+                    }
                 }
             }
         }
-        count
+        (xs, count)
+    }
+
+    fn advance_fetcher_step(fs: &mut u8, fifo: &mut u8) {
+        if *fs == 6 {
+            // PUSH state is sticky: only transitions when fifo is empty
+            if *fifo == 0 {
+                *fifo = 8;
+                *fs = 0;
+            }
+        } else {
+            *fs += 1;
+            if *fs == 6 && *fifo == 0 {
+                *fifo = 8;
+                *fs = 0;
+            }
+        }
+    }
+
+    fn compute_mode3_sprite_penalty(xs: &[u8]) -> u16 {
+        let mut total: u16 = 0;
+        let mut buckets = [0i16; 22]; // covers x 0..=167 → bucket 0..=20
+
+        for &x in xs {
+            if x >= 168 {
+                continue;
+            }
+            let bucket = (x >> 3) as usize;
+            let alignment_penalty = 5i16 - (x & 7) as i16;
+            if alignment_penalty > buckets[bucket] {
+                buckets[bucket] = alignment_penalty;
+            }
+            total += 6;
+        }
+
+        for &b in &buckets {
+            if b > 0 {
+                total += b as u16;
+            }
+        }
+
+        total & !3 // round down to nearest multiple of 4 → T-cycles
     }
 
     // go forward based on the cpu's last operation clocks
@@ -724,7 +770,8 @@ impl GPU {
                     self.modeclock = 0;
                     self.mode = 3;
                     self.accessed_oam_row = 0xFF;
-                    self.mode3_extra = self.count_scanline_sprites() * 11;
+                    let (xs, count) = self.collect_scanline_sprite_xs();
+                    self.mode3_extra = Self::compute_mode3_sprite_penalty(&xs[..count]);
                 }
             }
             // scanline, vram read mode

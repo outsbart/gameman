@@ -156,7 +156,8 @@ impl Gameboy {
             frames += 1;
 
             if ld_b_b > 1 {
-                return self.cpu.get_registry_value("B") == 3;
+                let b = self.cpu.get_registry_value("B");
+                return b == 3;
             }
 
             if frames > 500 {
