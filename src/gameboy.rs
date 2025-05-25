@@ -20,12 +20,6 @@ impl Gameboy {
         Gameboy { cpu }
     }
 
-    pub fn new_clean(path: &str) -> Gameboy {
-        let sav_path = path.replacen(".gb", ".sav", 1);
-        let _ = std::fs::remove_file(&sav_path);
-        Self::new(path)
-    }
-
     pub fn load_bios(&mut self) {
         self.cpu.mmu.set_bios(load_boot_rom());
         self.cpu.set_registry_value("PC", 0);
@@ -79,86 +73,12 @@ impl Gameboy {
         self.cpu.mmu.read_byte(addr)
     }
 
-    pub fn passes_test_rom(&mut self) -> bool {
-        loop {
-            self.step();
-
-            let outbuffer = self.cpu.mmu.link.get_buffer();
-            if outbuffer[0] != ' ' {
-                let result: String = outbuffer.iter().collect();
-                let passed: bool = result.contains("Passed");
-                let failed: bool = result.contains("Failed");
-                if passed {
-                    return passed;
-                }
-                if failed {
-                    return false;
-                }
-            }
-        }
+    pub fn get_link_buffer(&self) -> [char; 256] {
+        self.cpu.mmu.link.get_buffer()
     }
 
-    pub fn mooneye_step(&mut self) -> u8 {
-        let mut clocks_this_frame = 0u32;
-
-        // how many time was LD B,B executed?
-        let mut ld_b_b: u8 = 0;
-
-        loop {
-            let (_line, opcode, t) = self.cpu_step();
-
-            if opcode == 0x40 {
-                ld_b_b += 1;
-            }
-
-            clocks_this_frame += t as u32;
-
-            if clocks_this_frame >= CLOCKS_IN_A_FRAME {
-                break;
-            }
-        }
-
-        ld_b_b
-    }
-
-    pub fn passes_blargg_ram_test_rom(&mut self) -> bool {
-        self.blargg_ram_test_result().map_or(false, |v| v == 0)
-    }
-
-    pub fn blargg_ram_test_result(&mut self) -> Option<u8> {
-        let mut clocks = 0u32;
-        loop {
-            let (_line, _opcode, t) = self.cpu_step();
-            clocks += t as u32;
-            let val = self.cpu.mmu.read_byte(0xA000);
-            match val {
-                0x80 | 0xFF => {}
-                v => return Some(v),
-            }
-            if clocks >= 3600 * 70224 {
-                break;
-            }
-        }
-        None
-    }
-
-    pub fn passes_mooneye_test_rom(&mut self) -> bool {
-        let mut ld_b_b = 0;
-        let mut frames = 0u32;
-
-        loop {
-            ld_b_b += self.mooneye_step();
-            frames += 1;
-
-            if ld_b_b > 1 {
-                let b = self.cpu.get_registry_value("B");
-                return b == 3;
-            }
-
-            if frames > 500 {
-                return false;
-            }
-        }
+    pub fn get_cpu_register(&mut self, name: &str) -> u16 {
+        self.cpu.get_registry_value(name)
     }
 
     fn request_keypad_interrupt(&mut self) {
