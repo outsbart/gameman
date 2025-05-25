@@ -703,22 +703,6 @@ impl GPU {
         (xs, count)
     }
 
-    fn advance_fetcher_step(fs: &mut u8, fifo: &mut u8) {
-        if *fs == 6 {
-            // PUSH state is sticky: only transitions when fifo is empty
-            if *fifo == 0 {
-                *fifo = 8;
-                *fs = 0;
-            }
-        } else {
-            *fs += 1;
-            if *fs == 6 && *fifo == 0 {
-                *fifo = 8;
-                *fs = 0;
-            }
-        }
-    }
-
     fn compute_mode3_sprite_penalty(xs: &[u8]) -> u16 {
         let mut total: u16 = 0;
         let mut buckets = [0i16; 22]; // covers x 0..=167 → bucket 0..=20
