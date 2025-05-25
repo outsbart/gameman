@@ -21,11 +21,13 @@ blargg's cpu_instrs, instr_timing, mem_timing, dmg_sound test ROMs are passing.
 
 
 
+## Cartridge support
+
+Supported: ROM only, MBC1, MBC2, MBC3, MBC5 (rumble silently ignored).
+
 ## TODO
-- Fix sprite rendering priority
 - Save states
 - Refactor, refactor and refactor code
-- Extend cartridge types support
 - Gameboy Color support?
 
 

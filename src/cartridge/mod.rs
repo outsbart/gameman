@@ -90,6 +90,15 @@ impl Cartridge {
         Ok(file)
     }
 
+    pub fn update_ram_enabled(&mut self, enabled: bool) -> io::Result<()> {
+        let was_enabled = self.ram_enabled;
+        self.ram_enabled = enabled;
+        if was_enabled && !self.ram_enabled {
+            self.save()?;
+        }
+        Ok(())
+    }
+
     pub fn save(&mut self) -> io::Result<()> {
         if self.ram_dirty {
             if let Some(file) = self.save_file.as_mut() {
@@ -124,7 +133,10 @@ pub trait CartridgeAccess {
 
         let abs_addr = match addr & 0xF000 {
             0x0000 | 0x1000 | 0x2000 | 0x3000 => addr as usize,
-            0x4000 | 0x5000 | 0x6000 | 0x7000 => self.rom_offset() + (addr & 0x3FFF) as usize,
+            0x4000 | 0x5000 | 0x6000 | 0x7000 => {
+                let num_banks = cartridge.rom.len() / ROM_BANK_SIZE;
+                (cartridge.rom_bank as usize & (num_banks - 1)) * ROM_BANK_SIZE + (addr & 0x3FFF) as usize
+            }
             _ => panic!("Unhandled ROM MBC read at addr {:x}", addr),
         };
 
