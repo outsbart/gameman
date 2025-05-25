@@ -1,11 +1,187 @@
+extern crate sdl2;
 extern crate gameman;
 
 use gameman::gameboy::Gameboy;
+use gameman::keypad::Button;
+use gameman::sound::AUDIO_BUFFER_SIZE;
+use gameman::sound::SAMPLE_RATE;
+
+use sdl2::audio::AudioSpecDesired;
+use sdl2::event::Event;
+use sdl2::keyboard::Keycode;
+use sdl2::pixels::PixelFormatEnum;
+use sdl2::rect::Rect;
+
+use std::{thread, time};
+
+const SCREEN_SIZE_MULTIPLIER: u32 = 3;
+const SCREEN_WIDTH: u32 = 160 * SCREEN_SIZE_MULTIPLIER;
+const SCREEN_HEIGHT: u32 = 144 * SCREEN_SIZE_MULTIPLIER;
+const FPS: u32 = 60;
+const DELAY_EVERY_FRAME: u32 = 1000 / FPS;
 
 fn main() {
     let rom_path = std::env::args()
         .nth(1)
         .expect("no gb rom file given. Usage: cargo run <rom file>");
+
     let mut gameboy = Gameboy::new(rom_path.as_str());
-    gameboy.run();
+
+    let sdl = sdl2::init().unwrap();
+    let video_subsystem = sdl.video().unwrap();
+    let audio_subsystem = sdl.audio().unwrap();
+
+    let desired_spec = AudioSpecDesired {
+        freq: Some(SAMPLE_RATE as i32),
+        channels: Some(1),
+        samples: Some(AUDIO_BUFFER_SIZE as u16),
+    };
+
+    let device = audio_subsystem
+        .open_queue::<i16, _>(None, &desired_spec)
+        .unwrap();
+
+    let window = video_subsystem
+        .window("gameman", SCREEN_WIDTH, SCREEN_HEIGHT)
+        .position_centered()
+        .opengl()
+        .build()
+        .unwrap();
+
+    let mut canvas = window.into_canvas().build().unwrap();
+    let texture_creator = canvas.texture_creator();
+
+    let mut texture = texture_creator
+        .create_texture_streaming(PixelFormatEnum::RGB24, 160, 144)
+        .unwrap();
+
+    let mut last_ticks = time::Instant::now();
+    let mut pause = false;
+
+    let mut event_pump = sdl.event_pump().unwrap();
+
+    'running: loop {
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit { .. }
+                | Event::KeyDown { keycode: Some(Keycode::Q), .. }
+                | Event::KeyDown { keycode: Some(Keycode::Escape), .. } => break 'running,
+                Event::KeyDown { keycode: Some(Keycode::Space), .. } => {
+                    pause ^= true;
+                }
+                Event::KeyDown { keycode: Some(Keycode::N), .. } => {
+                    gameboy.step();
+                }
+                Event::KeyDown { keycode: Some(Keycode::Z), .. } => {
+                    gameboy.press_button(Button::A);
+                }
+                Event::KeyDown { keycode: Some(Keycode::X), .. } => {
+                    gameboy.press_button(Button::B);
+                }
+                Event::KeyDown { keycode: Some(Keycode::A), .. } => {
+                    gameboy.press_button(Button::SELECT);
+                }
+                Event::KeyDown { keycode: Some(Keycode::S), .. } => {
+                    gameboy.press_button(Button::START);
+                }
+                Event::KeyDown { keycode: Some(Keycode::Down), .. } => {
+                    gameboy.press_button(Button::DOWN);
+                }
+                Event::KeyDown { keycode: Some(Keycode::Up), .. } => {
+                    gameboy.press_button(Button::UP);
+                }
+                Event::KeyDown { keycode: Some(Keycode::Left), .. } => {
+                    gameboy.press_button(Button::LEFT);
+                }
+                Event::KeyDown { keycode: Some(Keycode::Right), .. } => {
+                    gameboy.press_button(Button::RIGHT);
+                }
+                Event::KeyUp { keycode: Some(Keycode::Z), .. } => {
+                    gameboy.release_button(Button::A);
+                }
+                Event::KeyUp { keycode: Some(Keycode::X), .. } => {
+                    gameboy.release_button(Button::B);
+                }
+                Event::KeyUp { keycode: Some(Keycode::A), .. } => {
+                    gameboy.release_button(Button::SELECT);
+                }
+                Event::KeyUp { keycode: Some(Keycode::S), .. } => {
+                    gameboy.release_button(Button::START);
+                }
+                Event::KeyUp { keycode: Some(Keycode::Down), .. } => {
+                    gameboy.release_button(Button::DOWN);
+                }
+                Event::KeyUp { keycode: Some(Keycode::Up), .. } => {
+                    gameboy.release_button(Button::UP);
+                }
+                Event::KeyUp { keycode: Some(Keycode::Left), .. } => {
+                    gameboy.release_button(Button::LEFT);
+                }
+                Event::KeyUp { keycode: Some(Keycode::Right), .. } => {
+                    gameboy.release_button(Button::RIGHT);
+                }
+                _ => {}
+            }
+        }
+
+        if pause {
+            continue;
+        }
+
+        gameboy.step();
+
+        canvas.clear();
+
+        texture
+            .with_lock(None, |buffer: &mut [u8], pitch: usize| {
+                let gpu_buffer = gameboy.get_framebuffer();
+
+                for y in 0..144 {
+                    for x in 0..160 {
+                        let pixel = gpu_buffer[x + y * 160];
+
+                        let (r, g, b): (u8, u8, u8) = match pixel {
+                            0b00 => (0xc4, 0xf0, 0xc2),
+                            0b01 => (0x5a, 0xb9, 0xa8),
+                            0b10 => (0x1e, 0x60, 0x6e),
+                            0b11 => (0x2d, 0x1b, 0x00),
+                            _ => panic!("unexpected pixel color"),
+                        };
+
+                        let x_out = x * 3;
+                        let y_out = y * pitch;
+
+                        buffer[x_out + y_out] = r;
+                        buffer[x_out + y_out + 1] = g;
+                        buffer[x_out + y_out + 2] = b;
+                    }
+                }
+            })
+            .unwrap();
+
+        canvas
+            .copy(&texture, None, Some(Rect::new(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)))
+            .unwrap();
+
+        canvas.present();
+
+        if let Some(audio_buffer) = gameboy.get_audio_buffer() {
+            while device.size() > AUDIO_BUFFER_SIZE as u32 {
+                thread::sleep(time::Duration::from_millis(1));
+            }
+            let _ = device.queue_audio(&audio_buffer[0..]);
+            device.resume();
+        }
+
+        let ticks = time::Instant::now();
+        let time_passed = (ticks - last_ticks).as_millis() as u32;
+
+        if time_passed < DELAY_EVERY_FRAME {
+            thread::sleep(time::Duration::from_millis(
+                (DELAY_EVERY_FRAME - time_passed) as u64,
+            ));
+        }
+
+        last_ticks = ticks;
+    }
 }

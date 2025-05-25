@@ -3,6 +3,7 @@ pub struct Key {
     column: u8,
 }
 
+#[derive(Clone, Copy)]
 pub enum Button {
     DOWN,
     UP,
