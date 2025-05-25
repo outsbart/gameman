@@ -24,6 +24,7 @@ pub struct Cartridge {
 
     ram_size: usize,
     ram_enabled: bool,
+    ram_dirty: bool,
     rom_bank: u16,
     ram_bank: u8,
     mode: u8,
@@ -39,6 +40,7 @@ impl Cartridge {
             ram: Vec::new(),
             ram_size,
             ram_enabled: false,
+            ram_dirty: false,
             rom_bank: 1,
             ram_bank: 0,
             mode: 0,
@@ -77,9 +79,7 @@ impl Cartridge {
         let expected_file_size = self.ram_size as u64;
 
         if file_size == 0 {
-            println!("Save file not found, creating one");
             self.ram = vec![0; self.ram_size];
-            self.save()?
         } else if file_size != expected_file_size {
             panic!("Save file has unexpected size");
         } else {
@@ -90,31 +90,25 @@ impl Cartridge {
         Ok(file)
     }
 
-    fn save(&mut self) -> io::Result<()> {
-        if let Some(file) = self.save_file.as_mut() {
-            println!("Saving game");
-            file.seek(SeekFrom::Start(0))?;
-            file.write_all(&self.ram)?;
+    pub fn save(&mut self) -> io::Result<()> {
+        if self.ram_dirty {
+            if let Some(file) = self.save_file.as_mut() {
+                file.seek(SeekFrom::Start(0))?;
+                file.write_all(&self.ram)?;
+                self.ram_dirty = false;
+            }
         }
         Ok(())
-    }
-}
-
-impl Drop for Cartridge {
-    fn drop(&mut self) {
-        // TODO: dont save when closing
-        match self.save() {
-            Ok(()) => {}
-            Err(e) => {
-                println!("Error updating save file: {}", e)
-            }
-        };
     }
 }
 
 pub trait CartridgeAccess {
     fn cartridge(&self) -> &Cartridge;
     fn cartridge_mut(&mut self) -> &mut Cartridge;
+
+    fn save(&mut self) -> io::Result<()> {
+        self.cartridge_mut().save()
+    }
 
     fn ram_offset(&self) -> usize {
         let cartridge = self.cartridge();
@@ -162,6 +156,7 @@ pub trait CartridgeAccess {
             return;
         }
         cartridge.ram[ram_offset + addr as usize] = byte;
+        cartridge.ram_dirty = true;
     }
 }
 

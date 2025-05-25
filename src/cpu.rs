@@ -38,9 +38,8 @@ const REG_M: u16 = 12;
 const REG_T: u16 = 13;
 
 pub struct Clocks {
-    // todo: remove pub
     m: u32,
-    pub t: u32, // TODO: remove pub
+    t: u32,
 }
 
 impl Clocks {

@@ -24,11 +24,14 @@ impl CartridgeAccess for CartridgeMBC3 {
 
     fn write_rom(&mut self, addr: u16, byte: u8) {
         let cartridge = self.cartridge_mut();
+        let mut should_save = false;
 
         match addr & 0xF000 {
             0x0000 | 0x1000 => {
                 // enable eram and timer
+                let was_enabled = self.ram_and_timer_enabled;
                 self.ram_and_timer_enabled = byte == 0x0A;
+                should_save = was_enabled && !self.ram_and_timer_enabled;
             }
             0x2000 | 0x3000 => {
                 // change rom bank
@@ -50,6 +53,11 @@ impl CartridgeAccess for CartridgeMBC3 {
             }
             _ => panic!("Unhandled rom write at addr 0x{:x}", addr),
         };
+        if should_save {
+            if let Err(e) = self.cart.save() {
+                println!("Error saving: {}", e);
+            }
+        }
     }
 
     fn read_ram(&self, addr: u16) -> u8 {
@@ -81,5 +89,6 @@ impl CartridgeAccess for CartridgeMBC3 {
             return;
         }
         cartridge.ram[ram_offset + addr as usize] = byte;
+        cartridge.ram_dirty = true;
     }
 }

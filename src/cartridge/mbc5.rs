@@ -36,11 +36,14 @@ impl CartridgeAccess for CartridgeMBC5 {
 
     fn write_rom(&mut self, addr: u16, byte: u8) {
         let cartridge = self.cartridge_mut();
+        let mut should_save = false;
 
         match addr & 0xF000 {
             0x0000 | 0x1000 => {
                 // enable eram
+                let was_enabled = cartridge.ram_enabled;
                 cartridge.ram_enabled = byte == 0x0A;
+                should_save = was_enabled && !cartridge.ram_enabled;
             }
             0x2000 => {
                 // receive low bits of rom bank number
@@ -57,5 +60,10 @@ impl CartridgeAccess for CartridgeMBC5 {
             0x6000 | 0x7000 => {}
             _ => panic!("Unhandled rom write at addr 0x{:x}", addr),
         };
+        if should_save {
+            if let Err(e) = self.cart.save() {
+                println!("Error saving: {}", e);
+            }
+        }
     }
 }

@@ -40,15 +40,23 @@ impl CartridgeAccess for CartridgeMBC2 {
         }
 
         let cartridge = self.cartridge_mut();
+        let mut should_save = false;
 
         if addr & 0x0100 == 0 {
+            let was_enabled = cartridge.ram_enabled;
             cartridge.ram_enabled = byte & 0x0F == 0x0A;
+            should_save = was_enabled && !cartridge.ram_enabled;
         } else {
             let mut bank = byte & 0x0F;
             if bank == 0 {
                 bank = 1;
             }
             cartridge.rom_bank = bank as u16;
+        }
+        if should_save {
+            if let Err(e) = self.cart.save() {
+                println!("Error saving: {}", e);
+            }
         }
     }
 
@@ -70,5 +78,6 @@ impl CartridgeAccess for CartridgeMBC2 {
         }
 
         cartridge.ram[(addr & 0x01FF) as usize] = byte & 0x0F;
+        cartridge.ram_dirty = true;
     }
 }

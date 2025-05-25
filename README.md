@@ -15,16 +15,14 @@ Audio works, but needs more testing on different platforms.
 
 ## Accuracy
 
-Accuracy is currently at instruction level.
+The emulator is machine-cycle accurate. Each instruction fires M-cycle ticks after every individual memory access and internal pipeline stage, keeping all components (GPU, timers, APU) synchronized at M-cycle granularity.
 
-blargg's cpu_instrs, instrs_timing, dmg_sound test roms are passing.
+blargg's cpu_instrs, instr_timing, mem_timing, dmg_sound test ROMs are passing.
 
 
 
 ## TODO
 - Fix sprite rendering priority
-- Machine cycle accuracy
-- Properly abstract emulation code to easily allow other frontends integration
 - Save states
 - Refactor, refactor and refactor code
 - Extend cartridge types support
@@ -32,7 +30,7 @@ blargg's cpu_instrs, instrs_timing, dmg_sound test roms are passing.
 
 
 ## Dependencies
-At the moment, SDL2 is required for sound, input and rendering.
+At the moment, SDL3 is required for sound, input and rendering.
 
 
 ## How to run

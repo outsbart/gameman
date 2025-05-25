@@ -47,9 +47,12 @@ impl CartridgeAccess for CartridgeMBC1Multicart {
     fn write_rom(&mut self, addr: u16, byte: u8) {
         // Writes are identical to standard MBC1; only the read mapping differs.
         let cartridge = self.cartridge_mut();
+        let mut should_save = false;
         match addr & 0xF000 {
             0x0000 | 0x1000 => {
+                let was_enabled = cartridge.ram_enabled;
                 cartridge.ram_enabled = byte & 0x0F == 0x0A;
+                should_save = was_enabled && !cartridge.ram_enabled;
             }
             0x2000 | 0x3000 => {
                 let mut val: u8 = byte & 0x1F;
@@ -68,6 +71,11 @@ impl CartridgeAccess for CartridgeMBC1Multicart {
                 cartridge.mode = byte & 1;
             }
             _ => panic!("Unhandled ROM write at addr 0x{:x}", addr),
+        }
+        if should_save {
+            if let Err(e) = self.cart.save() {
+                println!("Error saving: {}", e);
+            }
         }
     }
 }
@@ -122,11 +130,14 @@ impl CartridgeAccess for CartridgeMBC1 {
 
     fn write_rom(&mut self, addr: u16, byte: u8) {
         let cartridge = self.cartridge_mut();
+        let mut should_save = false;
 
         match addr & 0xF000 {
             0x0000 | 0x1000 => {
                 // enable eram
+                let was_enabled = cartridge.ram_enabled;
                 cartridge.ram_enabled = byte & 0x0F == 0x0A;
+                should_save = was_enabled && !cartridge.ram_enabled;
             }
             0x2000 | 0x3000 => {
                 // change rom bank
@@ -149,5 +160,10 @@ impl CartridgeAccess for CartridgeMBC1 {
             }
             _ => panic!("Unhandled rom write at addr 0x{:x}", addr),
         };
+        if should_save {
+            if let Err(e) = self.cart.save() {
+                println!("Error saving: {}", e);
+            }
+        }
     }
 }
