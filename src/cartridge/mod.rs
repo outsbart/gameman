@@ -109,66 +109,79 @@ impl Cartridge {
         }
         Ok(())
     }
-}
 
-pub trait CartridgeAccess {
-    fn cartridge(&self) -> &Cartridge;
-    fn cartridge_mut(&mut self) -> &mut Cartridge;
-
-    fn save(&mut self) -> io::Result<()> {
-        self.cartridge_mut().save()
-    }
-
-    fn ram_offset(&self) -> usize {
-        let cartridge = self.cartridge();
-        cartridge.ram_bank as usize * RAM_BANK_SIZE
-    }
-    fn rom_offset(&self) -> usize {
-        let cartridge = self.cartridge();
-        cartridge.rom_bank as usize * ROM_BANK_SIZE
-    }
-
-    fn read_rom(&self, addr: u16) -> u8 {
-        let cartridge = self.cartridge();
-
+    pub fn read_rom(&self, addr: u16) -> u8 {
         let abs_addr = match addr & 0xF000 {
             0x0000 | 0x1000 | 0x2000 | 0x3000 => addr as usize,
             0x4000 | 0x5000 | 0x6000 | 0x7000 => {
-                let num_banks = cartridge.rom.len() / ROM_BANK_SIZE;
-                (cartridge.rom_bank as usize & (num_banks - 1)) * ROM_BANK_SIZE + (addr & 0x3FFF) as usize
+                let num_banks = self.rom.len() / ROM_BANK_SIZE;
+                (self.rom_bank as usize & (num_banks - 1)) * ROM_BANK_SIZE + (addr & 0x3FFF) as usize
             }
             _ => panic!("Unhandled ROM MBC read at addr {:x}", addr),
         };
-
-        if abs_addr < cartridge.rom.len() {
-            cartridge.rom[abs_addr]
+        if abs_addr < self.rom.len() {
+            self.rom[abs_addr]
         } else {
             0
         }
     }
 
-    fn write_rom(&mut self, addr: u16, byte: u8);
-
-    fn read_ram(&self, addr: u16) -> u8 {
-        let cartridge = self.cartridge();
-
-        if cartridge.ram.is_empty() || !cartridge.ram_enabled {
+    pub fn read_ram(&self, addr: u16) -> u8 {
+        let offset = self.ram_bank as usize * RAM_BANK_SIZE;
+        if self.ram.is_empty() || !self.ram_enabled {
             0xFF
         } else {
-            cartridge.ram[self.ram_offset() + addr as usize]
+            self.ram[offset + addr as usize]
         }
     }
 
-    fn write_ram(&mut self, addr: u16, byte: u8) {
-        let ram_offset = self.ram_offset();
-
-        let cartridge = self.cartridge_mut();
-
-        if cartridge.ram.is_empty() || !cartridge.ram_enabled {
+    pub fn write_ram(&mut self, addr: u16, byte: u8) {
+        let offset = self.ram_bank as usize * RAM_BANK_SIZE;
+        if self.ram.is_empty() || !self.ram_enabled {
             return;
         }
-        cartridge.ram[ram_offset + addr as usize] = byte;
-        cartridge.ram_dirty = true;
+        self.ram[offset + addr as usize] = byte;
+        self.ram_dirty = true;
+    }
+}
+
+macro_rules! dispatch_cartridge {
+    ($self:expr, $method:ident ( $($arg:expr),* )) => {
+        match $self {
+            CartridgeKind::NoMBC(c) => c.$method($($arg),*),
+            CartridgeKind::MBC1(c) => c.$method($($arg),*),
+            CartridgeKind::MBC1Multicart(c) => c.$method($($arg),*),
+            CartridgeKind::MBC2(c) => c.$method($($arg),*),
+            CartridgeKind::MBC3(c) => c.$method($($arg),*),
+            CartridgeKind::MBC5(c) => c.$method($($arg),*),
+        }
+    };
+}
+
+pub enum CartridgeKind {
+    NoMBC(CartridgeNoMBC),
+    MBC1(CartridgeMBC1),
+    MBC1Multicart(CartridgeMBC1Multicart),
+    MBC2(CartridgeMBC2),
+    MBC3(CartridgeMBC3),
+    MBC5(CartridgeMBC5),
+}
+
+impl CartridgeKind {
+    pub fn read_rom(&self, addr: u16) -> u8 {
+        dispatch_cartridge!(self, read_rom(addr))
+    }
+    pub fn write_rom(&mut self, addr: u16, byte: u8) {
+        dispatch_cartridge!(self, write_rom(addr, byte))
+    }
+    pub fn read_ram(&self, addr: u16) -> u8 {
+        dispatch_cartridge!(self, read_ram(addr))
+    }
+    pub fn write_ram(&mut self, addr: u16, byte: u8) {
+        dispatch_cartridge!(self, write_ram(addr, byte))
+    }
+    pub fn save(&mut self) -> io::Result<()> {
+        dispatch_cartridge!(self, save())
     }
 }
 
@@ -186,7 +199,7 @@ fn is_mbc1_multicart(rom: &[u8]) -> bool {
     })
 }
 
-pub fn load_rom(path: &str) -> Box<dyn CartridgeAccess> {
+pub fn load_rom(path: &str) -> CartridgeKind {
     let mut rom: Vec<u8> = Vec::new();
 
     match File::open(path) {
@@ -224,17 +237,17 @@ pub fn load_rom(path: &str) -> Box<dyn CartridgeAccess> {
     let cart = Cartridge::new(PathBuf::from(path), rom, ram_size);
 
     match cart_type {
-        0 => Box::new(CartridgeNoMBC::new(cart)),
+        0 => CartridgeKind::NoMBC(CartridgeNoMBC::new(cart)),
         1 | 2 | 3 => {
             if multicart {
-                Box::new(CartridgeMBC1Multicart::new(cart))
+                CartridgeKind::MBC1Multicart(CartridgeMBC1Multicart::new(cart))
             } else {
-                Box::new(CartridgeMBC1::new(cart))
+                CartridgeKind::MBC1(CartridgeMBC1::new(cart))
             }
         }
-        0x05 | 0x06 => Box::new(CartridgeMBC2::new(cart)),
-        0x0F | 0x10 | 0x11 | 0x12 | 0x13 => Box::new(CartridgeMBC3::new(cart)),
-        0x19 | 0x1A | 0x1B | 0x1C | 0x1D | 0x1E => Box::new(CartridgeMBC5::new(cart)),
+        0x05 | 0x06 => CartridgeKind::MBC2(CartridgeMBC2::new(cart)),
+        0x0F | 0x10 | 0x11 | 0x12 | 0x13 => CartridgeKind::MBC3(CartridgeMBC3::new(cart)),
+        0x19 | 0x1A | 0x1B | 0x1C | 0x1D | 0x1E => CartridgeKind::MBC5(CartridgeMBC5::new(cart)),
         _ => panic!("Cartridge type {:x} not implemented", cart_type),
     }
 }

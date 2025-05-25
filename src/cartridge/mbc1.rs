@@ -1,4 +1,5 @@
-use crate::cartridge::{Cartridge, CartridgeAccess, RAM_BANK_SIZE, ROM_BANK_SIZE};
+use crate::cartridge::{Cartridge, RAM_BANK_SIZE, ROM_BANK_SIZE};
+use std::io;
 
 pub struct CartridgeMBC1Multicart {
     cart: Cartridge,
@@ -8,18 +9,9 @@ impl CartridgeMBC1Multicart {
     pub fn new(cart: Cartridge) -> Self {
         Self { cart }
     }
-}
 
-impl CartridgeAccess for CartridgeMBC1Multicart {
-    fn cartridge(&self) -> &Cartridge {
-        &self.cart
-    }
-    fn cartridge_mut(&mut self) -> &mut Cartridge {
-        &mut self.cart
-    }
-
-    fn read_rom(&self, addr: u16) -> u8 {
-        let cartridge = self.cartridge();
+    pub fn read_rom(&self, addr: u16) -> u8 {
+        let cartridge = &self.cart;
         let num_banks = cartridge.rom.len() / ROM_BANK_SIZE;
 
         // rom_bank uses same format as standard MBC1: bits[6:5]=secondary, bits[4:0]=primary (0→1 applied).
@@ -44,9 +36,9 @@ impl CartridgeAccess for CartridgeMBC1Multicart {
         cartridge.rom[bank * ROM_BANK_SIZE + (addr & 0x3FFF) as usize]
     }
 
-    fn write_rom(&mut self, addr: u16, byte: u8) {
+    pub fn write_rom(&mut self, addr: u16, byte: u8) {
         // Writes are identical to standard MBC1; only the read mapping differs.
-        let cartridge = self.cartridge_mut();
+        let cartridge = &mut self.cart;
         match addr & 0xF000 {
             0x0000 | 0x1000 => {
                 if let Err(e) = cartridge.update_ram_enabled(byte & 0x0F == 0x0A) {
@@ -72,6 +64,16 @@ impl CartridgeAccess for CartridgeMBC1Multicart {
             _ => panic!("Unhandled ROM write at addr 0x{:x}", addr),
         }
     }
+
+    pub fn read_ram(&self, addr: u16) -> u8 {
+        self.cart.read_ram(addr)
+    }
+    pub fn write_ram(&mut self, addr: u16, byte: u8) {
+        self.cart.write_ram(addr, byte)
+    }
+    pub fn save(&mut self) -> io::Result<()> {
+        self.cart.save()
+    }
 }
 
 pub struct CartridgeMBC1 {
@@ -82,27 +84,18 @@ impl CartridgeMBC1 {
     pub fn new(cart: Cartridge) -> Self {
         Self { cart }
     }
-}
-
-impl CartridgeAccess for CartridgeMBC1 {
-    fn cartridge(&self) -> &Cartridge {
-        &self.cart
-    }
-    fn cartridge_mut(&mut self) -> &mut Cartridge {
-        &mut self.cart
-    }
 
     fn ram_offset(&self) -> usize {
-        let cartridge = self.cartridge();
-        if cartridge.mode == 0 || cartridge.ram.is_empty() {
+        let cart = &self.cart;
+        if cart.mode == 0 || cart.ram.is_empty() {
             return 0;
         }
-        let num_ram_banks = cartridge.ram.len() / RAM_BANK_SIZE;
-        (cartridge.ram_bank as usize & (num_ram_banks - 1)) * RAM_BANK_SIZE
+        let num_ram_banks = cart.ram.len() / RAM_BANK_SIZE;
+        (cart.ram_bank as usize & (num_ram_banks - 1)) * RAM_BANK_SIZE
     }
 
-    fn read_rom(&self, addr: u16) -> u8 {
-        let cartridge = self.cartridge();
+    pub fn read_rom(&self, addr: u16) -> u8 {
+        let cartridge = &self.cart;
         let num_banks = cartridge.rom.len() / ROM_BANK_SIZE;
 
         let bank = match addr & 0xF000 {
@@ -122,8 +115,8 @@ impl CartridgeAccess for CartridgeMBC1 {
         cartridge.rom[bank * ROM_BANK_SIZE + (addr & 0x3FFF) as usize]
     }
 
-    fn write_rom(&mut self, addr: u16, byte: u8) {
-        let cartridge = self.cartridge_mut();
+    pub fn write_rom(&mut self, addr: u16, byte: u8) {
+        let cartridge = &mut self.cart;
 
         match addr & 0xF000 {
             0x0000 | 0x1000 => {
@@ -153,5 +146,27 @@ impl CartridgeAccess for CartridgeMBC1 {
             }
             _ => panic!("Unhandled rom write at addr 0x{:x}", addr),
         };
+    }
+
+    pub fn read_ram(&self, addr: u16) -> u8 {
+        let cart = &self.cart;
+        if cart.ram.is_empty() || !cart.ram_enabled {
+            return 0xFF;
+        }
+        cart.ram[self.ram_offset() + addr as usize]
+    }
+
+    pub fn write_ram(&mut self, addr: u16, byte: u8) {
+        let offset = self.ram_offset();
+        let cart = &mut self.cart;
+        if cart.ram.is_empty() || !cart.ram_enabled {
+            return;
+        }
+        cart.ram[offset + addr as usize] = byte;
+        cart.ram_dirty = true;
+    }
+
+    pub fn save(&mut self) -> io::Result<()> {
+        self.cart.save()
     }
 }

@@ -1,4 +1,5 @@
-use crate::cartridge::{Cartridge, CartridgeAccess};
+use crate::cartridge::Cartridge;
+use std::io;
 
 pub struct CartridgeMBC5 {
     cart: Cartridge,
@@ -8,18 +9,13 @@ impl CartridgeMBC5 {
     pub fn new(cart: Cartridge) -> Self {
         Self { cart }
     }
-}
 
-impl CartridgeAccess for CartridgeMBC5 {
-    fn cartridge(&self) -> &Cartridge {
-        &self.cart
-    }
-    fn cartridge_mut(&mut self) -> &mut Cartridge {
-        &mut self.cart
+    pub fn read_rom(&self, addr: u16) -> u8 {
+        self.cart.read_rom(addr)
     }
 
-    fn write_rom(&mut self, addr: u16, byte: u8) {
-        let cartridge = self.cartridge_mut();
+    pub fn write_rom(&mut self, addr: u16, byte: u8) {
+        let cartridge = &mut self.cart;
 
         match addr & 0xF000 {
             0x0000 | 0x1000 => {
@@ -43,5 +39,17 @@ impl CartridgeAccess for CartridgeMBC5 {
             0x6000 | 0x7000 => {}
             _ => panic!("Unhandled rom write at addr 0x{:x}", addr),
         };
+    }
+
+    pub fn read_ram(&self, addr: u16) -> u8 {
+        self.cart.read_ram(addr)
+    }
+
+    pub fn write_ram(&mut self, addr: u16, byte: u8) {
+        self.cart.write_ram(addr, byte)
+    }
+
+    pub fn save(&mut self) -> io::Result<()> {
+        self.cart.save()
     }
 }
