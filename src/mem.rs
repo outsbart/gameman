@@ -2,6 +2,7 @@ use crate::cartridge::CartridgeKind;
 use crate::gpu::GPUMemoriesAccess;
 use crate::keypad::Key;
 use crate::link::Link;
+use crate::oam_dma::OamDma;
 use crate::sound::Sound;
 use crate::timers::Timers;
 
@@ -19,12 +20,8 @@ pub struct MMU<M: GPUMemoriesAccess> {
     pub interrupt_enable: u8,
     pub interrupt_flags: u8,
 
-    pub oam_dma_source: u8,
-    oam_dma_remaining: u8,
-    oam_dma_startup: u8,
+    pub oam_dma: OamDma,
     t_sub: u8, // T-cycle sub-counter within current M-cycle (0–3)
-    oam_mode_before: u8,
-    oam_row_before: u8,
     pub gpu: M,
     pub key: Key,
     pub link: Link,
@@ -47,12 +44,8 @@ impl<M: GPUMemoriesAccess> MMU<M> {
             interrupt_enable: 0,
             interrupt_flags: 0x01,
 
-            oam_dma_source: 0,
-            oam_dma_remaining: 0,
-            oam_dma_startup: 0,
+            oam_dma: OamDma::new(),
             t_sub: 0,
-            oam_mode_before: 0,
-            oam_row_before: 0,
             gpu,
             key: Key::new(),
             link: Link::new(),
@@ -100,7 +93,7 @@ pub trait Memory {
 
 impl<M: GPUMemoriesAccess> Memory for MMU<M> {
     fn read_byte(&mut self, addr: u16) -> u8 {
-        if self.oam_dma_remaining > 0 && (0xFE00..=0xFE9F).contains(&addr) {
+        if self.oam_dma.is_active() && (0xFE00..=0xFE9F).contains(&addr) {
             return 0xFF;
         }
         match addr & 0xF000 {
@@ -148,7 +141,7 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                         0xFF07 => self.timers.read_tac(),
                         0xFF0F => self.interrupt_flags | 0xE0,
                         0xFF10..=0xFF3F => self.sound.read_byte(addr),
-                        0xFF46 => self.oam_dma_source,
+                        0xFF46 => self.oam_dma.source,
                         0xFF40..=0xFF45 | 0xFF47..=0xFF7F => self.gpu.read_byte(addr),
                         0xFF80..=0xFFFE => self.zram[(addr & 0x7F) as usize],
                         0xFFFF => self.interrupt_enable,
@@ -187,7 +180,7 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                         if addr & 0x00FF < 0xA0 {
                             let mode = self.gpu.gpu_mode();
                             let lcd_enabled = self.gpu.is_lcd_enabled();
-                            if self.oam_dma_remaining == 0 && (!lcd_enabled || (mode != 2 && mode != 3)) {
+                            if !self.oam_dma.is_active() && (!lcd_enabled || (mode != 2 && mode != 3)) {
                                 self.gpu.write_oam(addr & 0xFF, byte);
                             }
                         } else {
@@ -207,12 +200,7 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                         0xFF06 => self.timers.write_tma(byte),
                         0xFF07 => self.timers.write_tac(byte),
                         0xFF10..=0xFF3F => self.sound.write_byte(addr, byte),
-                        0xFF46 => {
-                            self.oam_dma_source = byte;
-                            // M=1 after write: old OAM still accessible.
-                            // M=2: DMA starts, copy fires in tick when startup expires.
-                            self.oam_dma_startup = 2;
-                        }
+                        0xFF46 => self.oam_dma.trigger(byte),
                         0xFF40..=0xFF45 | 0xFF47..=0xFF7F => self.gpu.write_byte(addr, byte),
                         0xFF80..=0xFFFE => self.zram[(addr & 0x007F) as usize] = byte,
                         _ => {}
@@ -231,19 +219,12 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
         self.t_sub += 1;
         if self.t_sub == 4 {
             self.t_sub = 0;
-            if self.oam_dma_startup > 0 {
-                self.oam_dma_startup -= 1;
-                if self.oam_dma_startup == 0 {
-                    let start: u16 = (self.oam_dma_source as u16) << 8;
-                    self.oam_dma_remaining = 0;
-                    for i in 0u16..160 {
-                        let byte = self.read_byte(start + i);
-                        self.gpu.write_oam(i, byte);
-                    }
-                    self.oam_dma_remaining = 160;
+            if let Some(start) = self.oam_dma.tick_m() {
+                for i in 0u16..160 {
+                    let byte = self.read_byte(start + i);
+                    self.gpu.write_oam(i, byte);
                 }
-            } else if self.oam_dma_remaining > 0 {
-                self.oam_dma_remaining -= 1;
+                self.oam_dma.finish();
             }
             self.sound.tick(4);
         }
@@ -265,49 +246,10 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
     }
 
     fn before_fetch(&mut self) {
-        self.oam_mode_before = self.gpu.gpu_mode();
-        self.oam_row_before = self.gpu.oam_scan_row();
+        self.oam_dma.snapshot(&self.gpu);
     }
     fn handle_oam_corruption(&mut self, opcode: u8, rr: u16) {
-        if self.oam_mode_before != 2 {
-            return;
-        }
-        let row = self.oam_row_before; // byte offset into OAM
-        let in_oam_bus = |addr: u16| (addr >> 8) == 0xFE;
-        match opcode {
-            // INC/DEC rr: bug fires after M1 (+4T = +8 bytes in OAM scan)
-            0x03 | 0x0B | 0x13 | 0x1B | 0x23 | 0x2B | 0x33 | 0x3B
-                if in_oam_bus(rr) => {
-                    self.gpu.apply_oam_corruption(row.saturating_add(8));
-                }
-            // LD A,(HL±): M2 memory read → read corruption (+8 bytes)
-            0x2A | 0x3A
-                if in_oam_bus(rr) => {
-                    self.gpu.apply_oam_read_corruption(row.saturating_add(8));
-                }
-            // POP rr: M2 reads SP (+8 bytes), M3 reads SP+1 (+16 bytes) — read corruption
-            0xC1 | 0xD1 | 0xE1 | 0xF1 => {
-                if in_oam_bus(rr) {
-                    self.gpu.apply_oam_read_corruption(row.saturating_add(8));
-                }
-                if in_oam_bus(rr.wrapping_add(1)) {
-                    self.gpu.apply_oam_read_corruption(row.saturating_add(16));
-                }
-            }
-            // PUSH rr: M2 internal (+8), M3 writes SP-1 (+16), M4 writes SP-2 (+24)
-            0xC5 | 0xD5 | 0xE5 | 0xF5 => {
-                if in_oam_bus(rr) {
-                    self.gpu.apply_oam_corruption(row.saturating_add(8));
-                }
-                if in_oam_bus(rr.wrapping_sub(1)) {
-                    self.gpu.apply_oam_corruption(row.saturating_add(16));
-                }
-                if in_oam_bus(rr.wrapping_sub(2)) {
-                    self.gpu.apply_oam_corruption(row.saturating_add(24));
-                }
-            }
-            _ => {}
-        }
+        self.oam_dma.handle_corruption(&mut self.gpu, opcode, rr);
     }
 }
 

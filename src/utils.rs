@@ -18,31 +18,10 @@ pub fn load_boot_rom() -> [u8; 0x0100] {
     boot_rom
 }
 
-pub fn u16_to_i16(unsigned: u16) -> i16 {
-    u16::cast_signed(unsigned)
-}
-
-pub fn u8_to_i8(unsigned: u8) -> i8 {
-    u8::cast_signed(unsigned)
-}
-
-pub fn rotate_left(unsigned: u8) -> u16 {
-    u16::from(unsigned << 1)
-}
-
-pub fn rotate_right(unsigned: u8) -> u16 {
-    u16::from(unsigned >> 1)
-}
-
 pub fn swap_nibbles(unsigned: u8) -> u16 {
-    // swap the nibbles
     let first_nibble = (unsigned & 0xF0) >> 4;
     let second_nibble = (unsigned & 0x0F) << 4;
     (first_nibble + second_nibble) as u16
-}
-
-pub fn parse_hex(number: &str) -> u16 {
-    u16::from_str_radix(number, 16).unwrap_or_else(|_| panic!("cant read {} yet!!!", number))
 }
 
 pub fn reset_bit(position: u8, number: u8) -> u16 {
@@ -100,29 +79,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_u8_to_i8() {
-        assert_eq!(u8_to_i8(0b0111_1111u8), 0b0111_1111i8);
-        assert_eq!(u8_to_i8(0b1111_1111u8), 0b1111_1111i8);
-        assert_eq!(u8_to_i8(0b0000_1111u8), 0b0000_1111i8);
-        assert_eq!(u8_to_i8(0b1111_1110u8), 0b1111_1110i8);
-    }
-
-    #[test]
-    fn test_rotate_left() {
-        // it doesnt really rotate... it's a shift and adds the Carry
-        assert_eq!(rotate_left(0b00000001u8), 0b0000000000000010u16);
-        assert_eq!(rotate_left(0b10000000u8), 0b0000000000000000u16);
-    }
-
-    #[test]
     fn test_swap() {
         assert_eq!(swap_nibbles(0xF0u8), 0x000Fu16);
         assert_eq!(swap_nibbles(0x0Fu8), 0x00F0u16);
-    }
-
-    #[test]
-    fn test_parse_hex() {
-        assert_eq!(parse_hex("20"), 0x0020u16);
     }
 
     #[test]
@@ -136,11 +95,5 @@ mod tests {
         assert_eq!(reset_bit(5, 0b1111_1111), 0b0000_0000_1101_1111);
         assert_eq!(reset_bit(6, 0b1111_1111), 0b0000_0000_1011_1111);
         assert_eq!(reset_bit(7, 0b1111_1111), 0b0000_0000_0111_1111);
-    }
-
-    #[test]
-    fn test_rust_shift() {
-        assert_eq!(u8::from(true), 0x1);
-        assert_eq!(u8::from(true) << 1, 0x2);
     }
 }
