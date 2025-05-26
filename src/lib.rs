@@ -3,7 +3,6 @@
 extern crate csv;
 extern crate lazy_static;
 extern crate log;
-extern crate serde_derive;
 
 pub mod cartridge;
 pub mod cpu;

@@ -4,9 +4,12 @@ use crate::cartridge::load_rom;
 use crate::cpu::{CPU, Operand};
 use crate::gpu::GPU;
 use crate::mem::{Interrupt, MMU, Memory};
+use serde::{Deserialize, Serialize};
+use std::io;
 
 const CLOCKS_IN_A_FRAME: u32 = 70224;
 
+#[derive(Serialize, Deserialize)]
 pub struct Gameboy {
     pub cpu: CPU<MMU<GPU>>,
 }
@@ -82,5 +85,24 @@ impl Gameboy {
 
     fn request_keypad_interrupt(&mut self) {
         self.cpu.mmu.request_interrupt(Interrupt::Joypad);
+    }
+
+    fn state_path(&self, slot: u8) -> std::path::PathBuf {
+        self.cpu.mmu.cartridge.inner_cart().path()
+            .with_extension(format!("ss{slot}"))
+    }
+
+    pub fn save_state_to_file(&self, slot: u8) -> io::Result<()> {
+        let bytes = bincode::serialize(self)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        std::fs::write(self.state_path(slot), bytes)
+    }
+
+    pub fn load_state_from_file(&mut self, slot: u8) -> io::Result<()> {
+        let path = self.state_path(slot);
+        let bytes = std::fs::read(path)?;
+        *self = bincode::deserialize(&bytes)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        self.cpu.mmu.cartridge.restore()
     }
 }

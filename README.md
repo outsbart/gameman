@@ -11,6 +11,8 @@ Major games like Tetris, Mario, Kirby, Zelda and Pokemon are fully working and p
 
 Save files will be put in the same directory as the rom file, but with a .sav extension.
 
+Save states are supported: press F5 to save and F7 to load (slot 0, stored as `.ss0` next to the ROM).
+
 Audio works, but needs more testing on different platforms.
 
 ## Accuracy
@@ -26,7 +28,6 @@ blargg's cpu_instrs, instr_timing, mem_timing, dmg_sound test ROMs are passing.
 Supported: ROM only, MBC1, MBC2, MBC3, MBC5 (rumble silently ignored).
 
 ## TODO
-- Save states
 - Refactor, refactor and refactor code
 - Gameboy Color support?
 
@@ -50,4 +51,10 @@ Use keyboard arrows for directions and...
         <td>Keyboard</td><td>Z</td><td>X</td><td>A</td><td>S</td>
     </tr>
 </table>
+
+Other keys:
+| Key | Action |
+|-----|--------|
+| F5  | Save state (slot 0) |
+| F7  | Load state (slot 0) |
 

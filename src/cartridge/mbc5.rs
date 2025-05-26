@@ -1,8 +1,10 @@
 use crate::cartridge::Cartridge;
+use serde::{Deserialize, Serialize};
 use std::io;
 
+#[derive(Serialize, Deserialize)]
 pub struct CartridgeMBC5 {
-    cart: Cartridge,
+    pub(super) cart: Cartridge,
 }
 
 impl CartridgeMBC5 {

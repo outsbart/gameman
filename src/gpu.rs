@@ -1,4 +1,6 @@
 use crate::cpu::is_bit_set;
+use serde::{Deserialize, Serialize};
+use serde_big_array::BigArray;
 
 const TILES_IN_A_TILEMAP_ROW: usize = 32;
 const TILES_IN_A_TILEMAP_COL: usize = 32;
@@ -42,7 +44,7 @@ pub trait GPUMemoriesAccess {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum Colour {
     Off = 0,
@@ -74,6 +76,7 @@ impl From<u8> for Colour {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 struct Palette {
     colour_3: Colour,
     colour_2: Colour,
@@ -111,10 +114,14 @@ impl Palette {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct GPU {
+    #[serde(with = "BigArray")]
     vram: [u8; 8192],
+    #[serde(with = "BigArray")]
     oam: [u8; 160],
-    buffer: [u8; 160 * 144], // every pixel can have 4 values (4 shades of grey)
+    #[serde(with = "BigArray")]
+    buffer: [u8; 160 * 144],
 
     modeclock: u16,
     mode: u8,

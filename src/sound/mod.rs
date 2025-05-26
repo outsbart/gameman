@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::ops::{Add, AddAssign};
 
 use crate::cpu::CPU_FREQ;
@@ -26,7 +27,7 @@ const VOLUME_BOOST: u8 = 3;
 
 type AudioOutType = i16;
 
-#[derive(Eq, Clone, Copy)]
+#[derive(Eq, Clone, Copy, Serialize, Deserialize)]
 pub struct Sample(u8);
 const SAMPLE_MAX: Sample = Sample(0xF);
 const SAMPLE_MIN: Sample = Sample(0);
@@ -63,7 +64,7 @@ impl Sample {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 pub struct Voltage(i16);
 
 impl Add for Voltage {
@@ -96,6 +97,7 @@ impl From<Sample> for Voltage {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Sound {
     square_1: SquareChannel,
     square_2: SquareChannel,
@@ -173,6 +175,7 @@ impl Memory for Sound {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct ChannelsOutput {
     square_1: Voltage,
     square_2: Voltage,
@@ -197,9 +200,11 @@ impl Default for ChannelsOutput {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 struct SoundOutput {
     mixer: Mixer,
     volume_master: VolumeMaster,
+    #[serde(skip)]
     out_buffer: OutputBuffer,
 }
 
@@ -220,6 +225,7 @@ impl SoundOutput {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct VolumeMaster {
     volume: u8,
 }
@@ -249,6 +255,7 @@ impl Default for VolumeMaster {
 }
 
 // Mixes together the sound voltages from the channels
+#[derive(Serialize, Deserialize)]
 pub struct Mixer {
     noise: bool,
     wave: bool,
@@ -852,9 +859,10 @@ impl Default for Sound {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct FrameSequencer {
     timer: Timer,
-    step: u8, // goes up by 1 everytime the timer hits 0
+    step: u8,
 }
 
 impl FrameSequencer {
@@ -887,7 +895,7 @@ impl Default for FrameSequencer {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 // a timer with a default period of 8
 pub struct TimerDefaultPeriod {
     period: usize, // initial and max value of curr
@@ -933,7 +941,7 @@ impl Default for TimerDefaultPeriod {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 pub struct Timer {
     period: usize, // initial and max value of curr
     curr: usize,   // goes down by 1 every tick and wraps back to period

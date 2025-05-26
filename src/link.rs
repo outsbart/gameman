@@ -1,9 +1,14 @@
 /// Link cable
 
+use serde::{Deserialize, Serialize};
+use serde_big_array::BigArray;
+
 // Post-boot divider = 0xABCC; bit 8 starts high.
 const POST_BOOT_BIT8: bool = (0xABCCu16 & 0x100) != 0;
 
+#[derive(Serialize, Deserialize)]
 pub struct Link {
+    #[serde(with = "BigArray")]
     buffer_out: [char; 256],
     buffer_index: usize,
     data: u8,

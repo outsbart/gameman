@@ -1,7 +1,9 @@
 use crate::sound::envelope::Envelope;
 use crate::sound::length::{Length, MaxLength};
 use crate::sound::{Sample, Timer, Voltage};
+use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize)]
 pub struct NoiseChannel {
     length: Length,
     envelope: Envelope,

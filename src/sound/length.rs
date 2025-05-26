@@ -1,5 +1,7 @@
+use serde::{Deserialize, Serialize};
+
 // all the channels have a max length value of 64, except for wave
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 #[repr(u16)]
 pub enum MaxLength {
     Wave = 256,
@@ -17,6 +19,7 @@ impl From<u16> for MaxLength {
 }
 
 // used to shut off a channel after a period of time
+#[derive(Serialize, Deserialize)]
 pub struct Length {
     max_length: MaxLength, // the max value that the length can have
     enable: bool,          // is length enabled? if not, clocking won't affect length

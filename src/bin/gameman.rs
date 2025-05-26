@@ -97,6 +97,16 @@ fn main() {
                 Event::KeyDown { keycode: Some(Keycode::Right), .. } => {
                     gameboy.press_button(Button::RIGHT);
                 }
+                Event::KeyDown { keycode: Some(Keycode::F5), .. } => {
+                    if let Err(e) = gameboy.save_state_to_file(0) {
+                        eprintln!("Save state failed: {e}");
+                    }
+                }
+                Event::KeyDown { keycode: Some(Keycode::F7), .. } => {
+                    if let Err(e) = gameboy.load_state_from_file(0) {
+                        eprintln!("Load state failed: {e}");
+                    }
+                }
                 Event::KeyUp { keycode: Some(Keycode::Z), .. } => {
                     gameboy.release_button(Button::A);
                 }

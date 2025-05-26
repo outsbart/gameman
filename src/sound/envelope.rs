@@ -1,7 +1,8 @@
 use crate::sound::{Sample, TimerDefaultPeriod};
+use serde::{Deserialize, Serialize};
 
 // every tick, increases or decreases volume
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 pub struct Envelope {
     timer: TimerDefaultPeriod,
     pub add_mode: bool,

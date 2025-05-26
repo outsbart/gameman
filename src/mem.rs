@@ -1,16 +1,23 @@
 use crate::cartridge::CartridgeKind;
 use crate::gpu::GPUMemoriesAccess;
+use serde::{Deserialize, Serialize};
+use serde_big_array::BigArray;
 use crate::keypad::Key;
 use crate::link::Link;
 use crate::oam_dma::OamDma;
 use crate::sound::Sound;
 use crate::timers::Timers;
 
+#[derive(Serialize, Deserialize)]
+#[serde(bound = "M: Serialize + for<'de2> serde::Deserialize<'de2>")]
 pub struct MMU<M: GPUMemoriesAccess> {
     still_bios: bool,
+    #[serde(with = "BigArray")]
     bios: [u8; 0x0100],
 
+    #[serde(with = "BigArray")]
     wram: [u8; 0x2000],
+    #[serde(with = "BigArray")]
     zram: [u8; 0x0080],
 
     pub cartridge: CartridgeKind,

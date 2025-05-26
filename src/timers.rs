@@ -1,4 +1,6 @@
-#[derive(Clone, Copy)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Copy, Serialize, Deserialize)]
 #[repr(u8)]
 enum TimerSpeed {
     Speed0 = 0,
@@ -33,19 +35,19 @@ impl From<u8> for TimerSpeed {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Serialize, Deserialize)]
 enum TimaStatus {
     BeingReloaded,
     JustReloaded,
     NotBusy,
 }
 
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 struct Timer {
     value: u8,
 }
 
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 struct FallingEdgeDetector {
     curr_signal: bool,
 }
@@ -76,6 +78,7 @@ impl Timer {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Timers {
     // tac
     speed: TimerSpeed,

@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 
 use crate::mem::Memory;
+use serde::{Deserialize, Serialize};
 use crate::utils::add_bytes;
 use crate::utils::add_word_with_signed;
 use crate::utils::add_words;
@@ -62,6 +63,7 @@ pub enum Operand {
     D16, // fetch_next_word()
 }
 
+#[derive(Serialize, Deserialize)]
 struct Regs {
     regs: [u8; 12],
 }
@@ -147,14 +149,16 @@ impl Memory for Regs {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(bound = "M: Serialize + for<'de2> serde::Deserialize<'de2>")]
 pub struct CPU<M: Memory> {
     regs: Regs,
     pub mmu: M,
     interrupt_master_enable: bool,
-    schedule_interrupt_enable: bool, // if set to true, next step interrupt_master_enable will be set to 1
+    schedule_interrupt_enable: bool,
     stopped: bool,
     halted: bool,
-    halt_bug: bool, // HALT with IME=0 + pending interrupt: next opcode byte is read twice
+    halt_bug: bool,
 }
 
 impl<M: Memory> ByteStream for CPU<M> {

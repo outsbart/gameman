@@ -1,8 +1,10 @@
 use crate::cartridge::{Cartridge, RAM_BANK_SIZE, ROM_BANK_SIZE};
+use serde::{Deserialize, Serialize};
 use std::io;
 
+#[derive(Serialize, Deserialize)]
 pub struct CartridgeMBC1Multicart {
-    cart: Cartridge,
+    pub(super) cart: Cartridge,
 }
 
 impl CartridgeMBC1Multicart {
@@ -76,8 +78,9 @@ impl CartridgeMBC1Multicart {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct CartridgeMBC1 {
-    cart: Cartridge,
+    pub(super) cart: Cartridge,
 }
 
 impl CartridgeMBC1 {

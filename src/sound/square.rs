@@ -1,9 +1,11 @@
 use crate::cpu::is_bit_set;
 use crate::sound::envelope::Envelope;
+use serde::{Deserialize, Serialize};
 use crate::sound::length::MaxLength;
 use crate::sound::sweep::Sweep;
 use crate::sound::{DUTY_PATTERNS_LENGTH, Length, Sample, Timer, Voltage};
 
+#[derive(Serialize, Deserialize)]
 pub struct SquareChannel {
     sweep: Sweep,
     pub envelope: Envelope,

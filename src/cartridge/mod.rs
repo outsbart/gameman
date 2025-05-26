@@ -10,6 +10,7 @@ use crate::cartridge::mbc3::CartridgeMBC3;
 use crate::cartridge::mbc5::CartridgeMBC5;
 use crate::cartridge::nombc::CartridgeNoMBC;
 
+use serde::{Deserialize, Serialize};
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -18,7 +19,9 @@ use std::path::PathBuf;
 pub const ROM_BANK_SIZE: usize = 0x4000;
 pub const RAM_BANK_SIZE: usize = 0x2000;
 
+#[derive(Serialize, Deserialize)]
 pub struct Cartridge {
+    #[serde(skip)]
     pub rom: Vec<u8>,
     pub ram: Vec<u8>,
 
@@ -30,6 +33,7 @@ pub struct Cartridge {
     mode: u8,
 
     path: PathBuf,
+    #[serde(skip)]
     save_file: Option<File>,
 }
 
@@ -99,6 +103,10 @@ impl Cartridge {
         Ok(())
     }
 
+    pub fn path(&self) -> &std::path::Path {
+        &self.path
+    }
+
     pub fn save(&mut self) -> io::Result<()> {
         if self.ram_dirty
             && let Some(file) = self.save_file.as_mut() {
@@ -106,6 +114,21 @@ impl Cartridge {
                 file.write_all(&self.ram)?;
                 self.ram_dirty = false;
             }
+        Ok(())
+    }
+
+    pub fn restore(&mut self) -> io::Result<()> {
+        self.rom = std::fs::read(&self.path)?;
+        if self.ram_size > 0 {
+            if let Ok(file) = OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .open(self.save_file_path())
+            {
+                self.save_file = Some(file);
+            }
+        }
         Ok(())
     }
 
@@ -157,6 +180,7 @@ macro_rules! dispatch_cartridge {
     };
 }
 
+#[derive(Serialize, Deserialize)]
 pub enum CartridgeKind {
     NoMBC(CartridgeNoMBC),
     MBC1(CartridgeMBC1),
@@ -181,6 +205,32 @@ impl CartridgeKind {
     }
     pub fn save(&mut self) -> io::Result<()> {
         dispatch_cartridge!(self, save())
+    }
+
+    pub fn inner_cart(&self) -> &Cartridge {
+        match self {
+            CartridgeKind::NoMBC(c) => &c.cart,
+            CartridgeKind::MBC1(c) => &c.cart,
+            CartridgeKind::MBC1Multicart(c) => &c.cart,
+            CartridgeKind::MBC2(c) => &c.cart,
+            CartridgeKind::MBC3(c) => &c.cart,
+            CartridgeKind::MBC5(c) => &c.cart,
+        }
+    }
+
+    pub fn inner_cart_mut(&mut self) -> &mut Cartridge {
+        match self {
+            CartridgeKind::NoMBC(c) => &mut c.cart,
+            CartridgeKind::MBC1(c) => &mut c.cart,
+            CartridgeKind::MBC1Multicart(c) => &mut c.cart,
+            CartridgeKind::MBC2(c) => &mut c.cart,
+            CartridgeKind::MBC3(c) => &mut c.cart,
+            CartridgeKind::MBC5(c) => &mut c.cart,
+        }
+    }
+
+    pub fn restore(&mut self) -> io::Result<()> {
+        self.inner_cart_mut().restore()
     }
 }
 

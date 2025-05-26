@@ -1,8 +1,10 @@
 use crate::sound::length::{Length, MaxLength};
 use crate::sound::{Sample, Timer, Voltage};
+use serde::{Deserialize, Serialize};
 
 const WAVE_RAM_SAMPLES: u8 = 32;
 
+#[derive(Serialize, Deserialize)]
 pub struct WaveChannel {
     dac_power: bool,
     frequency: u16,
@@ -25,7 +27,7 @@ pub struct WaveChannel {
     running: bool,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum Volume {
     Silent = 0,

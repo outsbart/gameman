@@ -1,5 +1,7 @@
 use crate::gpu::GPUMemoriesAccess;
+use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize)]
 pub struct OamDma {
     pub source: u8,
     remaining: u8,

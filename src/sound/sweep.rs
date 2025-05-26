@@ -1,6 +1,8 @@
 use crate::sound::TimerDefaultPeriod;
+use serde::{Deserialize, Serialize};
 use std::ops::{Add, Sub};
 
+#[derive(Serialize, Deserialize)]
 pub struct Sweep {
     pub shift: u8,
     negate: bool,           // true if calculate will operate in negate mode
