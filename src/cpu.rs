@@ -496,7 +496,7 @@ impl<M: Memory> CPU<M> {
                 0x1D => self.x1D(),
                 0x1E => self.x1E(),
                 0x1F => self.x1F(),
-                0x20 => self.x20(),
+                0x20 | 0x28 | 0x30 | 0x38 => self.cond_jr(opcode),
                 0x21 => self.x21(),
                 0x22 => self.x22(),
                 0x23 => self.x23(),
@@ -504,7 +504,6 @@ impl<M: Memory> CPU<M> {
                 0x25 => self.x25(),
                 0x26 => self.x26(),
                 0x27 => self.x27(),
-                0x28 => self.x28(),
                 0x29 => self.x29(),
                 0x2A => self.x2A(),
                 0x2B => self.x2B(),
@@ -512,7 +511,6 @@ impl<M: Memory> CPU<M> {
                 0x2D => self.x2D(),
                 0x2E => self.x2E(),
                 0x2F => self.x2F(),
-                0x30 => self.x30(),
                 0x31 => self.x31(),
                 0x32 => self.x32(),
                 0x33 => self.x33(),
@@ -520,7 +518,6 @@ impl<M: Memory> CPU<M> {
                 0x35 => self.x35(),
                 0x36 => self.x36(),
                 0x37 => self.x37(),
-                0x38 => self.x38(),
                 0x39 => self.x39(),
                 0x3A => self.x3A(),
                 0x3B => self.x3B(),
@@ -528,198 +525,96 @@ impl<M: Memory> CPU<M> {
                 0x3D => self.x3D(),
                 0x3E => self.x3E(),
                 0x3F => self.x3F(),
-                0x40 => self.x40(),
-                0x41 => self.x41(),
-                0x42 => self.x42(),
-                0x43 => self.x43(),
-                0x44 => self.x44(),
-                0x45 => self.x45(),
-                0x46 => self.x46(),
-                0x47 => self.x47(),
-                0x48 => self.x48(),
-                0x49 => self.x49(),
-                0x4A => self.x4A(),
-                0x4B => self.x4B(),
-                0x4C => self.x4C(),
-                0x4D => self.x4D(),
-                0x4E => self.x4E(),
-                0x4F => self.x4F(),
-                0x50 => self.x50(),
-                0x51 => self.x51(),
-                0x52 => self.x52(),
-                0x53 => self.x53(),
-                0x54 => self.x54(),
-                0x55 => self.x55(),
-                0x56 => self.x56(),
-                0x57 => self.x57(),
-                0x58 => self.x58(),
-                0x59 => self.x59(),
-                0x5A => self.x5A(),
-                0x5B => self.x5B(),
-                0x5C => self.x5C(),
-                0x5D => self.x5D(),
-                0x5E => self.x5E(),
-                0x5F => self.x5F(),
-                0x60 => self.x60(),
-                0x61 => self.x61(),
-                0x62 => self.x62(),
-                0x63 => self.x63(),
-                0x64 => self.x64(),
-                0x65 => self.x65(),
-                0x66 => self.x66(),
-                0x67 => self.x67(),
-                0x68 => self.x68(),
-                0x69 => self.x69(),
-                0x6A => self.x6A(),
-                0x6B => self.x6B(),
-                0x6C => self.x6C(),
-                0x6D => self.x6D(),
-                0x6E => self.x6E(),
-                0x6F => self.x6F(),
-                0x70 => self.x70(),
-                0x71 => self.x71(),
-                0x72 => self.x72(),
-                0x73 => self.x73(),
-                0x74 => self.x74(),
-                0x75 => self.x75(),
+                // LD r, r': dst = bits 5-3, src = bits 2-0
+                0x40..=0x75 | 0x77..=0x7F => {
+                    let src = Self::cb_reg_name(opcode & 0x07);
+                    let dst = Self::cb_reg_name((opcode >> 3) & 0x07);
+                    let val = self.get_operand_value(src);
+                    self.store_result(dst, val, true);
+                    let is_hl = (opcode & 0x07) == 6 || ((opcode >> 3) & 0x07) == 6;
+                    self.regs.write_byte(REG_T, if is_hl { 8 } else { 4 });
+                }
                 0x76 => self.x76(),
-                0x77 => self.x77(),
-                0x78 => self.x78(),
-                0x79 => self.x79(),
-                0x7A => self.x7A(),
-                0x7B => self.x7B(),
-                0x7C => self.x7C(),
-                0x7D => self.x7D(),
-                0x7E => self.x7E(),
-                0x7F => self.x7F(),
-                0x80 => self.x80(),
-                0x81 => self.x81(),
-                0x82 => self.x82(),
-                0x83 => self.x83(),
-                0x84 => self.x84(),
-                0x85 => self.x85(),
-                0x86 => self.x86(),
-                0x87 => self.x87(),
-                0x88 => self.x88(),
-                0x89 => self.x89(),
-                0x8A => self.x8A(),
-                0x8B => self.x8B(),
-                0x8C => self.x8C(),
-                0x8D => self.x8D(),
-                0x8E => self.x8E(),
-                0x8F => self.x8F(),
-                0x90 => self.x90(),
-                0x91 => self.x91(),
-                0x92 => self.x92(),
-                0x93 => self.x93(),
-                0x94 => self.x94(),
-                0x95 => self.x95(),
-                0x96 => self.x96(),
-                0x97 => self.x97(),
-                0x98 => self.x98(),
-                0x99 => self.x99(),
-                0x9A => self.x9A(),
-                0x9B => self.x9B(),
-                0x9C => self.x9C(),
-                0x9D => self.x9D(),
-                0x9E => self.x9E(),
-                0x9F => self.x9F(),
-                0xA0 => self.xA0(),
-                0xA1 => self.xA1(),
-                0xA2 => self.xA2(),
-                0xA3 => self.xA3(),
-                0xA4 => self.xA4(),
-                0xA5 => self.xA5(),
-                0xA6 => self.xA6(),
-                0xA7 => self.xA7(),
-                0xA8 => self.xA8(),
-                0xA9 => self.xA9(),
-                0xAA => self.xAA(),
-                0xAB => self.xAB(),
-                0xAC => self.xAC(),
-                0xAD => self.xAD(),
-                0xAE => self.xAE(),
-                0xAF => self.xAF(),
-                0xB0 => self.xB0(),
-                0xB1 => self.xB1(),
-                0xB2 => self.xB2(),
-                0xB3 => self.xB3(),
-                0xB4 => self.xB4(),
-                0xB5 => self.xB5(),
-                0xB6 => self.xB6(),
-                0xB7 => self.xB7(),
-                0xB8 => self.xB8(),
-                0xB9 => self.xB9(),
-                0xBA => self.xBA(),
-                0xBB => self.xBB(),
-                0xBC => self.xBC(),
-                0xBD => self.xBD(),
-                0xBE => self.xBE(),
-                0xBF => self.xBF(),
-                0xC0 => self.xC0(),
+                // ALU A, r: op = bits 5-3, src = bits 2-0
+                0x80..=0xBF => self.alu_a_r(opcode),
+                // RET cc
+                0xC0 | 0xC8 | 0xD0 | 0xD8 => {
+                    self.tick_m();
+                    if !self.cond_met(opcode) {
+                        self.regs.write_byte(REG_T, 8);
+                        return;
+                    }
+                    let addr = self.pop();
+                    self.tick_m();
+                    self.store_result("PC", addr, false);
+                    self.regs.write_byte(REG_T, 20);
+                }
                 0xC1 => self.xC1(),
-                0xC2 => self.xC2(),
+                // JP cc, a16
+                0xC2 | 0xCA | 0xD2 | 0xDA => {
+                    let addr = self.get_operand_value("a16");
+                    if !self.cond_met(opcode) {
+                        self.regs.write_byte(REG_T, 12);
+                        return;
+                    }
+                    self.tick_m();
+                    self.store_result("PC", addr, false);
+                    self.regs.write_byte(REG_T, 16);
+                }
                 0xC3 => self.xC3(),
-                0xC4 => self.xC4(),
+                // CALL cc, a16
+                0xC4 | 0xCC | 0xD4 | 0xDC => {
+                    let addr = self.get_operand_value("a16");
+                    if !self.cond_met(opcode) {
+                        self.regs.write_byte(REG_T, 12);
+                        return;
+                    }
+                    let pc = self.get_registry_value("PC");
+                    self.tick_m();
+                    self.push(pc);
+                    self.store_result("PC", addr, false);
+                    self.regs.write_byte(REG_T, 24);
+                }
                 0xC5 => self.xC5(),
                 0xC6 => self.xC6(),
-                0xC7 => self.xC7(),
-                0xC8 => self.xC8(),
+                // RST: target = opcode & 0x38
+                0xC7 | 0xCF | 0xD7 | 0xDF | 0xE7 | 0xEF | 0xF7 | 0xFF => {
+                    let pc = self.get_registry_value("PC");
+                    self.tick_m();
+                    self.push(pc);
+                    self.store_result("PC", (opcode & 0x38) as u16, false);
+                    self.regs.write_byte(REG_T, 16);
+                }
                 0xC9 => self.xC9(),
-                0xCA => self.xCA(),
                 0xCB => self.xCB(),
-                0xCC => self.xCC(),
                 0xCD => self.xCD(),
                 0xCE => self.xCE(),
-                0xCF => self.xCF(),
-                0xD0 => self.xD0(),
                 0xD1 => self.xD1(),
-                0xD2 => self.xD2(),
-                0xD3 => self.xD3(),
-                0xD4 => self.xD4(),
                 0xD5 => self.xD5(),
                 0xD6 => self.xD6(),
-                0xD7 => self.xD7(),
-                0xD8 => self.xD8(),
                 0xD9 => self.xD9(),
-                0xDA => self.xDA(),
-                0xDB => self.xDB(),
-                0xDC => self.xDC(),
-                0xDD => self.xDD(),
                 0xDE => self.xDE(),
-                0xDF => self.xDF(),
                 0xE0 => self.xE0(),
                 0xE1 => self.xE1(),
                 0xE2 => self.xE2(),
-                0xE3 => self.xE3(),
-                0xE4 => self.xE4(),
                 0xE5 => self.xE5(),
                 0xE6 => self.xE6(),
-                0xE7 => self.xE7(),
                 0xE8 => self.xE8(),
                 0xE9 => self.xE9(),
                 0xEA => self.xEA(),
-                0xEB => self.xEB(),
-                0xEC => self.xEC(),
-                0xED => self.xED(),
                 0xEE => self.xEE(),
-                0xEF => self.xEF(),
                 0xF0 => self.xF0(),
                 0xF1 => self.xF1(),
                 0xF2 => self.xF2(),
                 0xF3 => self.xF3(),
-                0xF4 => self.xF4(),
                 0xF5 => self.xF5(),
                 0xF6 => self.xF6(),
-                0xF7 => self.xF7(),
                 0xF8 => self.xF8(),
                 0xF9 => self.xF9(),
                 0xFA => self.xFA(),
                 0xFB => self.xFB(),
-                0xFC => self.xFC(),
-                0xFD => self.xFD(),
                 0xFE => self.xFE(),
-                0xFF => self.xFF(),
+                _ => {} // undefined/illegal opcodes
             }
         } else {
             self.execute_cb(opcode);
@@ -1064,23 +959,6 @@ impl<M: Memory> CPU<M> {
         self.regs.write_byte(REG_T, 4);
     }
 
-    fn x20(&mut self) {
-        let op1 = self.get_operand_value("PC");
-        let op2 = self.get_operand_value("d8");
-
-        let cond = self.get_operand_value("NZ");
-        if cond == 0 {
-            self.regs.write_byte(REG_T, 8);
-            return;
-        }
-
-        let result = (op1 as i16).wrapping_add(op2 as i8 as i16).wrapping_add(1) as u16;
-
-        self.tick_m();
-        self.store_result("PC", result, false);
-        self.regs.write_byte(REG_T, 12);
-    }
-
     fn x21(&mut self) {
         let op1 = self.get_operand_value("d16");
         self.store_result("HL", op1, false);
@@ -1177,24 +1055,6 @@ impl<M: Memory> CPU<M> {
         self.regs.write_byte(REG_T, 4);
     }
 
-    fn x28(&mut self) {
-        let op1 = self.get_operand_value("PC");
-        let op2 = self.get_operand_value("d8");
-
-        let cond = self.get_operand_value("Z");
-
-        if cond == 0 {
-            self.regs.write_byte(REG_T, 8);
-            return;
-        }
-
-        let result = (op1 as i16).wrapping_add(op2 as i8 as i16).wrapping_add(1) as u16;
-
-        self.tick_m();
-        self.store_result("PC", result, false);
-        self.regs.write_byte(REG_T, 12);
-    }
-
     fn x29(&mut self) {
         let op1 = self.get_operand_value("HL");
         let op2 = self.get_operand_value("HL");
@@ -1270,23 +1130,6 @@ impl<M: Memory> CPU<M> {
         self.regs.write_byte(REG_T, 4);
     }
 
-    fn x30(&mut self) {
-        let op1 = self.get_operand_value("PC");
-        let op2 = self.get_operand_value("d8");
-
-        let cond = self.get_operand_value("NC");
-        if cond == 0 {
-            self.regs.write_byte(REG_T, 8);
-            return;
-        }
-
-        let result = (op1 as i16).wrapping_add(op2 as i8 as i16).wrapping_add(1) as u16;
-
-        self.tick_m();
-        self.store_result("PC", result, false);
-        self.regs.write_byte(REG_T, 12);
-    }
-
     fn x31(&mut self) {
         let op1 = self.get_operand_value("d16");
         self.store_result("SP", op1, false);
@@ -1349,23 +1192,6 @@ impl<M: Memory> CPU<M> {
 
         self.regs.set_flags(z, false, false, true);
         self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x38(&mut self) {
-        let op1 = self.get_operand_value("PC");
-        let op2 = self.get_operand_value("d8");
-
-        let cond = self.get_operand_value("CA");
-        if cond == 0 {
-            self.regs.write_byte(REG_T, 8);
-            return;
-        }
-
-        let result = (op1 as i16).wrapping_add(op2 as i8 as i16).wrapping_add(1) as u16;
-
-        self.tick_m();
-        self.store_result("PC", result, false);
-        self.regs.write_byte(REG_T, 12);
     }
 
     fn x39(&mut self) {
@@ -1441,330 +1267,6 @@ impl<M: Memory> CPU<M> {
         self.regs.write_byte(REG_T, 4);
     }
 
-    fn x40(&mut self) {
-        let op1 = self.get_operand_value("B");
-        self.store_result("B", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x41(&mut self) {
-        let op1 = self.get_operand_value("C");
-        self.store_result("B", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x42(&mut self) {
-        let op1 = self.get_operand_value("D");
-        self.store_result("B", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x43(&mut self) {
-        let op1 = self.get_operand_value("E");
-        self.store_result("B", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x44(&mut self) {
-        let op1 = self.get_operand_value("H");
-        self.store_result("B", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x45(&mut self) {
-        let op1 = self.get_operand_value("L");
-        self.store_result("B", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x46(&mut self) {
-        let op1 = self.get_operand_value("(HL)");
-        self.store_result("B", op1, true);
-        self.regs.write_byte(REG_T, 8);
-    }
-
-    fn x47(&mut self) {
-        let op1 = self.get_operand_value("A");
-        self.store_result("B", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x48(&mut self) {
-        let op1 = self.get_operand_value("B");
-        self.store_result("C", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x49(&mut self) {
-        let op1 = self.get_operand_value("C");
-        self.store_result("C", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x4A(&mut self) {
-        let op1 = self.get_operand_value("D");
-        self.store_result("C", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x4B(&mut self) {
-        let op1 = self.get_operand_value("E");
-        self.store_result("C", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x4C(&mut self) {
-        let op1 = self.get_operand_value("H");
-        self.store_result("C", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x4D(&mut self) {
-        let op1 = self.get_operand_value("L");
-        self.store_result("C", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x4E(&mut self) {
-        let op1 = self.get_operand_value("(HL)");
-        self.store_result("C", op1, true);
-        self.regs.write_byte(REG_T, 8);
-    }
-
-    fn x4F(&mut self) {
-        let op1 = self.get_operand_value("A");
-        self.store_result("C", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x50(&mut self) {
-        let op1 = self.get_operand_value("B");
-        self.store_result("D", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x51(&mut self) {
-        let op1 = self.get_operand_value("C");
-        self.store_result("D", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x52(&mut self) {
-        let op1 = self.get_operand_value("D");
-        self.store_result("D", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x53(&mut self) {
-        let op1 = self.get_operand_value("E");
-        self.store_result("D", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x54(&mut self) {
-        let op1 = self.get_operand_value("H");
-        self.store_result("D", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x55(&mut self) {
-        let op1 = self.get_operand_value("L");
-        self.store_result("D", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x56(&mut self) {
-        let op1 = self.get_operand_value("(HL)");
-        self.store_result("D", op1, true);
-        self.regs.write_byte(REG_T, 8);
-    }
-
-    fn x57(&mut self) {
-        let op1 = self.get_operand_value("A");
-        self.store_result("D", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x58(&mut self) {
-        let op1 = self.get_operand_value("B");
-        self.store_result("E", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x59(&mut self) {
-        let op1 = self.get_operand_value("C");
-        self.store_result("E", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x5A(&mut self) {
-        let op1 = self.get_operand_value("D");
-        self.store_result("E", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x5B(&mut self) {
-        let op1 = self.get_operand_value("E");
-        self.store_result("E", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x5C(&mut self) {
-        let op1 = self.get_operand_value("H");
-        self.store_result("E", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x5D(&mut self) {
-        let op1 = self.get_operand_value("L");
-        self.store_result("E", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x5E(&mut self) {
-        let op1 = self.get_operand_value("(HL)");
-        self.store_result("E", op1, true);
-        self.regs.write_byte(REG_T, 8);
-    }
-
-    fn x5F(&mut self) {
-        let op1 = self.get_operand_value("A");
-        self.store_result("E", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x60(&mut self) {
-        let op1 = self.get_operand_value("B");
-        self.store_result("H", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x61(&mut self) {
-        let op1 = self.get_operand_value("C");
-        self.store_result("H", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x62(&mut self) {
-        let op1 = self.get_operand_value("D");
-        self.store_result("H", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x63(&mut self) {
-        let op1 = self.get_operand_value("E");
-        self.store_result("H", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x64(&mut self) {
-        let op1 = self.get_operand_value("H");
-        self.store_result("H", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x65(&mut self) {
-        let op1 = self.get_operand_value("L");
-        self.store_result("H", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x66(&mut self) {
-        let op1 = self.get_operand_value("(HL)");
-        self.store_result("H", op1, true);
-        self.regs.write_byte(REG_T, 8);
-    }
-
-    fn x67(&mut self) {
-        let op1 = self.get_operand_value("A");
-        self.store_result("H", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x68(&mut self) {
-        let op1 = self.get_operand_value("B");
-        self.store_result("L", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x69(&mut self) {
-        let op1 = self.get_operand_value("C");
-        self.store_result("L", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x6A(&mut self) {
-        let op1 = self.get_operand_value("D");
-        self.store_result("L", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x6B(&mut self) {
-        let op1 = self.get_operand_value("E");
-        self.store_result("L", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x6C(&mut self) {
-        let op1 = self.get_operand_value("H");
-        self.store_result("L", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x6D(&mut self) {
-        let op1 = self.get_operand_value("L");
-        self.store_result("L", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x6E(&mut self) {
-        let op1 = self.get_operand_value("(HL)");
-        self.store_result("L", op1, true);
-        self.regs.write_byte(REG_T, 8);
-    }
-
-    fn x6F(&mut self) {
-        let op1 = self.get_operand_value("A");
-        self.store_result("L", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x70(&mut self) {
-        let op1 = self.get_operand_value("B");
-        self.store_result("(HL)", op1, true);
-        self.regs.write_byte(REG_T, 8);
-    }
-
-    fn x71(&mut self) {
-        let op1 = self.get_operand_value("C");
-        self.store_result("(HL)", op1, true);
-        self.regs.write_byte(REG_T, 8);
-    }
-
-    fn x72(&mut self) {
-        let op1 = self.get_operand_value("D");
-        self.store_result("(HL)", op1, true);
-        self.regs.write_byte(REG_T, 8);
-    }
-
-    fn x73(&mut self) {
-        let op1 = self.get_operand_value("E");
-        self.store_result("(HL)", op1, true);
-        self.regs.write_byte(REG_T, 8);
-    }
-
-    fn x74(&mut self) {
-        let op1 = self.get_operand_value("H");
-        self.store_result("(HL)", op1, true);
-        self.regs.write_byte(REG_T, 8);
-    }
-
-    fn x75(&mut self) {
-        let op1 = self.get_operand_value("L");
-        self.store_result("(HL)", op1, true);
-        self.regs.write_byte(REG_T, 8);
-    }
-
     fn x76(&mut self) {
         let pending = self.mmu.read_byte(0xFFFF) & self.mmu.read_byte(0xFF0F) & 0x1F;
         if !self.interrupt_master_enable && pending != 0 {
@@ -1775,868 +1277,10 @@ impl<M: Memory> CPU<M> {
         self.regs.write_byte(REG_T, 4);
     }
 
-    fn x77(&mut self) {
-        let op1 = self.get_operand_value("A");
-        self.store_result("(HL)", op1, true);
-        self.regs.write_byte(REG_T, 8);
-    }
-
-    fn x78(&mut self) {
-        let op1 = self.get_operand_value("B");
-        self.store_result("A", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x79(&mut self) {
-        let op1 = self.get_operand_value("C");
-        self.store_result("A", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x7A(&mut self) {
-        let op1 = self.get_operand_value("D");
-        self.store_result("A", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x7B(&mut self) {
-        let op1 = self.get_operand_value("E");
-        self.store_result("A", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x7C(&mut self) {
-        let op1 = self.get_operand_value("H");
-        self.store_result("A", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x7D(&mut self) {
-        let op1 = self.get_operand_value("L");
-        self.store_result("A", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x7E(&mut self) {
-        let op1 = self.get_operand_value("(HL)");
-        self.store_result("A", op1, true);
-        self.regs.write_byte(REG_T, 8);
-    }
-
-    fn x7F(&mut self) {
-        let op1 = self.get_operand_value("A");
-        self.store_result("A", op1, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x80(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("B");
-
-        let (result, c, h) = add_bytes(op1, op2, 0);
-
-        self.store_result("A", result, true);
-
-        self.regs.set_flags((result as u8) == 0, false, h, c);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x81(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("C");
-
-        let (result, c, h) = add_bytes(op1, op2, 0);
-
-        self.store_result("A", result, true);
-
-        self.regs.set_flags((result as u8) == 0, false, h, c);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x82(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("D");
-
-        let (result, c, h) = add_bytes(op1, op2, 0);
-
-        self.store_result("A", result, true);
-
-        self.regs.set_flags((result as u8) == 0, false, h, c);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x83(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("E");
-
-        let (result, c, h) = add_bytes(op1, op2, 0);
-
-        self.store_result("A", result, true);
-
-        self.regs.set_flags((result as u8) == 0, false, h, c);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x84(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("H");
-
-        let (result, c, h) = add_bytes(op1, op2, 0);
-
-        self.store_result("A", result, true);
-
-        self.regs.set_flags((result as u8) == 0, false, h, c);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x85(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("L");
-
-        let (result, c, h) = add_bytes(op1, op2, 0);
-
-        self.store_result("A", result, true);
-
-        self.regs.set_flags((result as u8) == 0, false, h, c);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x86(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("(HL)");
-
-        let (result, c, h) = add_bytes(op1, op2, 0);
-
-        self.store_result("A", result, true);
-
-        self.regs.set_flags((result as u8) == 0, false, h, c);
-        self.regs.write_byte(REG_T, 8);
-    }
-
-    fn x87(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("A");
-
-        let (result, c, h) = add_bytes(op1, op2, 0);
-
-        self.store_result("A", result, true);
-
-        self.regs.set_flags((result as u8) == 0, false, h, c);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x88(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("B");
-
-        let (_, _, _, old_c) = self.regs.get_flags();
-
-        let (result, c, h) = add_bytes(op1, op2, if old_c { 1 } else { 0 });
-
-        self.store_result("A", result, true);
-
-        self.regs.set_flags((result as u8) == 0, false, h, c);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x89(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("C");
-
-        let (_, _, _, old_c) = self.regs.get_flags();
-
-        let (result, c, h) = add_bytes(op1, op2, if old_c { 1 } else { 0 });
-
-        self.store_result("A", result, true);
-
-        self.regs.set_flags((result as u8) == 0, false, h, c);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x8A(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("D");
-
-        let (_, _, _, old_c) = self.regs.get_flags();
-
-        let (result, c, h) = add_bytes(op1, op2, if old_c { 1 } else { 0 });
-
-        self.store_result("A", result, true);
-
-        self.regs.set_flags((result as u8) == 0, false, h, c);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x8B(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("E");
-
-        let (_, _, _, old_c) = self.regs.get_flags();
-
-        let (result, c, h) = add_bytes(op1, op2, if old_c { 1 } else { 0 });
-
-        self.store_result("A", result, true);
-
-        self.regs.set_flags((result as u8) == 0, false, h, c);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x8C(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("H");
-
-        let (_, _, _, old_c) = self.regs.get_flags();
-
-        let (result, c, h) = add_bytes(op1, op2, if old_c { 1 } else { 0 });
-
-        self.store_result("A", result, true);
-
-        self.regs.set_flags((result as u8) == 0, false, h, c);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x8D(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("L");
-
-        let (_, _, _, old_c) = self.regs.get_flags();
-
-        let (result, c, h) = add_bytes(op1, op2, if old_c { 1 } else { 0 });
-
-        self.store_result("A", result, true);
-
-        self.regs.set_flags((result as u8) == 0, false, h, c);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x8E(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("(HL)");
-
-        let (_, _, _, old_c) = self.regs.get_flags();
-
-        let (result, c, h) = add_bytes(op1, op2, if old_c { 1 } else { 0 });
-
-        self.store_result("A", result, true);
-
-        self.regs.set_flags((result as u8) == 0, false, h, c);
-        self.regs.write_byte(REG_T, 8);
-    }
-
-    fn x8F(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("A");
-
-        let (_, _, _, old_c) = self.regs.get_flags();
-
-        let (result, c, h) = add_bytes(op1, op2, if old_c { 1 } else { 0 });
-
-        self.store_result("A", result, true);
-
-        self.regs.set_flags((result as u8) == 0, false, h, c);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x90(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("B");
-
-        let (result, c, h) = sub_bytes(op1, op2, 0);
-
-        self.regs.set_flags((result as u8) == 0, true, h, c);
-        self.store_result("A", result, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x91(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("C");
-
-        let (result, c, h) = sub_bytes(op1, op2, 0);
-
-        self.regs.set_flags((result as u8) == 0, true, h, c);
-        self.store_result("A", result, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x92(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("D");
-
-        let (result, c, h) = sub_bytes(op1, op2, 0);
-
-        self.regs.set_flags((result as u8) == 0, true, h, c);
-        self.store_result("A", result, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x93(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("E");
-
-        let (result, c, h) = sub_bytes(op1, op2, 0);
-
-        self.regs.set_flags((result as u8) == 0, true, h, c);
-        self.store_result("A", result, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x94(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("H");
-
-        let (result, c, h) = sub_bytes(op1, op2, 0);
-
-        self.regs.set_flags((result as u8) == 0, true, h, c);
-        self.store_result("A", result, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x95(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("L");
-
-        let (result, c, h) = sub_bytes(op1, op2, 0);
-
-        self.regs.set_flags((result as u8) == 0, true, h, c);
-        self.store_result("A", result, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x96(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("(HL)");
-
-        let (result, c, h) = sub_bytes(op1, op2, 0);
-
-        self.regs.set_flags((result as u8) == 0, true, h, c);
-        self.store_result("A", result, true);
-        self.regs.write_byte(REG_T, 8);
-    }
-
-    fn x97(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("A");
-
-        let (result, c, h) = sub_bytes(op1, op2, 0);
-
-        self.regs.set_flags((result as u8) == 0, true, h, c);
-        self.store_result("A", result, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x98(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("B");
-        let (_, _, _, op3) = self.regs.get_flags();
-
-        let (result, c, h) = sub_bytes(op1, op2, if op3 { 1 } else { 0 });
-
-        self.regs.set_flags((result as u8) == 0, true, h, c);
-        self.store_result("A", result, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x99(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("C");
-        let (_, _, _, op3) = self.regs.get_flags();
-
-        let (result, c, h) = sub_bytes(op1, op2, if op3 { 1 } else { 0 });
-
-        self.regs.set_flags((result as u8) == 0, true, h, c);
-        self.store_result("A", result, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x9A(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("D");
-        let (_, _, _, op3) = self.regs.get_flags();
-
-        let (result, c, h) = sub_bytes(op1, op2, if op3 { 1 } else { 0 });
-
-        self.regs.set_flags((result as u8) == 0, true, h, c);
-        self.store_result("A", result, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x9B(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("E");
-        let (_, _, _, op3) = self.regs.get_flags();
-
-        let (result, c, h) = sub_bytes(op1, op2, if op3 { 1 } else { 0 });
-
-        self.regs.set_flags((result as u8) == 0, true, h, c);
-        self.store_result("A", result, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x9C(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("H");
-        let (_, _, _, op3) = self.regs.get_flags();
-
-        let (result, c, h) = sub_bytes(op1, op2, if op3 { 1 } else { 0 });
-
-        self.regs.set_flags((result as u8) == 0, true, h, c);
-        self.store_result("A", result, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x9D(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("L");
-        let (_, _, _, op3) = self.regs.get_flags();
-
-        let (result, c, h) = sub_bytes(op1, op2, if op3 { 1 } else { 0 });
-
-        self.regs.set_flags((result as u8) == 0, true, h, c);
-        self.store_result("A", result, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn x9E(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("(HL)");
-        let (_, _, _, op3) = self.regs.get_flags();
-
-        let (result, c, h) = sub_bytes(op1, op2, if op3 { 1 } else { 0 });
-
-        self.regs.set_flags((result as u8) == 0, true, h, c);
-        self.store_result("A", result, true);
-        self.regs.write_byte(REG_T, 8);
-    }
-
-    fn x9F(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("A");
-        let (_, _, _, op3) = self.regs.get_flags();
-
-        let (result, c, h) = sub_bytes(op1, op2, if op3 { 1 } else { 0 });
-
-        self.regs.set_flags((result as u8) == 0, true, h, c);
-        self.store_result("A", result, true);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xA0(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("B");
-
-        let result = op1 & op2;
-
-        self.store_result("A", result, true);
-
-        self.regs.set_flags((result as u8) == 0, false, true, false);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xA1(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("C");
-
-        let result = op1 & op2;
-
-        self.store_result("A", result, true);
-
-        self.regs.set_flags((result as u8) == 0, false, true, false);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xA2(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("D");
-
-        let result = op1 & op2;
-
-        self.store_result("A", result, true);
-
-        self.regs.set_flags((result as u8) == 0, false, true, false);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xA3(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("E");
-
-        let result = op1 & op2;
-
-        self.store_result("A", result, true);
-
-        self.regs.set_flags((result as u8) == 0, false, true, false);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xA4(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("H");
-
-        let result = op1 & op2;
-
-        self.store_result("A", result, true);
-
-        self.regs.set_flags((result as u8) == 0, false, true, false);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xA5(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("L");
-
-        let result = op1 & op2;
-
-        self.store_result("A", result, true);
-
-        self.regs.set_flags((result as u8) == 0, false, true, false);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xA6(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("(HL)");
-
-        let result = op1 & op2;
-
-        self.store_result("A", result, true);
-
-        self.regs.set_flags((result as u8) == 0, false, true, false);
-        self.regs.write_byte(REG_T, 8);
-    }
-
-    fn xA7(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("A");
-
-        let result = op1 & op2;
-
-        self.store_result("A", result, true);
-
-        self.regs.set_flags((result as u8) == 0, false, true, false);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xA8(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("B");
-
-        let result = op1 ^ op2;
-
-        self.store_result("A", result, true);
-
-        self.regs
-            .set_flags((result as u8) == 0, false, false, false);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xA9(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("C");
-
-        let result = op1 ^ op2;
-
-        self.store_result("A", result, true);
-
-        self.regs
-            .set_flags((result as u8) == 0, false, false, false);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xAA(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("D");
-
-        let result = op1 ^ op2;
-
-        self.store_result("A", result, true);
-
-        self.regs
-            .set_flags((result as u8) == 0, false, false, false);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xAB(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("E");
-
-        let result = op1 ^ op2;
-
-        self.store_result("A", result, true);
-
-        self.regs
-            .set_flags((result as u8) == 0, false, false, false);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xAC(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("H");
-
-        let result = op1 ^ op2;
-
-        self.store_result("A", result, true);
-
-        self.regs
-            .set_flags((result as u8) == 0, false, false, false);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xAD(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("L");
-
-        let result = op1 ^ op2;
-
-        self.store_result("A", result, true);
-
-        self.regs
-            .set_flags((result as u8) == 0, false, false, false);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xAE(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("(HL)");
-
-        let result = op1 ^ op2;
-
-        self.store_result("A", result, true);
-
-        self.regs
-            .set_flags((result as u8) == 0, false, false, false);
-        self.regs.write_byte(REG_T, 8);
-    }
-
-    fn xAF(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("A");
-
-        let result = op1 ^ op2;
-
-        self.store_result("A", result, true);
-
-        self.regs
-            .set_flags((result as u8) == 0, false, false, false);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xB0(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("B");
-
-        let result = op1 | op2;
-
-        self.store_result("A", result, true);
-
-        self.regs
-            .set_flags((result as u8) == 0, false, false, false);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xB1(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("C");
-
-        let result = op1 | op2;
-
-        self.store_result("A", result, true);
-
-        self.regs
-            .set_flags((result as u8) == 0, false, false, false);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xB2(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("D");
-
-        let result = op1 | op2;
-
-        self.store_result("A", result, true);
-
-        self.regs
-            .set_flags((result as u8) == 0, false, false, false);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xB3(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("E");
-
-        let result = op1 | op2;
-
-        self.store_result("A", result, true);
-
-        self.regs
-            .set_flags((result as u8) == 0, false, false, false);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xB4(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("H");
-
-        let result = op1 | op2;
-
-        self.store_result("A", result, true);
-
-        self.regs
-            .set_flags((result as u8) == 0, false, false, false);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xB5(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("L");
-
-        let result = op1 | op2;
-
-        self.store_result("A", result, true);
-
-        self.regs
-            .set_flags((result as u8) == 0, false, false, false);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xB6(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("(HL)");
-
-        let result = op1 | op2;
-
-        self.store_result("A", result, true);
-
-        self.regs
-            .set_flags((result as u8) == 0, false, false, false);
-        self.regs.write_byte(REG_T, 8);
-    }
-
-    fn xB7(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("A");
-
-        let result = op1 | op2;
-
-        self.store_result("A", result, true);
-
-        self.regs
-            .set_flags((result as u8) == 0, false, false, false);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xB8(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("B");
-
-        let (result, c, h) = sub_bytes(op1, op2, 0);
-
-        self.regs.set_flags((result as u8) == 0, true, h, c);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xB9(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("C");
-
-        let (result, c, h) = sub_bytes(op1, op2, 0);
-
-        self.regs.set_flags((result as u8) == 0, true, h, c);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xBA(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("D");
-
-        let (result, c, h) = sub_bytes(op1, op2, 0);
-
-        self.regs.set_flags((result as u8) == 0, true, h, c);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xBB(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("E");
-
-        let (result, c, h) = sub_bytes(op1, op2, 0);
-
-        self.regs.set_flags((result as u8) == 0, true, h, c);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xBC(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("H");
-
-        let (result, c, h) = sub_bytes(op1, op2, 0);
-
-        self.regs.set_flags((result as u8) == 0, true, h, c);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xBD(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("L");
-
-        let (result, c, h) = sub_bytes(op1, op2, 0);
-
-        self.regs.set_flags((result as u8) == 0, true, h, c);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xBE(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("(HL)");
-
-        let (result, c, h) = sub_bytes(op1, op2, 0);
-
-        self.regs.set_flags((result as u8) == 0, true, h, c);
-        self.regs.write_byte(REG_T, 8);
-    }
-
-    fn xBF(&mut self) {
-        let op1 = self.get_operand_value("A");
-        let op2 = self.get_operand_value("A");
-
-        let (result, c, h) = sub_bytes(op1, op2, 0);
-
-        self.regs.set_flags((result as u8) == 0, true, h, c);
-        self.regs.write_byte(REG_T, 4);
-    }
-
-    fn xC0(&mut self) {
-        self.tick_m();
-        let cond = self.get_operand_value("NZ");
-        if cond == 0 {
-            self.regs.write_byte(REG_T, 8);
-            return;
-        }
-
-        let op1 = self.pop();
-        self.tick_m();
-        self.store_result("PC", op1, false);
-        self.regs.write_byte(REG_T, 20);
-    }
-
     fn xC1(&mut self) {
         let op1 = self.pop();
         self.store_result("BC", op1, false);
         self.regs.write_byte(REG_T, 12);
-    }
-
-    fn xC2(&mut self) {
-        let op1 = self.get_operand_value("a16");
-        let cond = self.get_operand_value("NZ");
-
-        if cond == 0 {
-            self.regs.write_byte(REG_T, 12);
-            return;
-        }
-
-        self.tick_m();
-        self.store_result("PC", op1, false);
-        self.regs.write_byte(REG_T, 16);
     }
 
     fn xC3(&mut self) {
@@ -2644,23 +1288,6 @@ impl<M: Memory> CPU<M> {
         self.tick_m();
         self.store_result("PC", op1, false);
         self.regs.write_byte(REG_T, 16);
-    }
-
-    fn xC4(&mut self) {
-        let op1 = self.get_operand_value("a16");
-
-        let cond = self.get_operand_value("NZ");
-        if cond == 0 {
-            self.regs.write_byte(REG_T, 12);
-            return;
-        }
-
-        let value = self.get_registry_value("PC");
-        self.tick_m();
-        self.push(value);
-
-        self.store_result("PC", op1, false);
-        self.regs.write_byte(REG_T, 24);
     }
 
     fn xC5(&mut self) {
@@ -2682,29 +1309,6 @@ impl<M: Memory> CPU<M> {
         self.regs.write_byte(REG_T, 8);
     }
 
-    fn xC7(&mut self) {
-        let value = self.get_registry_value("PC");
-        self.tick_m();
-        self.push(value);
-        self.store_result("PC", 0x00, false);
-        self.regs.write_byte(REG_T, 16);
-    }
-
-    fn xC8(&mut self) {
-        self.tick_m();
-        let cond = self.get_operand_value("Z");
-
-        if cond == 0 {
-            self.regs.write_byte(REG_T, 8);
-            return;
-        }
-
-        let op1 = self.pop();
-        self.tick_m();
-        self.store_result("PC", op1, false);
-        self.regs.write_byte(REG_T, 20);
-    }
-
     fn xC9(&mut self) {
         let op1 = self.pop();
         self.tick_m();
@@ -2712,39 +1316,8 @@ impl<M: Memory> CPU<M> {
         self.regs.write_byte(REG_T, 16);
     }
 
-    fn xCA(&mut self) {
-        let op1 = self.get_operand_value("a16");
-
-        let cond = self.get_operand_value("Z");
-        if cond == 0 {
-            self.regs.write_byte(REG_T, 12);
-            return;
-        }
-
-        self.tick_m();
-        self.store_result("PC", op1, false);
-        self.regs.write_byte(REG_T, 16);
-    }
-
     fn xCB(&mut self) {
         panic!("wtf?")
-    }
-
-    fn xCC(&mut self) {
-        let op1 = self.get_operand_value("a16");
-
-        let cond = self.get_operand_value("Z");
-        if cond == 0 {
-            self.regs.write_byte(REG_T, 12);
-            return;
-        }
-
-        let value = self.get_registry_value("PC");
-        self.tick_m();
-        self.push(value);
-
-        self.store_result("PC", op1, false);
-        self.regs.write_byte(REG_T, 24);
     }
 
     fn xCD(&mut self) {
@@ -2772,65 +1345,10 @@ impl<M: Memory> CPU<M> {
         self.regs.write_byte(REG_T, 8);
     }
 
-    fn xCF(&mut self) {
-        let value = self.get_registry_value("PC");
-        self.tick_m();
-        self.push(value);
-        self.store_result("PC", 0x08, false);
-        self.regs.write_byte(REG_T, 16);
-    }
-
-    fn xD0(&mut self) {
-        self.tick_m();
-        let cond = self.get_operand_value("NC");
-        if cond == 0 {
-            self.regs.write_byte(REG_T, 8);
-            return;
-        }
-
-        let op1 = self.pop();
-        self.tick_m();
-        self.store_result("PC", op1, false);
-        self.regs.write_byte(REG_T, 20);
-    }
-
     fn xD1(&mut self) {
         let op1 = self.pop();
         self.store_result("DE", op1, false);
         self.regs.write_byte(REG_T, 12);
-    }
-
-    fn xD2(&mut self) {
-        let op1 = self.get_operand_value("a16");
-
-        let cond = self.get_operand_value("NC");
-        if cond == 0 {
-            self.regs.write_byte(REG_T, 12);
-            return;
-        }
-
-        self.tick_m();
-        self.store_result("PC", op1, false);
-        self.regs.write_byte(REG_T, 16);
-    }
-
-    fn xD3(&mut self) {}
-
-    fn xD4(&mut self) {
-        let op1 = self.get_operand_value("a16");
-
-        let cond = self.get_operand_value("NC");
-        if cond == 0 {
-            self.regs.write_byte(REG_T, 12);
-            return;
-        }
-
-        let value = self.get_registry_value("PC");
-        self.tick_m();
-        self.push(value);
-
-        self.store_result("PC", op1, false);
-        self.regs.write_byte(REG_T, 24);
     }
 
     fn xD5(&mut self) {
@@ -2851,28 +1369,6 @@ impl<M: Memory> CPU<M> {
         self.regs.write_byte(REG_T, 8);
     }
 
-    fn xD7(&mut self) {
-        let value = self.get_registry_value("PC");
-        self.tick_m();
-        self.push(value);
-        self.store_result("PC", 0x10, false);
-        self.regs.write_byte(REG_T, 16);
-    }
-
-    fn xD8(&mut self) {
-        self.tick_m();
-        let cond = self.get_operand_value("CA");
-        if cond == 0 {
-            self.regs.write_byte(REG_T, 8);
-            return;
-        }
-
-        let op1 = self.pop();
-        self.tick_m();
-        self.store_result("PC", op1, false);
-        self.regs.write_byte(REG_T, 20);
-    }
-
     fn xD9(&mut self) {
         let op1 = self.pop();
         self.tick_m();
@@ -2881,41 +1377,6 @@ impl<M: Memory> CPU<M> {
         self.interrupt_master_enable = true;
         self.regs.write_byte(REG_T, 16);
     }
-
-    fn xDA(&mut self) {
-        let op1 = self.get_operand_value("a16");
-
-        let cond = self.get_operand_value("CA");
-        if cond == 0 {
-            self.regs.write_byte(REG_T, 12);
-            return;
-        }
-
-        self.tick_m();
-        self.store_result("PC", op1, false);
-        self.regs.write_byte(REG_T, 16);
-    }
-
-    fn xDB(&mut self) {}
-
-    fn xDC(&mut self) {
-        let op1 = self.get_operand_value("a16");
-
-        let cond = self.get_operand_value("CA");
-        if cond == 0 {
-            self.regs.write_byte(REG_T, 12);
-            return;
-        }
-
-        let value = self.get_registry_value("PC");
-        self.tick_m();
-        self.push(value);
-
-        self.store_result("PC", op1, false);
-        self.regs.write_byte(REG_T, 24);
-    }
-
-    fn xDD(&mut self) {}
 
     fn xDE(&mut self) {
         let op1 = self.get_operand_value("A");
@@ -2927,14 +1388,6 @@ impl<M: Memory> CPU<M> {
         self.regs.set_flags((result as u8) == 0, true, h, c);
         self.store_result("A", result, true);
         self.regs.write_byte(REG_T, 8);
-    }
-
-    fn xDF(&mut self) {
-        let value = self.get_registry_value("PC");
-        self.tick_m();
-        self.push(value);
-        self.store_result("PC", 0x18, false);
-        self.regs.write_byte(REG_T, 16);
     }
 
     fn xE0(&mut self) {
@@ -2955,10 +1408,6 @@ impl<M: Memory> CPU<M> {
         self.regs.write_byte(REG_T, 8);
     }
 
-    fn xE3(&mut self) {}
-
-    fn xE4(&mut self) {}
-
     fn xE5(&mut self) {
         let op1 = self.get_operand_value("HL");
         self.tick_m();
@@ -2976,14 +1425,6 @@ impl<M: Memory> CPU<M> {
 
         self.regs.set_flags((result as u8) == 0, false, true, false);
         self.regs.write_byte(REG_T, 8);
-    }
-
-    fn xE7(&mut self) {
-        let value = self.get_registry_value("PC");
-        self.tick_m();
-        self.push(value);
-        self.store_result("PC", 0x20, false);
-        self.regs.write_byte(REG_T, 16);
     }
 
     fn xE8(&mut self) {
@@ -3012,12 +1453,6 @@ impl<M: Memory> CPU<M> {
         self.regs.write_byte(REG_T, 16);
     }
 
-    fn xEB(&mut self) {}
-
-    fn xEC(&mut self) {}
-
-    fn xED(&mut self) {}
-
     fn xEE(&mut self) {
         let op1 = self.get_operand_value("A");
         let op2 = self.get_operand_value("d8");
@@ -3029,14 +1464,6 @@ impl<M: Memory> CPU<M> {
         self.regs
             .set_flags((result as u8) == 0, false, false, false);
         self.regs.write_byte(REG_T, 8);
-    }
-
-    fn xEF(&mut self) {
-        let value = self.get_registry_value("PC");
-        self.tick_m();
-        self.push(value);
-        self.store_result("PC", 0x28, false);
-        self.regs.write_byte(REG_T, 16);
     }
 
     fn xF0(&mut self) {
@@ -3062,8 +1489,6 @@ impl<M: Memory> CPU<M> {
         self.regs.write_byte(REG_T, 4);
     }
 
-    fn xF4(&mut self) {}
-
     fn xF5(&mut self) {
         let op1 = self.get_operand_value("AF");
         self.tick_m();
@@ -3083,14 +1508,6 @@ impl<M: Memory> CPU<M> {
             .set_flags((result as u8) == 0, false, false, false);
 
         self.regs.write_byte(REG_T, 8);
-    }
-
-    fn xF7(&mut self) {
-        let value = self.get_registry_value("PC");
-        self.tick_m();
-        self.push(value);
-        self.store_result("PC", 0x30, false);
-        self.regs.write_byte(REG_T, 16);
     }
 
     fn xF8(&mut self) {
@@ -3124,10 +1541,6 @@ impl<M: Memory> CPU<M> {
         self.regs.write_byte(REG_T, 4);
     }
 
-    fn xFC(&mut self) {}
-
-    fn xFD(&mut self) {}
-
     fn xFE(&mut self) {
         let op1 = self.get_operand_value("A");
         let op2 = self.get_operand_value("d8");
@@ -3138,12 +1551,80 @@ impl<M: Memory> CPU<M> {
         self.regs.write_byte(REG_T, 8);
     }
 
-    fn xFF(&mut self) {
-        let value = self.get_registry_value("PC");
+    fn cond_met(&mut self, opcode: u8) -> bool {
+        let (z, _, _, c) = self.regs.get_flags();
+        match (opcode >> 3) & 0x03 {
+            0 => !z, // NZ
+            1 => z,  // Z
+            2 => !c, // NC
+            3 => c,  // C
+            _ => unreachable!(),
+        }
+    }
+
+    fn cond_jr(&mut self, opcode: u8) {
+        let op1 = self.get_operand_value("PC");
+        let op2 = self.get_operand_value("d8");
+        if !self.cond_met(opcode) {
+            self.regs.write_byte(REG_T, 8);
+            return;
+        }
+        let result = (op1 as i16).wrapping_add(op2 as i8 as i16).wrapping_add(1) as u16;
         self.tick_m();
-        self.push(value);
-        self.store_result("PC", 0x38, false);
-        self.regs.write_byte(REG_T, 16);
+        self.store_result("PC", result, false);
+        self.regs.write_byte(REG_T, 12);
+    }
+
+    fn alu_a_r(&mut self, opcode: u8) {
+        let src = Self::cb_reg_name(opcode & 0x07);
+        let is_hl = (opcode & 0x07) == 6;
+        let a = self.get_operand_value("A");
+        let operand = self.get_operand_value(src);
+        match (opcode >> 3) & 0x07 {
+            0 => { // ADD
+                let (result, c, h) = add_bytes(a, operand, 0);
+                self.store_result("A", result, true);
+                self.regs.set_flags((result as u8) == 0, false, h, c);
+            }
+            1 => { // ADC
+                let (_, _, _, old_c) = self.regs.get_flags();
+                let (result, c, h) = add_bytes(a, operand, if old_c { 1 } else { 0 });
+                self.store_result("A", result, true);
+                self.regs.set_flags((result as u8) == 0, false, h, c);
+            }
+            2 => { // SUB
+                let (result, c, h) = sub_bytes(a, operand, 0);
+                self.store_result("A", result, true);
+                self.regs.set_flags((result as u8) == 0, true, h, c);
+            }
+            3 => { // SBC
+                let (_, _, _, old_c) = self.regs.get_flags();
+                let (result, c, h) = sub_bytes(a, operand, if old_c { 1 } else { 0 });
+                self.store_result("A", result, true);
+                self.regs.set_flags((result as u8) == 0, true, h, c);
+            }
+            4 => { // AND
+                let result = a & operand;
+                self.store_result("A", result, true);
+                self.regs.set_flags((result as u8) == 0, false, true, false);
+            }
+            5 => { // XOR
+                let result = a ^ operand;
+                self.store_result("A", result, true);
+                self.regs.set_flags((result as u8) == 0, false, false, false);
+            }
+            6 => { // OR
+                let result = a | operand;
+                self.store_result("A", result, true);
+                self.regs.set_flags((result as u8) == 0, false, false, false);
+            }
+            7 => { // CP (compare: like SUB but discard result)
+                let (result, c, h) = sub_bytes(a, operand, 0);
+                self.regs.set_flags((result as u8) == 0, true, h, c);
+            }
+            _ => unreachable!(),
+        }
+        self.regs.write_byte(REG_T, if is_hl { 8 } else { 4 });
     }
 
     fn cb_reg_name(reg_idx: u8) -> &'static str {
