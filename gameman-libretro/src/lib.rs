@@ -151,6 +151,41 @@ impl Core for GameboyCore {
         ctx.draw_frame(bytes, 160, 144, 160 * 4);
     }
 
+    fn get_memory_data(
+        &mut self,
+        id: std::os::raw::c_uint,
+        _ctx: &mut GetMemoryDataContext,
+    ) -> *mut std::os::raw::c_void {
+        if id != 0 {
+            return std::ptr::null_mut();
+        }
+        match self.gameboy.as_mut() {
+            Some(gb) => {
+                let ram = &mut gb.cpu.mmu.cartridge.inner_cart_mut().ram;
+                if ram.is_empty() {
+                    std::ptr::null_mut()
+                } else {
+                    ram.as_mut_ptr() as *mut std::os::raw::c_void
+                }
+            }
+            None => std::ptr::null_mut(),
+        }
+    }
+
+    fn get_memory_size(
+        &mut self,
+        id: std::os::raw::c_uint,
+        _ctx: &mut GetMemorySizeContext,
+    ) -> usize {
+        if id != 0 {
+            return 0;
+        }
+        match self.gameboy.as_ref() {
+            Some(gb) => gb.cpu.mmu.cartridge.inner_cart().ram.len(),
+            None => 0,
+        }
+    }
+
     fn get_serialize_size(&mut self, _ctx: &mut GetSerializeSizeContext) -> usize {
         256 * 1024
     }
