@@ -1,3 +1,4 @@
+use gameman::cpu::Operand;
 use gameman::gameboy::Gameboy;
 
 const CLOCKS_IN_A_FRAME: u32 = 70224;
@@ -67,8 +68,7 @@ impl GameboyTestExt for Gameboy {
             frames += 1;
 
             if ld_b_b > 1 {
-                let b = self.get_cpu_register("B");
-                return b == 3;
+                return self.cpu.read_reg(Operand::B) == 3;
             }
 
             if frames > 500 {

@@ -1,7 +1,7 @@
 use crate::keypad::Button;
 
 use crate::cartridge::load_rom;
-use crate::cpu::CPU;
+use crate::cpu::{CPU, Operand};
 use crate::gpu::GPU;
 use crate::mem::{MMU, Memory};
 use crate::utils::load_boot_rom;
@@ -9,7 +9,7 @@ use crate::utils::load_boot_rom;
 const CLOCKS_IN_A_FRAME: u32 = 70224;
 
 pub struct Gameboy {
-    pub(crate) cpu: CPU<MMU<GPU>>,
+    pub cpu: CPU<MMU<GPU>>,
 }
 
 impl Gameboy {
@@ -22,14 +22,14 @@ impl Gameboy {
 
     pub fn load_bios(&mut self) {
         self.cpu.mmu.set_bios(load_boot_rom());
-        self.cpu.set_registry_value("PC", 0);
+        self.cpu.write_reg(Operand::PC, 0);
     }
 
     // fetch the operation, decodes it, and executes it.
     // returns the address of the executed instruction, the instruction opcode,
     // and t cycles passed during this step
     pub fn cpu_step(&mut self) -> (u16, u16, u8) {
-        let line_number = self.cpu.get_registry_value("PC");
+        let line_number = self.cpu.read_reg(Operand::PC);
 
         let (instr, cycles_this_step) = self.cpu.step();
 
@@ -75,10 +75,6 @@ impl Gameboy {
 
     pub fn get_link_buffer(&self) -> [char; 256] {
         self.cpu.mmu.link.get_buffer()
-    }
-
-    pub fn get_cpu_register(&mut self, name: &str) -> u16 {
-        self.cpu.get_registry_value(name)
     }
 
     fn request_keypad_interrupt(&mut self) {
