@@ -1,9 +1,11 @@
-#[macro_use]
-extern crate libretro_backend;
-
-use libretro_backend::{AudioVideoInfo, Core, CoreInfo, GameData, JoypadButton, LoadGameResult, PixelFormat, RuntimeHandle};
 use gameman::gameboy::Gameboy;
 use gameman::keypad::Button;
+use rust_libretro::{
+    contexts::*,
+    core::{Core, CoreOptions},
+    retro_core, sys::*, types::*,
+};
+use std::ffi::{CStr, CString};
 
 // XRGB8888: 0x00RRGGBB — same palette as the SDL frontend
 const PALETTE: [u32; 4] = [
@@ -13,122 +15,168 @@ const PALETTE: [u32; 4] = [
     0x00_2D_1B_00,
 ];
 
-const BUTTON_MAP: &[(JoypadButton, Button)] = &[
-    (JoypadButton::Up,     Button::UP),
-    (JoypadButton::Down,   Button::DOWN),
-    (JoypadButton::Left,   Button::LEFT),
-    (JoypadButton::Right,  Button::RIGHT),
-    (JoypadButton::A,      Button::A),
-    (JoypadButton::B,      Button::B),
-    (JoypadButton::Select, Button::SELECT),
-    (JoypadButton::Start,  Button::START),
+const BUTTON_MAP: &[(JoypadState, Button)] = &[
+    (JoypadState::UP, Button::UP),
+    (JoypadState::DOWN, Button::DOWN),
+    (JoypadState::LEFT, Button::LEFT),
+    (JoypadState::RIGHT, Button::RIGHT),
+    (JoypadState::A, Button::A),
+    (JoypadState::B, Button::B),
+    (JoypadState::SELECT, Button::SELECT),
+    (JoypadState::START, Button::START),
 ];
 
 struct GameboyCore {
     gameboy: Option<Gameboy>,
-    game_data: Option<GameData>,
     rom_path: String,
-    prev_buttons: u8,
+    prev_buttons: JoypadState,
     pending_audio: Vec<i16>,
 }
 
-impl Default for GameboyCore {
-    fn default() -> Self {
-        GameboyCore {
-            gameboy: None,
-            game_data: None,
-            rom_path: String::new(),
-            prev_buttons: 0,
-            pending_audio: Vec::new(),
-        }
-    }
-}
+retro_core!(GameboyCore {
+    gameboy: None,
+    rom_path: String::new(),
+    prev_buttons: JoypadState::empty(),
+    pending_audio: Vec::new(),
+});
+
+impl CoreOptions for GameboyCore {}
 
 impl Core for GameboyCore {
-    fn info() -> CoreInfo {
-        CoreInfo::new("gameman", env!("CARGO_PKG_VERSION"))
-            .supports_roms_with_extension("gb")
-            .requires_path_when_loading_roms()
+    fn get_info(&self) -> SystemInfo {
+        SystemInfo {
+            library_name: CString::new("gameman").unwrap(),
+            library_version: CString::new(env!("CARGO_PKG_VERSION")).unwrap(),
+            valid_extensions: CString::new("gb|gbc").unwrap(),
+            need_fullpath: true,
+            block_extract: false,
+        }
     }
 
-    fn on_load_game(&mut self, game_data: GameData) -> LoadGameResult {
-        let path = match game_data.path() {
-            Some(p) => p.to_string(),
-            None => return LoadGameResult::Failed(game_data),
+    fn on_get_av_info(&mut self, _ctx: &mut GetAvInfoContext) -> retro_system_av_info {
+        retro_system_av_info {
+            geometry: retro_game_geometry {
+                base_width: 160,
+                base_height: 144,
+                max_width: 160,
+                max_height: 144,
+                aspect_ratio: 0.0,
+            },
+            timing: retro_system_timing {
+                fps: 59.73,
+                sample_rate: 44100.0,
+            },
+        }
+    }
+
+    fn on_load_game(
+        &mut self,
+        game: Option<retro_game_info>,
+        ctx: &mut LoadGameContext,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        ctx.set_pixel_format(PixelFormat::XRGB8888);
+
+        let info = game.ok_or("no game info")?;
+        let path = unsafe {
+            if info.path.is_null() {
+                return Err("no path".into());
+            }
+            CStr::from_ptr(info.path).to_str()?.to_owned()
         };
 
         self.gameboy = Some(Gameboy::new(&path));
         self.rom_path = path;
-        self.prev_buttons = 0;
-        self.game_data = Some(game_data);
-
-        LoadGameResult::Success(
-            AudioVideoInfo::new()
-                .video(160, 144, 59.73, PixelFormat::ARGB8888)
-                .audio(44100.0),
-        )
+        self.prev_buttons = JoypadState::empty();
+        Ok(())
     }
 
-    fn on_unload_game(&mut self) -> GameData {
+    fn on_unload_game(&mut self, _ctx: &mut UnloadGameContext) {
         self.gameboy = None;
-        self.game_data.take().unwrap()
     }
 
-    fn on_run(&mut self, handle: &mut RuntimeHandle) {
+    fn on_reset(&mut self, _ctx: &mut ResetContext) {
+        if !self.rom_path.is_empty() {
+            self.gameboy = Some(Gameboy::new(&self.rom_path));
+            self.prev_buttons = JoypadState::empty();
+        }
+    }
+
+    fn on_run(&mut self, ctx: &mut RunContext, _delta_us: Option<i64>) {
         let gb = match self.gameboy.as_mut() {
             Some(gb) => gb,
             None => return,
         };
 
-        // Detect button transitions and drive the keypad
-        let mut new_buttons: u8 = 0;
-        for (i, (retro_btn, gb_btn)) in BUTTON_MAP.iter().enumerate() {
-            let pressed = handle.is_joypad_button_pressed(0, *retro_btn);
-            if pressed {
-                new_buttons |= 1 << i;
+        // Detect button transitions
+        ctx.poll_input();
+        let new_buttons = ctx.get_joypad_state(0, 0);
+        let pressed = new_buttons & !self.prev_buttons;
+        let released = self.prev_buttons & !new_buttons;
+        for &(bit, gb_btn) in BUTTON_MAP {
+            if pressed.contains(bit) {
+                gb.press_button(gb_btn);
             }
-            let was = (self.prev_buttons >> i) & 1 != 0;
-            if pressed && !was {
-                gb.press_button(*gb_btn);
-            } else if !pressed && was {
-                gb.release_button(*gb_btn);
+            if released.contains(bit) {
+                gb.release_button(gb_btn);
             }
         }
         self.prev_buttons = new_buttons;
 
         gb.step();
 
-        // Drain all mono samples produced this frame, duplicate to stereo
-        let mono = gb.drain_audio();
-        self.pending_audio.extend(mono.iter().flat_map(|&s| [s, s]));
+        // Audio: drain mono samples, duplicate to stereo
+        self.pending_audio
+            .extend(gb.drain_audio().iter().flat_map(|&s| [s, s]));
 
-        // Upload >= minimum required (1478 = 739 stereo pairs > 1476.64 minimum)
+        // 1478 stereo i16 values = 739 pairs ≥ 44100/59.73 ≈ 738.4 minimum
         const MIN_STEREO_SAMPLES: usize = 1478;
-        let chunk = if self.pending_audio.len() >= MIN_STEREO_SAMPLES {
+        let chunk: Vec<i16> = if self.pending_audio.len() >= MIN_STEREO_SAMPLES {
             self.pending_audio.drain(..MIN_STEREO_SAMPLES).collect()
         } else {
-            // Pad with silence — only happens for the first frame at startup
             let mut v: Vec<i16> = self.pending_audio.drain(..).collect();
             v.resize(MIN_STEREO_SAMPLES, 0);
             v
         };
-        handle.upload_audio_frame(&chunk);
+        {
+            let audio_ctx = AudioContext::from(&mut *ctx);
+            audio_ctx.batch_audio_samples(&chunk);
+        }
 
-        // Video: palette index 0-3 → XRGB8888 bytes
+        // Video: palette index → XRGB8888
         let fb = gb.get_framebuffer();
         let pixels: Vec<u32> = fb.iter().map(|&c| PALETTE[c as usize]).collect();
         let bytes = unsafe {
             std::slice::from_raw_parts(pixels.as_ptr() as *const u8, pixels.len() * 4)
         };
-        handle.upload_video_frame(bytes);
+        ctx.draw_frame(bytes, 160, 144, 160 * 4);
     }
 
-    fn on_reset(&mut self) {
-        if !self.rom_path.is_empty() {
-            self.gameboy = Some(Gameboy::new(&self.rom_path));
-            self.prev_buttons = 0;
+    fn get_serialize_size(&mut self, _ctx: &mut GetSerializeSizeContext) -> usize {
+        256 * 1024
+    }
+
+    fn on_serialize(&mut self, slice: &mut [u8], _ctx: &mut SerializeContext) -> bool {
+        let Some(gb) = &self.gameboy else { return false; };
+        match bincode::serialize(gb) {
+            Ok(bytes) if bytes.len() <= slice.len() => {
+                slice[..bytes.len()].copy_from_slice(&bytes);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn on_unserialize(&mut self, slice: &mut [u8], _ctx: &mut UnserializeContext) -> bool {
+        match bincode::deserialize::<Gameboy>(slice) {
+            Ok(mut gb) => {
+                if gb.cpu.mmu.cartridge.restore().is_ok() {
+                    self.gameboy = Some(gb);
+                    true
+                } else {
+                    false
+                }
+            }
+            _ => false,
         }
     }
 }
-
-libretro_core!(GameboyCore);

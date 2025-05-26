@@ -9,4 +9,5 @@ crate-type = ["cdylib"]
 
 [dependencies]
 gameman = { path = "..", default-features = false }
-libretro-backend = "0.2"
+rust-libretro = "0.3"
+bincode = "1"
