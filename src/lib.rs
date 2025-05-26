@@ -2,7 +2,6 @@
 
 extern crate csv;
 extern crate lazy_static;
-#[macro_use]
 extern crate log;
 extern crate serde_derive;
 

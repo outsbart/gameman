@@ -62,17 +62,6 @@ pub enum Operand {
     D16, // fetch_next_word()
 }
 
-pub struct Clocks {
-    m: u32,
-    t: u32,
-}
-
-impl Clocks {
-    fn new() -> Self {
-        Clocks { m: 0, t: 0 }
-    }
-}
-
 struct Regs {
     regs: [u8; 12],
 }
@@ -159,7 +148,6 @@ impl Memory for Regs {
 }
 
 pub struct CPU<M: Memory> {
-    pub clks: Clocks,
     regs: Regs,
     pub mmu: M,
     interrupt_master_enable: bool,
@@ -181,7 +169,6 @@ impl<M: Memory> ByteStream for CPU<M> {
 impl<M: Memory> CPU<M> {
     pub fn new(mmu: M) -> CPU<M> {
         let mut cpu = CPU {
-            clks: Clocks::new(),
             regs: Regs::new(),
             mmu,
             interrupt_master_enable: false,
@@ -634,7 +621,7 @@ impl<M: Memory> CPU<M> {
                 0xF9 => self.xF9(),
                 0xFA => self.xFA(),
                 0xFB => self.xFB(),
-                _ => 0 // undefined/illegal opcodes
+                _ => 0, // undefined/illegal opcodes
             }
         } else {
             self.execute_cb(opcode)
@@ -1210,10 +1197,7 @@ mod tests {
 
     #[test]
     fn cpu_inizialization() {
-        let CPU { clks, mut regs, .. } = CPU::new(DummyMMU::new());
-
-        assert_eq!(clks.m, 0);
-        assert_eq!(clks.t, 0);
+        let CPU { mut regs, .. } = CPU::new(DummyMMU::new());
 
         assert_eq!(regs.read_byte(REG_A), 0x01);
         assert_eq!(regs.read_byte(REG_B), 0x00);
