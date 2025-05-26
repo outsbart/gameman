@@ -389,6 +389,16 @@ impl Sound {
         }
     }
 
+    pub fn post_boot_init(&mut self) {
+        self.set_nr52(0x80);
+        self.set_nr11(0xBF);
+        self.set_nr12(0xF3);
+        self.set_nr14(0xBF);
+        self.set_nr21(0x3F);
+        self.set_nr50(0x77);
+        self.set_nr51(0xF3);
+    }
+
     pub fn tick(&mut self, t: u8) {
         for _i in 0..t {
             self.tick_channels();

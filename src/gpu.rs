@@ -395,6 +395,8 @@ impl GPUMemoriesAccess for GPU {
         GPU::step(self, t)
     }
     fn post_boot_init(&mut self) {
+        self.write_byte(0xFF40, 0x91);
+        self.write_byte(0xFF47, 0xFC);
         self.mode = 1;
         self.line = 153;
         self.modeclock = 396;

@@ -55,16 +55,7 @@ impl<M: GPUMemoriesAccess> MMU<M> {
     }
 
     fn post_boot_init(&mut self) {
-        self.sound.set_nr52(0x80);
-        self.sound.set_nr11(0xBF);
-        self.sound.set_nr12(0xF3);
-        self.sound.set_nr14(0xBF);
-        self.sound.set_nr21(0x3F);
-        self.sound.set_nr50(0x77);
-        self.sound.set_nr51(0xF3);
-
-        self.gpu.write_byte(0xFF40, 0x91);
-        self.gpu.write_byte(0xFF47, 0xFC);
+        self.sound.post_boot_init();
         self.gpu.post_boot_init();
     }
 
