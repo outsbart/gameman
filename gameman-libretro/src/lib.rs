@@ -2,19 +2,17 @@ use gameman::gameboy::Gameboy;
 use gameman::keypad::Button;
 use rust_libretro::{
     contexts::*,
-    core::{Core, CoreOptions},
+    core::Core,
     input_descriptors,
+    proc::CoreOptions,
     retro_core, sys::*, types::*,
 };
 use std::ffi::{CStr, CString};
 
-// XRGB8888: 0x00RRGGBB — same palette as the SDL frontend
-const PALETTE: [u32; 4] = [
-    0x00_C4_F0_C2,
-    0x00_5A_B9_A8,
-    0x00_1E_60_6E,
-    0x00_2D_1B_00,
-];
+const PALETTE_CLASSIC:   [u32; 4] = [0x00C4F0C2, 0x005AB9A8, 0x001E606E, 0x002D1B00];
+const PALETTE_GRAYSCALE: [u32; 4] = [0x00FFFFFF, 0x00AAAAAA, 0x00555555, 0x00000000];
+const PALETTE_DMG_GREEN: [u32; 4] = [0x009BBC0F, 0x008BAC0F, 0x00306230, 0x000F380F];
+const PALETTE_POCKET:    [u32; 4] = [0x00C8C3A0, 0x008E8A6F, 0x005A5540, 0x001E1B10];
 
 const BUTTON_MAP: &[(JoypadState, Button)] = &[
     (JoypadState::UP, Button::UP),
@@ -27,11 +25,24 @@ const BUTTON_MAP: &[(JoypadState, Button)] = &[
     (JoypadState::START, Button::START),
 ];
 
+#[derive(CoreOptions)]
+#[options({
+    "gameman_palette",
+    "Color Palette",
+    "Selects the 4-color palette used to render the display.",
+    {
+        { "classic",   "Classic (Green)" },
+        { "grayscale", "Grayscale"        },
+        { "dmg_green", "DMG Green"        },
+        { "pocket",    "GB Pocket"        },
+    }
+})]
 struct GameboyCore {
     gameboy: Option<Gameboy>,
     rom_path: String,
     prev_buttons: JoypadState,
     pending_audio: Vec<i16>,
+    palette: [u32; 4],
 }
 
 retro_core!(GameboyCore {
@@ -39,9 +50,8 @@ retro_core!(GameboyCore {
     rom_path: String::new(),
     prev_buttons: JoypadState::empty(),
     pending_audio: Vec::new(),
+    palette: PALETTE_CLASSIC,
 });
-
-impl CoreOptions for GameboyCore {}
 
 impl Core for GameboyCore {
     fn on_init(&mut self, ctx: &mut InitContext) {
@@ -57,6 +67,15 @@ impl Core for GameboyCore {
         );
         let gctx: GenericContext = ctx.into();
         gctx.set_input_descriptors(DESCRIPTORS);
+    }
+
+    fn on_options_changed(&mut self, ctx: &mut OptionsChangedContext) {
+        self.palette = match ctx.get_variable("gameman_palette").as_deref() {
+            Some("grayscale") => PALETTE_GRAYSCALE,
+            Some("dmg_green") => PALETTE_DMG_GREEN,
+            Some("pocket")    => PALETTE_POCKET,
+            _                 => PALETTE_CLASSIC,
+        };
     }
 
     fn get_info(&self) -> SystemInfo {
@@ -160,7 +179,7 @@ impl Core for GameboyCore {
 
         // Video: palette index → XRGB8888
         let fb = gb.get_framebuffer();
-        let pixels: Vec<u32> = fb.iter().map(|&c| PALETTE[c as usize]).collect();
+        let pixels: Vec<u32> = fb.iter().map(|&c| self.palette[c as usize]).collect();
         let bytes = unsafe {
             std::slice::from_raw_parts(pixels.as_ptr() as *const u8, pixels.len() * 4)
         };
