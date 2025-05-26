@@ -3,8 +3,7 @@ use crate::keypad::Button;
 use crate::cartridge::load_rom;
 use crate::cpu::{CPU, Operand};
 use crate::gpu::GPU;
-use crate::mem::{MMU, Memory};
-use crate::utils::load_boot_rom;
+use crate::mem::{Interrupt, MMU, Memory};
 
 const CLOCKS_IN_A_FRAME: u32 = 70224;
 
@@ -21,7 +20,11 @@ impl Gameboy {
     }
 
     pub fn load_bios(&mut self) {
-        self.cpu.mmu.set_bios(load_boot_rom());
+        let bios: [u8; 0x0100] = std::fs::read("roms/DMG_ROM.bin")
+            .expect("couldn't open boot rom")
+            .try_into()
+            .expect("boot rom must be 256 bytes");
+        self.cpu.mmu.set_bios(bios);
         self.cpu.write_reg(Operand::PC, 0);
     }
 
@@ -78,7 +81,6 @@ impl Gameboy {
     }
 
     fn request_keypad_interrupt(&mut self) {
-        let interrupt_flags = self.cpu.mmu.read_byte(0xFF0F) | 0b10000;
-        self.cpu.mmu.write_byte(0xFF0F, interrupt_flags);
+        self.cpu.mmu.request_interrupt(Interrupt::Joypad);
     }
 }

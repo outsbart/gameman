@@ -1,23 +1,3 @@
-use std::fs::File;
-use std::io::Read;
-
-pub fn load_boot_rom() -> [u8; 0x0100] {
-    // TODO: make a generic function for loading roms
-    let mut boot_rom: [u8; 0x0100] = [0; 0x0100];
-
-    match File::open("roms/DMG_ROM.bin") {
-        Ok(mut file) => {
-            match file.read_exact(&mut boot_rom[..]) {
-                Ok(_) => boot_rom,
-                Err(_) => panic!("couldnt read the boot rom into the buffer!"),
-            };
-        }
-        Err(_) => panic!("couldnt open the boot rom file"),
-    }
-
-    boot_rom
-}
-
 pub fn swap_nibbles(unsigned: u8) -> u16 {
     let first_nibble = (unsigned & 0xF0) >> 4;
     let second_nibble = (unsigned & 0x0F) << 4;

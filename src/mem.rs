@@ -17,8 +17,8 @@ pub struct MMU<M: GPUMemoriesAccess> {
     pub timers: Timers,
     pub sound: Sound,
 
-    pub interrupt_enable: u8,
-    pub interrupt_flags: u8,
+    interrupt_enable: u8,
+    interrupt_flags: u8,
 
     pub oam_dma: OamDma,
     t_sub: u8, // T-cycle sub-counter within current M-cycle (0–3)
@@ -63,6 +63,18 @@ impl<M: GPUMemoriesAccess> MMU<M> {
         self.bios = bios;
         self.still_bios = true; // TODO: move this into a reset fn
     }
+
+    pub fn request_interrupt(&mut self, interrupt: Interrupt) {
+        self.interrupt_flags |= 1 << interrupt as u8;
+    }
+}
+
+pub enum Interrupt {
+    VBlank = 0,
+    Stat   = 1,
+    Timer  = 2,
+    Serial = 3,
+    Joypad = 4,
 }
 
 pub trait Memory {
@@ -221,18 +233,18 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
         }
         // Timers and GPU advance every T-cycle.
         if self.timers.tick(1) {
-            self.interrupt_flags |= 4;
+            self.request_interrupt(Interrupt::Timer);
         }
         // Serial clock derived from bit 8 of the divider (checked after timers.tick).
         if self.link.tick(self.timers.divider()) {
-            self.interrupt_flags |= 8;
+            self.request_interrupt(Interrupt::Serial);
         }
         let (vblank, stat) = self.gpu.step(1);
         if vblank {
-            self.interrupt_flags |= 1;
+            self.request_interrupt(Interrupt::VBlank);
         }
         if stat {
-            self.interrupt_flags |= 2;
+            self.request_interrupt(Interrupt::Stat);
         }
     }
 
