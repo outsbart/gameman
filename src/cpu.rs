@@ -311,7 +311,7 @@ impl<M: Memory> CPU<M> {
         }
     }
 
-    pub fn write_operand(&mut self, dst: Operand, val: u16, is_byte: bool) {
+    pub fn write_operand(&mut self, dst: Operand, val: u16) {
         let addr: u16 = match dst {
             Operand::A
             | Operand::B
@@ -337,16 +337,8 @@ impl<M: Memory> CPU<M> {
             Operand::IndA16 => self.fetch_next_word(),
             _ => unreachable!(),
         };
-        if is_byte {
-            self.mmu.write_byte(addr, val as u8);
-            self.tick_m();
-        } else {
-            self.mmu.write_byte(addr, (val & 0xFF) as u8);
-            self.tick_m();
-            self.mmu
-                .write_byte(addr.wrapping_add(1), ((val >> 8) & 0xFF) as u8);
-            self.tick_m();
-        }
+        self.mmu.write_byte(addr, val as u8);
+        self.tick_m();
     }
 
     pub fn push(&mut self, value: u16) {
@@ -625,7 +617,7 @@ impl<M: Memory> CPU<M> {
         let src = Self::cb_reg(opcode & 0x07);
         let dst = Self::cb_reg((opcode >> 3) & 0x07);
         let val = self.read_operand(src);
-        self.write_operand(dst, val, true);
+        self.write_operand(dst, val);
         let is_hl = (opcode & 0x07) == 6 || ((opcode >> 3) & 0x07) == 6;
         if is_hl { 8 } else { 4 }
     }
@@ -634,22 +626,22 @@ impl<M: Memory> CPU<M> {
         let idx = (opcode >> 3) & 0x07;
         let reg = Self::cb_reg(idx);
         let val = self.read_operand(Operand::D8);
-        self.write_operand(reg, val, true);
+        self.write_operand(reg, val);
         if idx == 6 { 12 } else { 8 }
     }
 
     fn ld_ind_r16_a(&mut self, opcode: u8) -> u8 {
         let a = self.read_reg(Operand::A);
         match (opcode >> 4) & 0x03 {
-            0 => self.write_operand(Operand::IndBC, a, true),
-            1 => self.write_operand(Operand::IndDE, a, true),
+            0 => self.write_operand(Operand::IndBC, a),
+            1 => self.write_operand(Operand::IndDE, a),
             2 => {
-                self.write_operand(Operand::IndHL, a, true);
+                self.write_operand(Operand::IndHL, a);
                 let hl = self.read_reg(Operand::HL);
                 self.write_reg(Operand::HL, hl.wrapping_add(1));
             }
             3 => {
-                self.write_operand(Operand::IndHL, a, true);
+                self.write_operand(Operand::IndHL, a);
                 let hl = self.read_reg(Operand::HL);
                 self.write_reg(Operand::HL, hl.wrapping_sub(1));
             }
@@ -682,7 +674,7 @@ impl<M: Memory> CPU<M> {
 
     fn ldh_ind_a8_a(&mut self) -> u8 {
         let op1 = self.read_reg(Operand::A);
-        self.write_operand(Operand::IndA8, op1, true);
+        self.write_operand(Operand::IndA8, op1);
         12
     }
 
@@ -694,7 +686,7 @@ impl<M: Memory> CPU<M> {
 
     fn ld_ind_c_a(&mut self) -> u8 {
         let op1 = self.read_reg(Operand::A);
-        self.write_operand(Operand::IndC, op1, true);
+        self.write_operand(Operand::IndC, op1);
         8
     }
 
@@ -706,7 +698,7 @@ impl<M: Memory> CPU<M> {
 
     fn ld_ind_a16_a(&mut self) -> u8 {
         let op1 = self.read_reg(Operand::A);
-        self.write_operand(Operand::IndA16, op1, true);
+        self.write_operand(Operand::IndA16, op1);
         16
     }
 
@@ -717,8 +709,12 @@ impl<M: Memory> CPU<M> {
     }
 
     fn ld_ind_a16_sp(&mut self) -> u8 {
-        let op1 = self.read_reg(Operand::SP);
-        self.write_operand(Operand::IndA16, op1, false);
+        let addr = self.fetch_next_word();
+        let sp = self.read_reg(Operand::SP);
+        self.mmu.write_byte(addr, (sp & 0xFF) as u8);
+        self.tick_m();
+        self.mmu.write_byte(addr.wrapping_add(1), ((sp >> 8) & 0xFF) as u8);
+        self.tick_m();
         20
     }
 
@@ -829,7 +825,7 @@ impl<M: Memory> CPU<M> {
         let (_, _, _, prev_c) = self.regs.get_flags();
         let op1 = self.read_operand(reg);
         let (result, _, h) = add_bytes(op1, 1, 0);
-        self.write_operand(reg, result, true);
+        self.write_operand(reg, result);
         self.regs.set_flags((result as u8) == 0, false, h, prev_c);
         if idx == 6 { 12 } else { 4 }
     }
@@ -840,7 +836,7 @@ impl<M: Memory> CPU<M> {
         let (_, _, _, prev_c) = self.regs.get_flags();
         let op1 = self.read_operand(reg);
         let (result, _, h) = sub_bytes(op1, 1, 0);
-        self.write_operand(reg, result, true);
+        self.write_operand(reg, result);
         self.regs.set_flags((result as u8) == 0, true, h, prev_c);
         if idx == 6 { 12 } else { 4 }
     }
@@ -1173,7 +1169,7 @@ impl<M: Memory> CPU<M> {
                     7 => cb_srl(op),
                     _ => unreachable!(),
                 };
-                self.write_operand(reg, result, true);
+                self.write_operand(reg, result);
                 self.regs
                     .set_flags((result as u8) == 0, false, false, new_carry);
                 if is_hl { 16 } else { 8 }
@@ -1190,14 +1186,14 @@ impl<M: Memory> CPU<M> {
                 // RES n, r
                 let op = self.read_operand(reg);
                 let result = reset_bit(sub_op, op as u8);
-                self.write_operand(reg, result, true);
+                self.write_operand(reg, result);
                 if is_hl { 16 } else { 8 }
             }
             3 => {
                 // SET n, r
                 let op = self.read_operand(reg);
                 let result = set_bit(sub_op, op as u8);
-                self.write_operand(reg, result, true);
+                self.write_operand(reg, result);
                 if is_hl { 16 } else { 8 }
             }
             _ => unreachable!(),

@@ -20,7 +20,7 @@ pub struct MMU<M: GPUMemoriesAccess> {
     pub interrupt_flags: u8,
 
     pub oam_dma_source: u8,
-    oam_dma_remaining: u16,
+    oam_dma_remaining: u8,
     oam_dma_startup: u8,
     t_sub: u8, // T-cycle sub-counter within current M-cycle (0–3)
     oam_mode_before: u8,
@@ -103,7 +103,6 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
         if self.oam_dma_remaining > 0 && (0xFE00..=0xFE9F).contains(&addr) {
             return 0xFF;
         }
-        // TODO: once everything works and is tested, refactor using actual ranges
         match addr & 0xF000 {
             // BIOS
             0x0000 => {
@@ -116,18 +115,14 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                 self.cartridge.read_rom(addr)
             }
 
-            0x1000 | 0x2000 | 0x3000 => self.cartridge.read_rom(addr), // ROM 0
-            0x4000 | 0x5000 | 0x6000 | 0x7000 => self.cartridge.read_rom(addr),
+            0x1000..=0x7000 => self.cartridge.read_rom(addr),
             0x8000 | 0x9000 => self.gpu.read_vram(addr & 0x1FFF), // VRAM
             0xA000 | 0xB000 => self.cartridge.read_ram(addr & 0x1FFF), // External RAM
             0xC000 | 0xD000 | 0xE000 => self.wram[(addr & 0x1FFF) as usize], // Working RAM
 
             0xF000 => {
                 match addr & 0x0F00 {
-                    0x0000 | 0x0100 | 0x0200 | 0x0300 | 0x0400 | 0x0500 | 0x0600 | 0x0700
-                    | 0x0800 | 0x0900 | 0x0A00 | 0x0B00 | 0x0C00 | 0x0D00 => {
-                        self.wram[(addr & 0x1FFF) as usize]
-                    } // Working RAM echo
+                    0x0000..=0x0D00 => self.wram[(addr & 0x1FFF) as usize], // Working RAM echo
 
                     // GPU OAM
                     0x0E00 => {
@@ -143,36 +138,22 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                     }
 
                     // Zero page
-                    0x0F00 => {
-                        if addr == 0xFFFF {
-                            self.interrupt_enable
-                        } else if addr > 0xFF7F {
-                            self.zram[(addr & 0x7F) as usize]
-                        } else {
-                            match addr & 0xF0 {
-                                0x00 => match addr & 0xF {
-                                    0 => self.key.read_byte(),
-                                    1 => self.link.get_data(),
-                                    2 => self.link.get_control(),
-                                    4 => self.timers.read_divider(),
-                                    5 => self.timers.read_tima(),
-                                    6 => self.timers.read_tma(),
-                                    7 => self.timers.read_tac(),
-                                    0xF => self.interrupt_flags | 0xE0,
-                                    _ => 0xFF,
-                                },
-                                0x10 | 0x20 | 0x30 => self.sound.read_byte(addr),
-                                0x40 | 0x50 | 0x60 | 0x70 => {
-                                    if addr == 0xFF46 {
-                                        self.oam_dma_source
-                                    } else {
-                                        self.gpu.read_byte(addr)
-                                    }
-                                }
-                                _ => panic!("Unhandled memory access"),
-                            }
-                        }
-                    }
+                    0x0F00 => match addr {
+                        0xFF00 => self.key.read_byte(),
+                        0xFF01 => self.link.get_data(),
+                        0xFF02 => self.link.get_control(),
+                        0xFF04 => self.timers.read_divider(),
+                        0xFF05 => self.timers.read_tima(),
+                        0xFF06 => self.timers.read_tma(),
+                        0xFF07 => self.timers.read_tac(),
+                        0xFF0F => self.interrupt_flags | 0xE0,
+                        0xFF10..=0xFF3F => self.sound.read_byte(addr),
+                        0xFF46 => self.oam_dma_source,
+                        0xFF40..=0xFF45 | 0xFF47..=0xFF7F => self.gpu.read_byte(addr),
+                        0xFF80..=0xFFFE => self.zram[(addr & 0x7F) as usize],
+                        0xFFFF => self.interrupt_enable,
+                        _ => 0xFF,
+                    },
 
                     _ => panic!("Unhandled memory access"),
                 }
@@ -182,10 +163,8 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
         }
     }
     fn write_byte(&mut self, addr: u16, byte: u8) {
-        // TODO: once everything works and is tested, refactor using actual ranges
         match addr & 0xF000 {
-            0x0000 | 0x1000 | 0x2000 | 0x3000 => self.cartridge.write_rom(addr, byte), // BIOS AND ROM 0
-            0x4000 | 0x5000 | 0x6000 | 0x7000 => self.cartridge.write_rom(addr, byte), // ROM 1
+            0x0000..=0x7000 => self.cartridge.write_rom(addr, byte),
             // VRAM
             0x8000 | 0x9000 => {
                 self.gpu.write_vram(addr & 0x1FFF, byte);
@@ -201,10 +180,7 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
 
             0xF000 => {
                 match addr & 0x0F00 {
-                    0x0000 | 0x0100 | 0x0200 | 0x0300 | 0x0400 | 0x0500 | 0x0600 | 0x0700
-                    | 0x0800 | 0x0900 | 0x0A00 | 0x0B00 | 0x0C00 | 0x0D00 => {
-                        self.wram[(addr & 0x1FFF) as usize] = byte;
-                    }
+                    0x0000..=0x0D00 => self.wram[(addr & 0x1FFF) as usize] = byte,
                     // GPU OAM
                     0x0E00 => {
                         // Sprite Attribute Table (OAM - Object Attribute Memory) at $FE00-FE9F
@@ -220,42 +196,27 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                     }
 
                     // Zero page
-                    0x0F00 => {
-                        if addr == 0xFFFF {
-                            self.interrupt_enable = byte;
-                        } else if addr == 0xFF0F {
-                            self.interrupt_flags = byte;
+                    0x0F00 => match addr {
+                        0xFFFF => self.interrupt_enable = byte,
+                        0xFF0F => self.interrupt_flags = byte,
+                        0xFF00 => self.key.write_byte(byte),
+                        0xFF01 => self.link.set_data(byte),
+                        0xFF02 => self.link.set_control(byte),
+                        0xFF04 => self.timers.change_divider(byte),
+                        0xFF05 => self.timers.write_tima(byte),
+                        0xFF06 => self.timers.write_tma(byte),
+                        0xFF07 => self.timers.write_tac(byte),
+                        0xFF10..=0xFF3F => self.sound.write_byte(addr, byte),
+                        0xFF46 => {
+                            self.oam_dma_source = byte;
+                            // M=1 after write: old OAM still accessible.
+                            // M=2: DMA starts, copy fires in tick when startup expires.
+                            self.oam_dma_startup = 2;
                         }
-                        // keypad
-                        else if addr == 0xFF00 {
-                            self.key.write_byte(byte);
-                        } else if addr == 0xFF01 {
-                            self.link.set_data(byte);
-                        } else if addr == 0xFF02 {
-                            self.link.set_control(byte);
-                        } else if addr == 0xFF04 {
-                            self.timers.change_divider(byte);
-                        } else if addr == 0xFF05 {
-                            self.timers.write_tima(byte);
-                        } else if addr == 0xFF06 {
-                            self.timers.write_tma(byte);
-                        } else if addr == 0xFF07 {
-                            self.timers.write_tac(byte);
-                        } else if addr >= 0xFF80 {
-                            self.zram[(addr & 0x007F) as usize] = byte;
-                        } else if addr >= 0xFF40 {
-                            if addr == 0xFF46 {
-                                self.oam_dma_source = byte;
-                                // M=1 after write: old OAM still accessible.
-                                // M=2: DMA starts, copy fires in tick when startup expires.
-                                self.oam_dma_startup = 2;
-                                return;
-                            }
-                            self.gpu.write_byte(addr, byte);
-                        } else if addr >= 0xFF10 {
-                            self.sound.write_byte(addr, byte);
-                        }
-                    }
+                        0xFF40..=0xFF45 | 0xFF47..=0xFF7F => self.gpu.write_byte(addr, byte),
+                        0xFF80..=0xFFFE => self.zram[(addr & 0x007F) as usize] = byte,
+                        _ => {}
+                    },
 
                     _ => panic!("Unhandled memory write"),
                 }
