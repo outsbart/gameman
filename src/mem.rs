@@ -315,17 +315,15 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
         let in_oam_bus = |addr: u16| (addr >> 8) == 0xFE;
         match opcode {
             // INC/DEC rr: bug fires after M1 (+4T = +8 bytes in OAM scan)
-            0x03 | 0x0B | 0x13 | 0x1B | 0x23 | 0x2B | 0x33 | 0x3B => {
-                if in_oam_bus(rr) {
+            0x03 | 0x0B | 0x13 | 0x1B | 0x23 | 0x2B | 0x33 | 0x3B
+                if in_oam_bus(rr) => {
                     self.gpu.apply_oam_corruption(row.saturating_add(8));
                 }
-            }
             // LD A,(HL±): M2 memory read → read corruption (+8 bytes)
-            0x2A | 0x3A => {
-                if in_oam_bus(rr) {
+            0x2A | 0x3A
+                if in_oam_bus(rr) => {
                     self.gpu.apply_oam_read_corruption(row.saturating_add(8));
                 }
-            }
             // POP rr: M2 reads SP (+8 bytes), M3 reads SP+1 (+16 bytes) — read corruption
             0xC1 | 0xD1 | 0xE1 | 0xF1 => {
                 if in_oam_bus(rr) {

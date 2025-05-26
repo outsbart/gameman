@@ -411,7 +411,7 @@ impl Sound {
         }
 
         // every 2 steps we tick the channel length counters
-        if self.frame_sequencer.step % 2 == 0 {
+        if self.frame_sequencer.step.is_multiple_of(2) {
             self.square_1.tick_length();
             self.square_2.tick_length();
             self.wave.tick_length();

@@ -100,13 +100,12 @@ impl Cartridge {
     }
 
     pub fn save(&mut self) -> io::Result<()> {
-        if self.ram_dirty {
-            if let Some(file) = self.save_file.as_mut() {
+        if self.ram_dirty
+            && let Some(file) = self.save_file.as_mut() {
                 file.seek(SeekFrom::Start(0))?;
                 file.write_all(&self.ram)?;
                 self.ram_dirty = false;
             }
-        }
         Ok(())
     }
 
@@ -238,7 +237,7 @@ pub fn load_rom(path: &str) -> CartridgeKind {
 
     match cart_type {
         0 => CartridgeKind::NoMBC(CartridgeNoMBC::new(cart)),
-        1 | 2 | 3 => {
+        1..=3 => {
             if multicart {
                 CartridgeKind::MBC1Multicart(CartridgeMBC1Multicart::new(cart))
             } else {
@@ -246,8 +245,8 @@ pub fn load_rom(path: &str) -> CartridgeKind {
             }
         }
         0x05 | 0x06 => CartridgeKind::MBC2(CartridgeMBC2::new(cart)),
-        0x0F | 0x10 | 0x11 | 0x12 | 0x13 => CartridgeKind::MBC3(CartridgeMBC3::new(cart)),
-        0x19 | 0x1A | 0x1B | 0x1C | 0x1D | 0x1E => CartridgeKind::MBC5(CartridgeMBC5::new(cart)),
+        0x0F..=0x13 => CartridgeKind::MBC3(CartridgeMBC3::new(cart)),
+        0x19..=0x1E => CartridgeKind::MBC5(CartridgeMBC5::new(cart)),
         _ => panic!("Cartridge type {:x} not implemented", cart_type),
     }
 }

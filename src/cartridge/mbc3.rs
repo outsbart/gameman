@@ -24,11 +24,10 @@ impl CartridgeMBC3 {
                 // enable eram and timer
                 let was_enabled = self.ram_and_timer_enabled;
                 self.ram_and_timer_enabled = byte == 0x0A;
-                if was_enabled && !self.ram_and_timer_enabled {
-                    if let Err(e) = self.cart.save() {
+                if was_enabled && !self.ram_and_timer_enabled
+                    && let Err(e) = self.cart.save() {
                         println!("Error saving: {}", e);
                     }
-                }
             }
             0x2000 | 0x3000 => {
                 // change rom bank

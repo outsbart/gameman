@@ -177,7 +177,7 @@ impl GPUMemoriesAccess for GPU {
             return;
         }
         let r = r as usize;
-        if r < 8 || r > 152 {
+        if !(8..=152).contains(&r) {
             return;
         }
         let a = self.oam[r] as u16 | ((self.oam[r + 1] as u16) << 8);
@@ -198,7 +198,7 @@ impl GPUMemoriesAccess for GPU {
             return;
         }
         let r = r as usize;
-        if r < 8 || r > 152 {
+        if !(8..=152).contains(&r) {
             return;
         }
         match r & 0x18 {
@@ -498,12 +498,12 @@ impl GPU {
 
                 // find the tile in the vram
                 let tilemap_index =
-                    tilemap_offset + (tilemap_y * TILES_IN_A_TILEMAP_ROW + tilemap_x) as usize;
+                    tilemap_offset + (tilemap_y * TILES_IN_A_TILEMAP_ROW + tilemap_x);
 
                 let pos = self.vram[tilemap_index];
 
                 // find out the row in the tile data
-                let tileset_index: usize = self.get_tileset_index(pos) + 2 * cell_y as usize;
+                let tileset_index: usize = self.get_tileset_index(pos) + 2 * cell_y;
 
                 // a tile pixel line is encoded in two consecutive bytes
                 let byte_1 = self.vram[tileset_index];
@@ -556,12 +556,12 @@ impl GPU {
 
                 // find the tile in the vram
                 let tilemap_index =
-                    tilemap_offset + (tilemap_y * TILES_IN_A_TILEMAP_ROW + tilemap_x) as usize;
+                    tilemap_offset + (tilemap_y * TILES_IN_A_TILEMAP_ROW + tilemap_x);
 
                 let pos = self.vram[tilemap_index];
 
                 // find out the row in the tile data
-                let tileset_index: usize = self.get_tileset_index(pos) + 2 * cell_y as usize;
+                let tileset_index: usize = self.get_tileset_index(pos) + 2 * cell_y;
 
                 // a tile pixel line is encoded in two consecutive bytes
                 let byte_1 = self.vram[tileset_index];
@@ -620,7 +620,7 @@ impl GPU {
 
                 // sprites always use tiledata1
                 let tile_in_tileset: usize = TILEDATA1_OFFSET
-                    + (2 * 8 * pos as usize + sprite_pixel_row as usize * 2) as usize;
+                    + (2 * 8 * pos as usize + sprite_pixel_row as usize * 2);
 
                 // a tile pixel line is encoded in two consecutive bytes
                 let byte_1 = self.vram[tile_in_tileset];

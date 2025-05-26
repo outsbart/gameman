@@ -68,7 +68,7 @@ impl FallingEdgeDetector {
         self.curr_signal = running && (divider & bit_to_check != 0);
 
         // returns true if the value changed from true to false
-        (self.prev_signal == true) && !self.curr_signal
+        (self.prev_signal) && !self.curr_signal
     }
 
     // Immediate edge check when TAC is written — hardware updates the
@@ -210,11 +210,10 @@ impl Timers {
         self.running = ((byte & 0b0000_0100) >> 2) == 1;
         // Hardware updates the multiplexer output on the same cycle as the write.
         // If it falls from 1→0, TIMA increments (and the reload/interrupt pipeline starts).
-        if self.falling_edge_detector.check_write_edge(self.speed, self.running, self.divider) {
-            if self.tima.increase() {
+        if self.falling_edge_detector.check_write_edge(self.speed, self.running, self.divider)
+            && self.tima.increase() {
                 self.tima_reload_cycle = 8;
             }
-        }
     }
 
     pub fn divider(&self) -> u16 {

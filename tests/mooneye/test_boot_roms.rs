@@ -8,19 +8,19 @@ use helpers::GameboyTestExt;
 use gameman::gameboy::Gameboy;
 
 #[test]
-fn boot_regs_dmgABC() {
+fn boot_regs_dmg_abc() {
     let mut emulator = Gameboy::new("tests/mooneye/roms/boot_regs-dmgABC.gb");
     assert!(emulator.passes_mooneye_test_rom());
 }
 
 #[test]
-fn boot_div_dmgABCmgb() {
+fn boot_div_dmg_abcmgb() {
     let mut emulator = Gameboy::new("tests/mooneye/roms/boot_div-dmgABCmgb.gb");
     assert!(emulator.passes_mooneye_test_rom());
 }
 
 #[test]
-fn boot_hwio_dmgABCmgb() {
+fn boot_hwio_dmg_abcmgb() {
     let mut emulator = Gameboy::new("tests/mooneye/roms/boot_hwio-dmgABCmgb.gb");
     assert!(emulator.passes_mooneye_test_rom());
 }
@@ -62,14 +62,14 @@ fn boot_div_dmg0() {
 
 #[ignore = "targets Super variants, not DMG ABC"]
 #[test]
-fn boot_div_S() {
+fn boot_div_s() {
     let mut emulator = Gameboy::new("tests/mooneye/roms/boot_div-S.gb");
     assert!(emulator.passes_mooneye_test_rom());
 }
 
 #[ignore = "targets Super variants, not DMG ABC"]
 #[test]
-fn boot_div2_S() {
+fn boot_div2_s() {
     let mut emulator = Gameboy::new("tests/mooneye/roms/boot_div2-S.gb");
     assert!(emulator.passes_mooneye_test_rom());
 }
@@ -83,7 +83,7 @@ fn boot_hwio_dmg0() {
 
 #[ignore = "targets Super variants, not DMG ABC"]
 #[test]
-fn boot_hwio_S() {
+fn boot_hwio_s() {
     let mut emulator = Gameboy::new("tests/mooneye/roms/boot_hwio-S.gb");
     assert!(emulator.passes_mooneye_test_rom());
 }

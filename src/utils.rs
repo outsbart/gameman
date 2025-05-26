@@ -46,11 +46,11 @@ pub fn parse_hex(number: &str) -> u16 {
 }
 
 pub fn reset_bit(position: u8, number: u8) -> u16 {
-    (!(1u16 << position) & number as u16) as u16
+    !(1u16 << position) & number as u16
 }
 
 pub fn set_bit(position: u8, number: u8) -> u16 {
-    ((1u16 << position) | number as u16) as u16
+    (1u16 << position) | number as u16
 }
 
 pub fn add_words(a: u16, b: u16, c: u16) -> (u16, bool, bool) {
