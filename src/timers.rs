@@ -47,7 +47,6 @@ struct Timer {
 
 #[derive(Default)]
 struct FallingEdgeDetector {
-    prev_signal: bool,
     curr_signal: bool,
 }
 
@@ -62,21 +61,7 @@ impl FallingEdgeDetector {
     }
 
     fn compute_and_detect(&mut self, speed: TimerSpeed, running: bool, divider: u16) -> bool {
-        let bit_to_check = Self::bit_for_speed(speed);
-
-        self.prev_signal = self.curr_signal;
-        self.curr_signal = running && (divider & bit_to_check != 0);
-
-        // returns true if the value changed from true to false
-        (self.prev_signal) && !self.curr_signal
-    }
-
-    // Immediate edge check when TAC is written — hardware updates the
-    // multiplexer output synchronously with the write, before the next tick.
-    // Returns true if a falling edge occurred (caller handles TIMA increment).
-    fn check_write_edge(&mut self, speed: TimerSpeed, running: bool, divider: u16) -> bool {
-        let bit_to_check = Self::bit_for_speed(speed);
-        let new_signal = running && (divider & bit_to_check != 0);
+        let new_signal = running && (divider & Self::bit_for_speed(speed) != 0);
         let falling_edge = self.curr_signal && !new_signal;
         self.curr_signal = new_signal;
         falling_edge
@@ -210,7 +195,7 @@ impl Timers {
         self.running = ((byte & 0b0000_0100) >> 2) == 1;
         // Hardware updates the multiplexer output on the same cycle as the write.
         // If it falls from 1→0, TIMA increments (and the reload/interrupt pipeline starts).
-        if self.falling_edge_detector.check_write_edge(self.speed, self.running, self.divider)
+        if self.falling_edge_detector.compute_and_detect(self.speed, self.running, self.divider)
             && self.tima.increase() {
                 self.tima_reload_cycle = 8;
             }
