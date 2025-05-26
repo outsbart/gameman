@@ -3,6 +3,7 @@ use gameman::keypad::Button;
 use rust_libretro::{
     contexts::*,
     core::{Core, CoreOptions},
+    input_descriptors,
     retro_core, sys::*, types::*,
 };
 use std::ffi::{CStr, CString};
@@ -43,6 +44,21 @@ retro_core!(GameboyCore {
 impl CoreOptions for GameboyCore {}
 
 impl Core for GameboyCore {
+    fn on_init(&mut self, ctx: &mut InitContext) {
+        const DESCRIPTORS: &[retro_input_descriptor] = &input_descriptors!(
+            { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,     "Up"     },
+            { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN,   "Down"   },
+            { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,   "Left"   },
+            { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT,  "Right"  },
+            { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,      "A"      },
+            { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,      "B"      },
+            { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Select" },
+            { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START,  "Start"  },
+        );
+        let gctx: GenericContext = ctx.into();
+        gctx.set_input_descriptors(DESCRIPTORS);
+    }
+
     fn get_info(&self) -> SystemInfo {
         SystemInfo {
             library_name: CString::new("gameman").unwrap(),

@@ -142,6 +142,7 @@ version = "0.1.0"
 dependencies = [
  "bincode",
  "gameman",
+ "libc",
  "rust-libretro",
 ]
 
