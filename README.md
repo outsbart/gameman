@@ -1,87 +1,110 @@
-# gameman [![Build Status](https://github.com/outsbart/gameman/actions/workflows/integration.yml/badge.svg)](https://github.com/outsbart/gameman/actions)
-gameman is a Game Boy (DMG) emulator written in Rust as a hobby project.
-I'm doing it mostly for learning Rust and to have fun with the challenges of emulation.
+# Gameman [![Build Status](https://github.com/outsbart/gameman/actions/workflows/integration.yml/badge.svg)](https://github.com/outsbart/gameman/actions)
+
+Gameman is a fully functional Game Boy (DMG) emulator written in Rust, originally started as a hobby project for
+learning Rust and to have fun with the challenges of emulation.
 
 <p align="center">
-  <img alt="A pokemon game running in gameman" src="https://user-images.githubusercontent.com/3172529/67021247-a958b300-f0ff-11e9-8543-d883cf1fdbb4.png">
+  <img alt="A Pokémon game running in Gameman" src="https://user-images.githubusercontent.com/3172529/67021247-a958b300-f0ff-11e9-8543-d883cf1fdbb4.png">
 </p>
 
-## Status
-
-Major games like Tetris, Mario, Kirby, Zelda and Pokémon are fully working and playable.
+## Features
 
 - **Save files** — written as `.sav` next to the ROM, loaded automatically on startup
 - **Save states** — press F5 to save, F7 to load (slot 0, stored as `.ss0` next to the ROM)
 - **Stereo audio** — all four channels with correct left/right panning
-- **Real-Time Clock** — MBC3 RTC advances in real time; Pokémon Gold/Silver/Crystal clocks work correctly
+- **Real-Time Clock** — Pokémon Gold/Silver/Crystal in-game clocks work correctly and advance in real time
+- **Classic Game Boy palette** — rendered in authentic green tones by default; the libretro frontend adds Grayscale, DMG
+  Green, and GB Pocket palette options
+- **Cartridge support** — all major MBCs covered
+- **RetroAchievements** *(libretro)* — earn achievements while you play via RetroArch
+- **Cheats** *(libretro)* — GameShark and Game Genie codes via RetroArch's built-in cheat system
 
 ## Accuracy
 
-The emulator is machine-cycle accurate. Each instruction fires M-cycle ticks after every individual memory access and internal pipeline stage, keeping all components (GPU, timers, APU) synchronized at M-cycle granularity.
+The emulator is machine-cycle accurate. All blargg and mooneye test ROM suites pass:
 
-All blargg and mooneye test ROM suites pass:
-
-| Suite | Tests |
-|-------|-------|
-| blargg | `cpu_instrs`, `instr_timing`, `mem_timing`, `dmg_sound`, `halt_bug`, `interrupt_time`, `oam_bug` |
+| Suite   | Tests                                                                                                      |
+|---------|------------------------------------------------------------------------------------------------------------|
+| blargg  | `cpu_instrs`, `instr_timing`, `mem_timing`, `dmg_sound`, `halt_bug`, `interrupt_time`, `oam_bug`           |
 | mooneye | `bits`, `instr`, `instr_timing`, `interrupts`, `mbc1`, `mbc2`, `mbc5`, `oam_dma`, `ppu`, `serial`, `timer` |
 
-## Cartridge support
+## Building / Running
 
-| MBC | Notes |
-|-----|-------|
-| ROM only | — |
-| MBC1 | Multicart (MBC1M) auto-detected |
-| MBC2 | Built-in 512×4-bit RAM |
-| MBC3 | Real-Time Clock on cart types 0x0F / 0x10 |
-| MBC5 | Rumble silently ignored |
+The emulator can be run as a standalone app (using SDL3) or on any libretro frontend, such as RetroArch.
 
-## Frontends
+<details>
+<summary><strong>Standalone (SDL3)</strong></summary>
 
-gameman is structured as a core library with two frontends you can choose from:
+Runs as a native desktop window.
 
-### Standalone (SDL3)
+**1. Install Rust** — [rust-lang.org/tools/install](https://www.rust-lang.org/tools/install)
 
-Runs as a native window using SDL3 for rendering, audio, and input.
+**2. Install SDL3**
 
-**Dependency:** [SDL3](https://wiki.libsdl.org/SDL3/Installation) must be installed.
+| Platform        | Command                                                               |
+|-----------------|-----------------------------------------------------------------------|
+| Ubuntu / Debian | `sudo apt install libsdl3-dev`                                        |
+| macOS           | `brew install sdl3`                                                   |
+| Windows         | Download from [libsdl.org](https://wiki.libsdl.org/SDL3/Installation) |
+
+**3. Build and run**
 
 ```bash
-cargo run --release <rom file>
+cargo run --release -- path/to/rom.gb
 ```
 
-**Controls** — keyboard arrows for directions, plus:
+**4. Controls**
 
-<table style="text-align: center">
-    <tr>
-        <td>Game Boy</td><td>A</td><td>B</td><td>Select</td><td>Start</td>
-    </tr>
-    <tr>
-        <td>Keyboard</td><td>Z</td><td>X</td><td>A</td><td>S</td>
-    </tr>
-</table>
+| D-Pad      | A | B | Select | Start | Save state | Load state |
+|------------|---|---|--------|-------|------------|------------|
+| Arrow keys | Z | X | A      | S     | F5         | F7         |
 
-| Key | Action |
-|-----|--------|
-| F5  | Save state (slot 0) |
-| F7  | Load state (slot 0) |
+Save states are stored as `<rom>.ss0` next to the ROM file.
 
-### Libretro / RetroArch
+</details>
 
-Runs as a core inside [RetroArch](https://www.retroarch.com/), unlocking controller support, shaders, rewind, RetroAchievements, and more.
+<details>
+<summary><strong>Libretro / RetroArch</strong></summary>
+
+Runs as a core inside [RetroArch](https://www.retroarch.com/), adding controller support, shaders, rewind,
+RetroAchievements, and more.
+
+**1. Get the core**
+
+Download the pre-built `libgameman_libretro.so` and `gameman_libretro.info` from the [latest release](https://github.com/outsbart/gameman/releases/latest).
+
+<details>
+<summary>Or build from source</summary>
+
+Install [Rust](https://www.rust-lang.org/tools/install) and a Clang library:
+
+| Platform        | Command                                                         |
+|-----------------|-----------------------------------------------------------------|
+| Ubuntu / Debian | `sudo apt install libclang-dev`                                 |
+| macOS           | `xcode-select --install` *(Clang is bundled with Xcode tools)*  |
+| Windows         | Install [LLVM](https://releases.llvm.org/) and add it to `PATH` |
 
 ```bash
 cargo build --release -p gameman-libretro
-cp target/release/libgameman_libretro.so ~/.config/retroarch/cores/
-cp gameman-libretro/gameman_libretro.info ~/.config/retroarch/cores/
 ```
 
-Additional features over the standalone frontend:
+The output files are `target/release/libgameman_libretro.so` and `gameman-libretro/gameman_libretro.info`.
 
-- **Color palettes** — choose between Classic Green, Grayscale, DMG Green, and GB Pocket in Quick Menu → Options
-- **RetroAchievements** — earn achievements while you play
-- **Cheats** — use RetroArch's built-in cheat system
-- **RTC persistence** — the in-game clock keeps ticking between sessions
+</details>
+
+**2. Install it into RetroArch**
+
+```bash
+cp libgameman_libretro.so ~/.config/retroarch/cores/
+cp gameman_libretro.info ~/.config/retroarch/cores/
+```
+
+**3. Load a game**
+
+Open RetroArch → *Load Content* → select your `.gb` or `.gbc` ROM. Gameman will be offered automatically as a matching
+core.
+
+</details>
 
 ## Resources
 
