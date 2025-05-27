@@ -97,16 +97,14 @@ impl Gameboy {
     }
 
     pub fn save_state_to_file(&self, slot: u8) -> io::Result<()> {
-        let bytes =
-            bincode::serialize(self).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        let bytes = bincode::serialize(self).map_err(io::Error::other)?;
         std::fs::write(self.state_path(slot), bytes)
     }
 
     pub fn load_state_from_file(&mut self, slot: u8) -> io::Result<()> {
         let path = self.state_path(slot);
         let bytes = std::fs::read(path)?;
-        *self =
-            bincode::deserialize(&bytes).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        *self = bincode::deserialize(&bytes).map_err(io::Error::other)?;
         self.cpu.mmu.cartridge.restore()
     }
 }

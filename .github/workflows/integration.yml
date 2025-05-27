@@ -78,4 +78,4 @@ jobs:
           name: gameman-libretro
           path: |
             target/release/libgameman_libretro.so
-            gameman_libretro.info
+            gameman-libretro/gameman_libretro.info

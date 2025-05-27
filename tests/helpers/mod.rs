@@ -41,7 +41,7 @@ impl GameboyTestExt for Gameboy {
     }
 
     fn passes_blargg_ram_test_rom(&mut self) -> bool {
-        self.blargg_ram_test_result().map_or(false, |v| v == 0)
+        self.blargg_ram_test_result() == Some(0)
     }
 
     fn blargg_ram_test_result(&mut self) -> Option<u8> {

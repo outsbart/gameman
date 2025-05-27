@@ -10,6 +10,12 @@ pub struct OamDma {
     row_before: u8,
 }
 
+impl Default for OamDma {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OamDma {
     pub fn new() -> OamDma {
         OamDma {

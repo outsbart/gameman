@@ -77,6 +77,7 @@ impl Cartridge {
             .read(true)
             .write(true)
             .create(true)
+            .truncate(true)
             .open(self.save_file_path())?;
 
         let file_size = file.metadata()?.len();
@@ -120,15 +121,15 @@ impl Cartridge {
 
     pub fn restore(&mut self) -> io::Result<()> {
         self.rom = std::fs::read(&self.path)?;
-        if self.ram_size > 0 {
-            if let Ok(file) = OpenOptions::new()
+        if self.ram_size > 0
+            && let Ok(file) = OpenOptions::new()
                 .read(true)
                 .write(true)
                 .create(true)
+                .truncate(true)
                 .open(self.save_file_path())
-            {
-                self.save_file = Some(file);
-            }
+        {
+            self.save_file = Some(file);
         }
         Ok(())
     }
