@@ -176,6 +176,7 @@ impl Memory for Sound {
 }
 
 #[derive(Serialize, Deserialize)]
+#[derive(Clone, Copy)]
 pub struct ChannelsOutput {
     square_1: Voltage,
     square_2: Voltage,
@@ -471,11 +472,13 @@ impl Sound {
         }
 
         self.left_sound_output.receive(channel_outputs);
-        // todo: what about right sound output?
+        self.right_sound_output.receive(channel_outputs);
     }
 
     pub fn drain_audio(&mut self) -> Vec<i16> {
-        self.left_sound_output.out_buffer.drain_all()
+        let left = self.left_sound_output.out_buffer.drain_all();
+        let right = self.right_sound_output.out_buffer.drain_all();
+        left.into_iter().zip(right).flat_map(|(l, r)| [l, r]).collect()
     }
 
     // Square channel 1 sweep

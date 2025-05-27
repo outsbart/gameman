@@ -187,9 +187,8 @@ impl Core for GameboyCore {
 
         gb.step();
 
-        // Audio: drain mono samples, duplicate to stereo
-        self.pending_audio
-            .extend(gb.drain_audio().iter().flat_map(|&s| [s, s]));
+        // Audio: drain interleaved stereo samples
+        self.pending_audio.extend(gb.drain_audio());
 
         // 1478 stereo i16 values = 739 pairs ≥ 44100/59.73 ≈ 738.4 minimum
         const MIN_STEREO_SAMPLES: usize = 1478;

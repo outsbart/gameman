@@ -371,7 +371,7 @@ impl<M: Memory> CPU<M> {
     pub fn step(&mut self) -> (u16, u8) {
         let mut instr: u16 = 0;
 
-        let cycles = if !self.halted {
+        let cycles = if !self.halted && !self.stopped {
             let mut prefixed = false;
             // Snapshot GPU mode/row before the opcode fetch ticks the GPU.
             self.mmu.before_fetch();
@@ -445,6 +445,9 @@ impl<M: Memory> CPU<M> {
         // wake up cpu if there is an interrupt, even if ime = 0
         if interrupts != 0 && self.halted {
             self.halted = false;
+        }
+        if interrupts != 0 && self.stopped {
+            self.stopped = false;
         }
 
         // if we have to handle an interrupt
@@ -591,6 +594,7 @@ impl<M: Memory> CPU<M> {
     }
 
     fn stop(&mut self) -> u8 {
+        self.fetch_next_byte(); // consume the mandatory 0x00 operand
         self.stopped = true;
         4
     }

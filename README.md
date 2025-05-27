@@ -7,31 +7,68 @@ I'm doing it mostly for learning Rust and to have fun with the challenges of emu
 </p>
 
 ## Status
-Major games like Tetris, Mario, Kirby, Zelda and Pokemon are fully working and playable.
 
-Save files will be put in the same directory as the rom file, but with a .sav extension.
+Major games like Tetris, Mario, Kirby, Zelda and Pokémon are fully working and playable.
 
-Save states are supported: press F5 to save and F7 to load (slot 0, stored as `.ss0` next to the ROM).
-
-Audio works, but needs more testing on different platforms.
+- **Save files** — written as `.sav` next to the ROM, loaded automatically on startup
+- **Save states** — press F5 to save, F7 to load (slot 0, stored as `.ss0` next to the ROM)
+- **Stereo audio** — all four channels with correct left/right panning
+- **Real-Time Clock** — MBC3 RTC advances in real time; Pokémon Gold/Silver/Crystal clocks work correctly
 
 ## Accuracy
 
 The emulator is machine-cycle accurate. Each instruction fires M-cycle ticks after every individual memory access and internal pipeline stage, keeping all components (GPU, timers, APU) synchronized at M-cycle granularity.
 
-blargg's cpu_instrs, instr_timing, mem_timing, dmg_sound test ROMs are passing.
+All blargg and mooneye test ROM suites pass:
 
-
+| Suite | Tests |
+|-------|-------|
+| blargg | `cpu_instrs`, `instr_timing`, `mem_timing`, `dmg_sound`, `halt_bug`, `interrupt_time`, `oam_bug` |
+| mooneye | `bits`, `instr`, `instr_timing`, `interrupts`, `mbc1`, `mbc2`, `mbc5`, `oam_dma`, `ppu`, `serial`, `timer` |
 
 ## Cartridge support
 
-Supported: ROM only, MBC1, MBC2, MBC3 (with Real-Time Clock for Pokémon Gold/Silver/Crystal), MBC5 (rumble silently ignored).
+| MBC | Notes |
+|-----|-------|
+| ROM only | — |
+| MBC1 | Multicart (MBC1M) auto-detected |
+| MBC2 | Built-in 512×4-bit RAM |
+| MBC3 | Real-Time Clock on cart types 0x0F / 0x10 |
+| MBC5 | Rumble silently ignored |
 
-## Libretro / RetroArch
+## Frontends
 
-A libretro core (`gameman-libretro`) is available for use with RetroArch.
+gameman is structured as a core library with two frontends you can choose from:
 
-### Building and installing
+### Standalone (SDL3)
+
+Runs as a native window using SDL3 for rendering, audio, and input.
+
+**Dependency:** [SDL3](https://wiki.libsdl.org/SDL3/Installation) must be installed.
+
+```bash
+cargo run --release <rom file>
+```
+
+**Controls** — keyboard arrows for directions, plus:
+
+<table style="text-align: center">
+    <tr>
+        <td>Game Boy</td><td>A</td><td>B</td><td>Select</td><td>Start</td>
+    </tr>
+    <tr>
+        <td>Keyboard</td><td>Z</td><td>X</td><td>A</td><td>S</td>
+    </tr>
+</table>
+
+| Key | Action |
+|-----|--------|
+| F5  | Save state (slot 0) |
+| F7  | Load state (slot 0) |
+
+### Libretro / RetroArch
+
+Runs as a core inside [RetroArch](https://www.retroarch.com/), unlocking controller support, shaders, rewind, RetroAchievements, and more.
 
 ```bash
 cargo build --release -p gameman-libretro
@@ -39,47 +76,17 @@ cp target/release/libgameman_libretro.so ~/.config/retroarch/cores/
 cp gameman-libretro/gameman_libretro.info ~/.config/retroarch/cores/
 ```
 
-### Features
+Additional features over the standalone frontend:
 
-- **Save files** — cart RAM is saved and loaded by RetroArch automatically (`.srm`)
-- **Save states** — full state serialization; RetroArch manages slots and rewind
-- **Real-Time Clock** — MBC3 RTC state is preserved across sessions via a `.rtc` file managed by RetroArch
-- **Color palettes** — selectable in Quick Menu → Options:
-  - Classic (Green) *(default)*
-  - Grayscale
-  - DMG Green
-  - GB Pocket
-- **RetroAchievements** — memory descriptors expose WRAM, VRAM, OAM, HRAM and cart RAM; all achievement addresses resolve correctly
-- **Cheats** — RetroArch cheat search and apply work via the same memory descriptor map
+- **Color palettes** — choose between Classic Green, Grayscale, DMG Green, and GB Pocket in Quick Menu → Options
+- **RetroAchievements** — earn achievements while you play
+- **Cheats** — use RetroArch's built-in cheat system
+- **RTC persistence** — the in-game clock keeps ticking between sessions
 
-## TODO
-- Refactor, refactor and refactor code
-- Gameboy Color support?
+## Resources
 
-
-## Dependencies
-At the moment, SDL3 is required for sound, input and rendering.
-
-
-## How to run
-```bash
-cargo run --release <rom location>
-```
-
-## Buttons
-Use keyboard arrows for directions and...
-<table style="text-align: center">
-    <tr>
-        <td>Gameboy</td><td>A</td><td>B</td><td>Select</td><td>Start</td>
-    </tr>
-    <tr>
-        <td>Keyboard</td><td>Z</td><td>X</td><td>A</td><td>S</td>
-    </tr>
-</table>
-
-Other keys:
-| Key | Action |
-|-----|--------|
-| F5  | Save state (slot 0) |
-| F7  | Load state (slot 0) |
-
+- [Pan Docs](https://gbdev.io/pandocs/) — comprehensive Game Boy hardware reference
+- [blargg test ROMs](https://github.com/L-P/blargg-test-roms) — CPU, timing, sound, and hardware behavior tests
+- [mooneye test suite](https://github.com/Gekkio/mooneye-test-suite) — accuracy test ROMs with broad hardware coverage
+- [Gambatte](https://github.com/sinamas/gambatte) — reference emulator used to verify hardware-accurate behavior
+- [RetroArch](https://www.retroarch.com/) — frontend for the libretro core

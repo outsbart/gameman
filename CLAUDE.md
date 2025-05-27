@@ -41,8 +41,9 @@ Gameboy
     └── MMU<GPU>          // Memory Management Unit
         ├── GPU            // Pixel Processing Unit + VRAM/OAM
         ├── Cartridge      // ROM + RAM + save file (trait: CartridgeAccess)
-        ├── Sound          // APU
+        ├── Sound          // APU (src/sound/)
         ├── Timers         // DIV/TIMA/TMA/TAC
+        ├── OamDma         // OAM DMA controller
         ├── Key            // Joypad input
         └── Link           // Serial link (used by test ROMs for output)
 ```
@@ -60,7 +61,29 @@ synchronized at M-cycle granularity. The outer loop in `Gameboy::step()` accumul
 ### Cartridge types
 
 Cartridge loading (`src/cartridge/mod.rs`) inspects the ROM header and returns a `Box<dyn CartridgeAccess>`. Supported
-MBCs: none (ROM-only), MBC1, MBC2, MBC3, MBC5. Save files are written as `.sav` next to the ROM.
+MBCs:
+
+| MBC | File | Notes |
+|-----|------|-------|
+| ROM only | `nombc.rs` | — |
+| MBC1 | `mbc1.rs` | Multicart (MBC1M) auto-detected via Nintendo logo heuristic |
+| MBC2 | `mbc2.rs` | Built-in 512×4-bit RAM; upper nibble always 0xF on read |
+| MBC3 | `mbc3.rs` | RTC on cart types 0x0F/0x10; `Rtc::base_unix_secs` stores unix epoch at which RTC=0 |
+| MBC5 | `mbc5.rs` | 9-bit ROM bank split across two writes; rumble silently ignored |
+
+Save files are written as `.sav` next to the ROM; loaded automatically on `Gameboy::new()`.
+
+### Save states
+
+`Gameboy` derives `Serialize`/`Deserialize` via bincode. `save_state_to_file(slot)` writes the full state to
+`<rom>.ss{slot}`; `load_state_from_file(slot)` deserializes and then calls `cartridge.restore()` to re-open the ROM
+file (ROM bytes are not serialized). The libretro core exposes save states via `on_serialize` / `on_unserialize`.
+
+### Sound (APU)
+
+Source lives in `src/sound/`. Four channels: Square 1 (with frequency sweep), Square 2, Wave (CH3), Noise (CH4).
+A frame sequencer at 512 Hz drives length counters (256 Hz), volume envelopes (64 Hz), and frequency sweep (128 Hz).
+`Sound::drain_audio()` returns interleaved stereo `[L, R, L, R, ...]` i16 samples at 44100 Hz.
 
 ### Test ROMs
 
@@ -83,4 +106,5 @@ ROM files for integration tests are stored in `tests/`.
 
 ### Validation step
 
-To validate your changes, run the tests with `cargo nextest run` with a timeout of 30
+To validate your changes, run the tests with `cargo nextest run` with a timeout of 30 seconds per test.
+All 174 tests should pass (22 skipped — those require ROMs not included in the repo).

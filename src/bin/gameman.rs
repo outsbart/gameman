@@ -31,7 +31,7 @@ fn main() {
     let video_subsystem = sdl.video().unwrap();
     let audio_subsystem = sdl.audio().unwrap();
 
-    let spec = AudioSpec::new(Some(SAMPLE_RATE as i32), Some(1), Some(AudioFormat::s16_sys()));
+    let spec = AudioSpec::new(Some(SAMPLE_RATE as i32), Some(2), Some(AudioFormat::s16_sys()));
 
     let stream = audio_subsystem
         .open_playback_device(&spec)
