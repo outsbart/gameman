@@ -1,18 +1,14 @@
 use gameman::gameboy::Gameboy;
 use gameman::keypad::Button;
 use rust_libretro::{
-    contexts::*,
-    core::Core,
-    input_descriptors,
-    proc::CoreOptions,
-    retro_core, sys::*, types::*,
+    contexts::*, core::Core, input_descriptors, proc::CoreOptions, retro_core, sys::*, types::*,
 };
 use std::ffi::{CStr, CString};
 
-const PALETTE_CLASSIC:   [u32; 4] = [0x00C4F0C2, 0x005AB9A8, 0x001E606E, 0x002D1B00];
+const PALETTE_CLASSIC: [u32; 4] = [0x00C4F0C2, 0x005AB9A8, 0x001E606E, 0x002D1B00];
 const PALETTE_GRAYSCALE: [u32; 4] = [0x00FFFFFF, 0x00AAAAAA, 0x00555555, 0x00000000];
 const PALETTE_DMG_GREEN: [u32; 4] = [0x009BBC0F, 0x008BAC0F, 0x00306230, 0x000F380F];
-const PALETTE_POCKET:    [u32; 4] = [0x00C8C3A0, 0x008E8A6F, 0x005A5540, 0x001E1B10];
+const PALETTE_POCKET: [u32; 4] = [0x00C8C3A0, 0x008E8A6F, 0x005A5540, 0x001E1B10];
 
 const BUTTON_MAP: &[(JoypadState, Button)] = &[
     (JoypadState::UP, Button::UP),
@@ -73,8 +69,8 @@ impl Core for GameboyCore {
         self.palette = match ctx.get_variable("gameman_palette").as_deref() {
             Some("grayscale") => PALETTE_GRAYSCALE,
             Some("dmg_green") => PALETTE_DMG_GREEN,
-            Some("pocket")    => PALETTE_POCKET,
-            _                 => PALETTE_CLASSIC,
+            Some("pocket") => PALETTE_POCKET,
+            _ => PALETTE_CLASSIC,
         };
     }
 
@@ -124,19 +120,44 @@ impl Core for GameboyCore {
         self.prev_buttons = JoypadState::empty();
 
         let gb = self.gameboy.as_mut().unwrap();
-        let wram_ptr     = gb.cpu.mmu.wram.as_mut_ptr() as *mut _;
-        let vram_ptr     = gb.cpu.mmu.gpu.vram.as_mut_ptr() as *mut _;
-        let oam_ptr      = gb.cpu.mmu.gpu.oam.as_mut_ptr() as *mut _;
-        let hram_ptr     = gb.cpu.mmu.zram.as_mut_ptr() as *mut _;
+        let wram_ptr = gb.cpu.mmu.wram.as_mut_ptr() as *mut _;
+        let vram_ptr = gb.cpu.mmu.gpu.vram.as_mut_ptr() as *mut _;
+        let oam_ptr = gb.cpu.mmu.gpu.oam.as_mut_ptr() as *mut _;
+        let hram_ptr = gb.cpu.mmu.zram.as_mut_ptr() as *mut _;
         let cart_ram_ptr = gb.cpu.mmu.cartridge.inner_cart().ram.as_ptr() as *mut _;
         let cart_ram_len = gb.cpu.mmu.cartridge.inner_cart().ram.len();
 
         let zero = unsafe { std::mem::zeroed::<retro_memory_descriptor>() };
         let mut descriptors = vec![
-            retro_memory_descriptor { flags: RETRO_MEMDESC_SYSTEM_RAM as u64, ptr: wram_ptr, start: 0xC000, len: 0x2000, ..zero },
-            retro_memory_descriptor { flags: RETRO_MEMDESC_VIDEO_RAM  as u64, ptr: vram_ptr, start: 0x8000, len: 0x2000, ..zero },
-            retro_memory_descriptor { flags: 0,                               ptr: oam_ptr,  start: 0xFE00, select: 0xFF00, len: 0x00A0, ..zero },
-            retro_memory_descriptor { flags: RETRO_MEMDESC_SYSTEM_RAM as u64, ptr: hram_ptr, start: 0xFF80, len: 0x0080, ..zero },
+            retro_memory_descriptor {
+                flags: RETRO_MEMDESC_SYSTEM_RAM as u64,
+                ptr: wram_ptr,
+                start: 0xC000,
+                len: 0x2000,
+                ..zero
+            },
+            retro_memory_descriptor {
+                flags: RETRO_MEMDESC_VIDEO_RAM as u64,
+                ptr: vram_ptr,
+                start: 0x8000,
+                len: 0x2000,
+                ..zero
+            },
+            retro_memory_descriptor {
+                flags: 0,
+                ptr: oam_ptr,
+                start: 0xFE00,
+                select: 0xFF00,
+                len: 0x00A0,
+                ..zero
+            },
+            retro_memory_descriptor {
+                flags: RETRO_MEMDESC_SYSTEM_RAM as u64,
+                ptr: hram_ptr,
+                start: 0xFF80,
+                len: 0x0080,
+                ..zero
+            },
         ];
         if cart_ram_len > 0 {
             descriptors.push(retro_memory_descriptor {
@@ -147,7 +168,10 @@ impl Core for GameboyCore {
                 ..zero
             });
         }
-        let map = retro_memory_map { descriptors: descriptors.as_ptr(), num_descriptors: descriptors.len() as u32 };
+        let map = retro_memory_map {
+            descriptors: descriptors.as_ptr(),
+            num_descriptors: descriptors.len() as u32,
+        };
         unsafe { ctx.set_memory_maps(map) };
 
         Ok(())
@@ -207,9 +231,8 @@ impl Core for GameboyCore {
         // Video: palette index → XRGB8888
         let fb = gb.get_framebuffer();
         let pixels: Vec<u32> = fb.iter().map(|&c| self.palette[c as usize]).collect();
-        let bytes = unsafe {
-            std::slice::from_raw_parts(pixels.as_ptr() as *const u8, pixels.len() * 4)
-        };
+        let bytes =
+            unsafe { std::slice::from_raw_parts(pixels.as_ptr() as *const u8, pixels.len() * 4) };
         ctx.draw_frame(bytes, 160, 144, 160 * 4);
     }
 
@@ -252,7 +275,9 @@ impl Core for GameboyCore {
                 None => 0,
             },
             1 => {
-                let has_rtc = self.gameboy.as_mut()
+                let has_rtc = self
+                    .gameboy
+                    .as_mut()
                     .and_then(|gb| gb.cpu.mmu.cartridge.rtc_base_secs_mut())
                     .is_some();
                 if has_rtc { 8 } else { 0 }
@@ -266,7 +291,9 @@ impl Core for GameboyCore {
     }
 
     fn on_serialize(&mut self, slice: &mut [u8], _ctx: &mut SerializeContext) -> bool {
-        let Some(gb) = &self.gameboy else { return false; };
+        let Some(gb) = &self.gameboy else {
+            return false;
+        };
         match bincode::serialize(gb) {
             Ok(bytes) if bytes.len() <= slice.len() => {
                 slice[..bytes.len()].copy_from_slice(&bytes);

@@ -241,7 +241,8 @@ impl GPUMemoriesAccess for GPU {
                     let e = self.oam[r - 32 + i];
                     self.oam[r - 8 + i] = match r {
                         0x20 => (c & (a | b | d | e)) | (a & b & d & e), // tertiary_2
-                        0x40 => {                                          // quaternary_dmg
+                        0x40 => {
+                            // quaternary_dmg
                             // SameBoy: (e & (h|g|(~d&f)|c|b)) | (c&g&h)
                             // where b=oam[r+i], c=oam[r-4+i], d=oam[r-6+i], e=oam[r-8+i],
                             //       f=oam[r-14+i], g=oam[r-16+i], h=oam[r-32+i]
@@ -250,8 +251,8 @@ impl GPUMemoriesAccess for GPU {
                             // my c=sb_e, my b=sb_c, my a=sb_b, my d=sb_g, my e=sb_h
                             (c & (e | d | ((!sb_d) & sb_f) | b | a)) | (b & d & e)
                         }
-                        0x60 => (c & (a | b | d | e)) | (b & d & e),     // tertiary_3
-                        _ => c | (a & b & d & e),                          // tertiary_1 (r==0x80)
+                        0x60 => (c & (a | b | d | e)) | (b & d & e), // tertiary_3
+                        _ => c | (a & b & d & e),                    // tertiary_1 (r==0x80)
                     };
                 }
                 for i in 0..8usize {
@@ -290,7 +291,11 @@ impl GPUMemoriesAccess for GPU {
                     | (if self.lcd_enabled { 0x80 } else { 0 })
             }
             0xFF41 => {
-                let mode_bits = if self.lcd_startup_ticks > 0 { 0 } else { self.mode & 0x03 };
+                let mode_bits = if self.lcd_startup_ticks > 0 {
+                    0
+                } else {
+                    self.mode & 0x03
+                };
                 0x80 | mode_bits
                     | (if self.compare_enabled { 0x40 } else { 0 })
                     | (if self.mode2_int_enabled { 0x20 } else { 0 })
@@ -628,8 +633,8 @@ impl GPU {
                 }
 
                 // sprites always use tiledata1
-                let tile_in_tileset: usize = TILEDATA1_OFFSET
-                    + (2 * 8 * pos as usize + sprite_pixel_row as usize * 2);
+                let tile_in_tileset: usize =
+                    TILEDATA1_OFFSET + (2 * 8 * pos as usize + sprite_pixel_row as usize * 2);
 
                 // a tile pixel line is encoded in two consecutive bytes
                 let byte_1 = self.vram[tile_in_tileset];

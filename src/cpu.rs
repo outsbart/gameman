@@ -1,7 +1,6 @@
 #![allow(non_snake_case)]
 
 use crate::mem::Memory;
-use serde::{Deserialize, Serialize};
 use crate::utils::add_bytes;
 use crate::utils::add_word_with_signed;
 use crate::utils::add_words;
@@ -9,6 +8,7 @@ use crate::utils::reset_bit;
 use crate::utils::set_bit;
 use crate::utils::sub_bytes;
 use crate::utils::swap_nibbles;
+use serde::{Deserialize, Serialize};
 
 pub const CPU_FREQ: usize = 4194304; // cpu frequency, in hz
 
@@ -721,7 +721,8 @@ impl<M: Memory> CPU<M> {
         let sp = self.read_reg(Operand::SP);
         self.mmu.write_byte(addr, (sp & 0xFF) as u8);
         self.tick_m();
-        self.mmu.write_byte(addr.wrapping_add(1), ((sp >> 8) & 0xFF) as u8);
+        self.mmu
+            .write_byte(addr.wrapping_add(1), ((sp >> 8) & 0xFF) as u8);
         self.tick_m();
         20
     }

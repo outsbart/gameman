@@ -19,7 +19,7 @@ impl CartridgeMBC1Multicart {
         // rom_bank uses same format as standard MBC1: bits[6:5]=secondary, bits[4:0]=primary (0→1 applied).
         // Multicart maps secondary×16 (not ×32), and uses only the lower 4 bits of the primary.
         let slot = ((cartridge.rom_bank & 0x60) >> 1) as usize; // secondary × 16
-        let primary4 = (cartridge.rom_bank & 0x0F) as usize;    // lower 4 bits of primary
+        let primary4 = (cartridge.rom_bank & 0x0F) as usize; // lower 4 bits of primary
 
         let bank = match addr & 0xF000 {
             0x0000 | 0x1000 | 0x2000 | 0x3000 => {
@@ -29,9 +29,7 @@ impl CartridgeMBC1Multicart {
                     0
                 }
             }
-            0x4000 | 0x5000 | 0x6000 | 0x7000 => {
-                (slot | primary4) & (num_banks - 1)
-            }
+            0x4000 | 0x5000 | 0x6000 | 0x7000 => (slot | primary4) & (num_banks - 1),
             _ => panic!("Unhandled ROM MBC1 multicart read at addr {:x}", addr),
         };
 
@@ -109,9 +107,7 @@ impl CartridgeMBC1 {
                     0
                 }
             }
-            0x4000 | 0x5000 | 0x6000 | 0x7000 => {
-                cartridge.rom_bank as usize & (num_banks - 1)
-            }
+            0x4000 | 0x5000 | 0x6000 | 0x7000 => cartridge.rom_bank as usize & (num_banks - 1),
             _ => panic!("Unhandled ROM MBC1 read at addr {:x}", addr),
         };
 

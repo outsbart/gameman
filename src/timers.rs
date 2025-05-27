@@ -198,10 +198,13 @@ impl Timers {
         self.running = ((byte & 0b0000_0100) >> 2) == 1;
         // Hardware updates the multiplexer output on the same cycle as the write.
         // If it falls from 1→0, TIMA increments (and the reload/interrupt pipeline starts).
-        if self.falling_edge_detector.compute_and_detect(self.speed, self.running, self.divider)
-            && self.tima.increase() {
-                self.tima_reload_cycle = 8;
-            }
+        if self
+            .falling_edge_detector
+            .compute_and_detect(self.speed, self.running, self.divider)
+            && self.tima.increase()
+        {
+            self.tima_reload_cycle = 8;
+        }
     }
 
     pub fn divider(&self) -> u16 {

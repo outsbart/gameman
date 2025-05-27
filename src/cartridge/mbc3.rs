@@ -13,7 +13,7 @@ fn now_unix_secs() -> u64 {
 #[derive(Serialize, Deserialize)]
 pub struct Rtc {
     pub(super) base_unix_secs: u64,
-    latched: [u8; 5],      // [S, M, H, DL, DH] snapshot shown to the game
+    latched: [u8; 5], // [S, M, H, DL, DH] snapshot shown to the game
     latch_saw_zero: bool,
 }
 
@@ -28,14 +28,18 @@ impl Rtc {
 
     fn latch(&mut self) {
         let elapsed = now_unix_secs().saturating_sub(self.base_unix_secs);
-        let secs    = (elapsed % 60) as u8;
-        let mins    = ((elapsed / 60) % 60) as u8;
-        let hours   = ((elapsed / 3600) % 24) as u8;
-        let days    = elapsed / 86400;
+        let secs = (elapsed % 60) as u8;
+        let mins = ((elapsed / 60) % 60) as u8;
+        let hours = ((elapsed / 3600) % 24) as u8;
+        let days = elapsed / 86400;
         let days_lo = (days & 0xFF) as u8;
         let mut days_hi: u8 = 0;
-        if days & 0x100 != 0 { days_hi |= 0x01; }
-        if days >= 512        { days_hi |= 0x80; }
+        if days & 0x100 != 0 {
+            days_hi |= 0x01;
+        }
+        if days >= 512 {
+            days_hi |= 0x80;
+        }
         self.latched = [secs, mins, hours, days_lo, days_hi];
     }
 
@@ -47,11 +51,11 @@ impl Rtc {
     fn write(&mut self, reg: u8, val: u8) {
         self.latch();
         self.latched[reg as usize] = val;
-        let s    = self.latched[0] as u64;
-        let m    = self.latched[1] as u64;
-        let h    = self.latched[2] as u64;
-        let dl   = self.latched[3] as u64;
-        let dh   = self.latched[4] as u64;
+        let s = self.latched[0] as u64;
+        let m = self.latched[1] as u64;
+        let h = self.latched[2] as u64;
+        let dl = self.latched[3] as u64;
+        let dh = self.latched[4] as u64;
         let days = dl | ((dh & 0x01) << 8);
         let total = days * 86400 + h * 3600 + m * 60 + s;
         self.base_unix_secs = now_unix_secs().saturating_sub(total);
@@ -83,27 +87,27 @@ impl CartridgeMBC3 {
             0x0000 | 0x1000 => {
                 let was_enabled = self.ram_and_timer_enabled;
                 self.ram_and_timer_enabled = byte == 0x0A;
-                if was_enabled && !self.ram_and_timer_enabled
-                    && let Err(e) = self.cart.save() {
-                        println!("Error saving: {}", e);
-                    }
+                if was_enabled
+                    && !self.ram_and_timer_enabled
+                    && let Err(e) = self.cart.save()
+                {
+                    println!("Error saving: {}", e);
+                }
             }
             0x2000 | 0x3000 => {
                 self.cart.rom_bank = if byte == 0 { 1 } else { byte.into() };
             }
-            0x4000 | 0x5000 => {
-                match byte {
-                    0x0..=0x3 => {
-                        self.cart.mode = 0;
-                        self.cart.ram_bank = byte & 3;
-                    }
-                    0x8..=0xC => {
-                        self.cart.mode = 1;
-                        self.cart.ram_bank = byte;
-                    }
-                    _ => {}
+            0x4000 | 0x5000 => match byte {
+                0x0..=0x3 => {
+                    self.cart.mode = 0;
+                    self.cart.ram_bank = byte & 3;
                 }
-            }
+                0x8..=0xC => {
+                    self.cart.mode = 1;
+                    self.cart.ram_bank = byte;
+                }
+                _ => {}
+            },
             0x6000 | 0x7000 => {
                 if let Some(rtc) = &mut self.rtc {
                     match byte {
@@ -171,11 +175,11 @@ mod tests {
             latch_saw_zero: false,
         };
         rtc.latch();
-        assert_eq!(rtc.latched[0], 4);  // seconds
-        assert_eq!(rtc.latched[1], 3);  // minutes
-        assert_eq!(rtc.latched[2], 2);  // hours
-        assert_eq!(rtc.latched[3], 1);  // days_lo
-        assert_eq!(rtc.latched[4], 0);  // days_hi: no overflow
+        assert_eq!(rtc.latched[0], 4); // seconds
+        assert_eq!(rtc.latched[1], 3); // minutes
+        assert_eq!(rtc.latched[2], 2); // hours
+        assert_eq!(rtc.latched[3], 1); // days_lo
+        assert_eq!(rtc.latched[4], 0); // days_hi: no overflow
     }
 
     #[test]
@@ -187,7 +191,7 @@ mod tests {
             latch_saw_zero: false,
         };
         rtc.latch();
-        assert_eq!(rtc.latched[3], 0);           // days_lo = 256 & 0xFF = 0
+        assert_eq!(rtc.latched[3], 0); // days_lo = 256 & 0xFF = 0
         assert_eq!(rtc.latched[4] & 0x01, 0x01); // day-256 bit set
         assert_eq!(rtc.latched[4] & 0x80, 0x00); // no carry yet
     }
@@ -213,9 +217,9 @@ mod tests {
         };
         rtc.write(0, 15); // seconds
         rtc.write(1, 30); // minutes
-        rtc.write(2, 5);  // hours
-        rtc.write(3, 2);  // days_lo
-        rtc.write(4, 0);  // days_hi
+        rtc.write(2, 5); // hours
+        rtc.write(3, 2); // days_lo
+        rtc.write(4, 0); // days_hi
         rtc.latch();
         assert_eq!(rtc.latched[0], 15);
         assert_eq!(rtc.latched[1], 30);

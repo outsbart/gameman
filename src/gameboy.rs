@@ -88,21 +88,25 @@ impl Gameboy {
     }
 
     fn state_path(&self, slot: u8) -> std::path::PathBuf {
-        self.cpu.mmu.cartridge.inner_cart().path()
+        self.cpu
+            .mmu
+            .cartridge
+            .inner_cart()
+            .path()
             .with_extension(format!("ss{slot}"))
     }
 
     pub fn save_state_to_file(&self, slot: u8) -> io::Result<()> {
-        let bytes = bincode::serialize(self)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        let bytes =
+            bincode::serialize(self).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
         std::fs::write(self.state_path(slot), bytes)
     }
 
     pub fn load_state_from_file(&mut self, slot: u8) -> io::Result<()> {
         let path = self.state_path(slot);
         let bytes = std::fs::read(path)?;
-        *self = bincode::deserialize(&bytes)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        *self =
+            bincode::deserialize(&bytes).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
         self.cpu.mmu.cartridge.restore()
     }
 }

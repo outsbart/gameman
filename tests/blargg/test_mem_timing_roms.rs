@@ -4,7 +4,6 @@ extern crate gameman;
 mod helpers;
 use helpers::GameboyTestExt;
 
-
 use gameman::gameboy::Gameboy;
 
 #[ignore = "redundant: tests identical logic to mem_timing_2 sub-tests, which run faster in parallel"]

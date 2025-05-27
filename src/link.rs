@@ -1,5 +1,4 @@
 /// Link cable
-
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 

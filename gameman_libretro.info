@@ -1,0 +1,30 @@
+# Software Information
+display_name = "Nintendo - Game Boy (gameman)"
+authors = "Bart Merenda"
+supported_extensions = "gb|gbc"
+corename = "gameman"
+license = "MIT"
+permissions = ""
+display_version = "0.1.0"
+categories = "Emulator"
+
+# Hardware Information
+manufacturer = "Nintendo"
+systemname = "Game Boy"
+systemid = "game_boy"
+
+# Libretro Features
+supports_no_game = "false"
+database = "Nintendo - Game Boy|Nintendo - Game Boy Color"
+savestate = "true"
+savestate_features = "serialized"
+cheats = "true"
+input_descriptors = "true"
+memory_descriptors = "true"
+libretro_saves = "true"
+core_options = "true"
+load_subsystem = "false"
+hw_render = "false"
+needs_fullpath = "true"
+disk_control = "false"
+is_experimental = "false"

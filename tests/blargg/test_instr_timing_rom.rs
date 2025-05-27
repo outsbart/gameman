@@ -4,7 +4,6 @@ extern crate gameman;
 mod helpers;
 use helpers::GameboyTestExt;
 
-
 use gameman::gameboy::Gameboy;
 
 #[test]

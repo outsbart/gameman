@@ -7,60 +7,75 @@ jobs:
     name: Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: check
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: sudo apt-get install -y libsdl3-dev libclang-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo check
 
   test:
     name: Test Suite
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - name: Install libsdl2
-        run: sudo apt-get install -y libsdl2-dev
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: sudo apt-get install -y libsdl3-dev libclang-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@nextest
+      - name: Cache test ROMs
+        id: cache-test-roms
+        uses: actions/cache@v4
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
+          path: test-roms
+          key: game-boy-test-roms-v7.0
+      - name: Download test ROMs
+        if: steps.cache-test-roms.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSL https://github.com/c-sp/game-boy-test-roms/releases/download/v7.0/game-boy-test-roms-v7.0.zip -o test-roms.zip
+          unzip -q test-roms.zip -d test-roms
+      - name: Place test ROMs
+        run: |
+          BLARGG=$(find test-roms -maxdepth 2 -type d -name blargg)
+          MOONEYE=$(find test-roms -maxdepth 3 -type d -name acceptance)
+          mkdir -p tests/blargg/roms tests/mooneye/roms
+          cp -r "$BLARGG"/. tests/blargg/roms/
+          cp -r "$MOONEYE"/. tests/mooneye/roms/
+      - run: cargo nextest run
 
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - run: rustup component add rustfmt
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+          components: rustfmt
+      - run: cargo fmt --all -- --check
 
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: sudo apt-get install -y libsdl3-dev libclang-dev
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - run: rustup component add clippy
-      - uses: actions-rs/cargo@v1
+          components: clippy
+      - run: cargo clippy -- -D warnings
+
+  build-libretro:
+    name: Build libretro core
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: sudo apt-get install -y libclang-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release -p gameman-libretro
+      - uses: actions/upload-artifact@v4
         with:
-          command: clippy
-          args: -- -D warnings
+          name: gameman-libretro
+          path: |
+            target/release/libgameman_libretro.so
+            gameman_libretro.info

@@ -1,12 +1,12 @@
 use crate::cartridge::CartridgeKind;
 use crate::gpu::GPUMemoriesAccess;
-use serde::{Deserialize, Serialize};
-use serde_big_array::BigArray;
 use crate::keypad::Key;
 use crate::link::Link;
 use crate::oam_dma::OamDma;
 use crate::sound::Sound;
 use crate::timers::Timers;
+use serde::{Deserialize, Serialize};
+use serde_big_array::BigArray;
 
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "M: Serialize + for<'de2> serde::Deserialize<'de2>")]
@@ -78,8 +78,8 @@ impl<M: GPUMemoriesAccess> MMU<M> {
 
 pub enum Interrupt {
     VBlank = 0,
-    Stat   = 1,
-    Timer  = 2,
+    Stat = 1,
+    Timer = 2,
     Serial = 3,
     Joypad = 4,
 }
@@ -190,7 +190,9 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                         if addr & 0x00FF < 0xA0 {
                             let mode = self.gpu.gpu_mode();
                             let lcd_enabled = self.gpu.is_lcd_enabled();
-                            if !self.oam_dma.is_active() && (!lcd_enabled || (mode != 2 && mode != 3)) {
+                            if !self.oam_dma.is_active()
+                                && (!lcd_enabled || (mode != 2 && mode != 3))
+                            {
                                 self.gpu.write_oam(addr & 0xFF, byte);
                             }
                         } else {
@@ -300,7 +302,11 @@ mod tests {
 
     fn dummy_cartridge() -> CartridgeKind {
         use crate::cartridge::nombc::CartridgeNoMBC;
-        CartridgeKind::NoMBC(CartridgeNoMBC::new(Cartridge::new(PathBuf::new(), vec![0; 0x8000], 0)))
+        CartridgeKind::NoMBC(CartridgeNoMBC::new(Cartridge::new(
+            PathBuf::new(),
+            vec![0; 0x8000],
+            0,
+        )))
     }
 
     impl GPUMemoriesAccess for DummyGPU {
@@ -446,10 +452,7 @@ mod tests {
     /// from 0x8000 to 0x9FFF should access gpu vram
     #[test]
     fn gpu_vram_access() {
-        let mut mmu = MMU::new(
-            DummyGPU::with([1; 65536], [0; 65536]),
-            dummy_cartridge(),
-        );
+        let mut mmu = MMU::new(DummyGPU::with([1; 65536], [0; 65536]), dummy_cartridge());
 
         assert_eq!(mmu.read_byte(0x7FFF), 0);
         assert_eq!(mmu.read_byte(0x8000), 1);
@@ -478,10 +481,7 @@ mod tests {
     /// from 0xFE00 to 0xFE9F should access gpu oam
     #[test]
     fn gpu_oam_access() {
-        let mut mmu = MMU::new(
-            DummyGPU::with([0; 65536], [1; 65536]),
-            dummy_cartridge(),
-        );
+        let mut mmu = MMU::new(DummyGPU::with([0; 65536], [1; 65536]), dummy_cartridge());
 
         assert_eq!(mmu.read_byte(0xFDFF), 0);
         assert_eq!(mmu.read_byte(0xFE00), 1);

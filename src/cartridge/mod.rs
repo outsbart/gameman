@@ -109,11 +109,12 @@ impl Cartridge {
 
     pub fn save(&mut self) -> io::Result<()> {
         if self.ram_dirty
-            && let Some(file) = self.save_file.as_mut() {
-                file.seek(SeekFrom::Start(0))?;
-                file.write_all(&self.ram)?;
-                self.ram_dirty = false;
-            }
+            && let Some(file) = self.save_file.as_mut()
+        {
+            file.seek(SeekFrom::Start(0))?;
+            file.write_all(&self.ram)?;
+            self.ram_dirty = false;
+        }
         Ok(())
     }
 
@@ -137,7 +138,8 @@ impl Cartridge {
             0x0000 | 0x1000 | 0x2000 | 0x3000 => addr as usize,
             0x4000 | 0x5000 | 0x6000 | 0x7000 => {
                 let num_banks = self.rom.len() / ROM_BANK_SIZE;
-                (self.rom_bank as usize & (num_banks - 1)) * ROM_BANK_SIZE + (addr & 0x3FFF) as usize
+                (self.rom_bank as usize & (num_banks - 1)) * ROM_BANK_SIZE
+                    + (addr & 0x3FFF) as usize
             }
             _ => panic!("Unhandled ROM MBC read at addr {:x}", addr),
         };

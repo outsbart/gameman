@@ -4,7 +4,6 @@ extern crate gameman;
 mod helpers;
 use helpers::GameboyTestExt;
 
-
 use gameman::gameboy::Gameboy;
 
 #[test]
@@ -39,43 +38,50 @@ fn sound_05_sweep_details() {
 
 #[test]
 fn sound_06_overflow_on_trigger() {
-    let mut emulator = Gameboy::new("tests/blargg/roms/dmg_sound/rom_singles/06-overflow on trigger.gb");
+    let mut emulator =
+        Gameboy::new("tests/blargg/roms/dmg_sound/rom_singles/06-overflow on trigger.gb");
     assert!(emulator.passes_blargg_ram_test_rom());
 }
 
 #[test]
 fn sound_07_len_sweep_period_sync() {
-    let mut emulator = Gameboy::new("tests/blargg/roms/dmg_sound/rom_singles/07-len sweep period sync.gb");
+    let mut emulator =
+        Gameboy::new("tests/blargg/roms/dmg_sound/rom_singles/07-len sweep period sync.gb");
     assert!(emulator.passes_blargg_ram_test_rom());
 }
 
 #[test]
 fn sound_08_len_ctr_during_power() {
-    let mut emulator = Gameboy::new("tests/blargg/roms/dmg_sound/rom_singles/08-len ctr during power.gb");
+    let mut emulator =
+        Gameboy::new("tests/blargg/roms/dmg_sound/rom_singles/08-len ctr during power.gb");
     assert!(emulator.passes_blargg_ram_test_rom());
 }
 
 #[test]
 fn sound_09_wave_read_while_on() {
-    let mut emulator = Gameboy::new("tests/blargg/roms/dmg_sound/rom_singles/09-wave read while on.gb");
+    let mut emulator =
+        Gameboy::new("tests/blargg/roms/dmg_sound/rom_singles/09-wave read while on.gb");
     assert!(emulator.passes_blargg_ram_test_rom());
 }
 
 #[test]
 fn sound_10_wave_trigger_while_on() {
-    let mut emulator = Gameboy::new("tests/blargg/roms/dmg_sound/rom_singles/10-wave trigger while on.gb");
+    let mut emulator =
+        Gameboy::new("tests/blargg/roms/dmg_sound/rom_singles/10-wave trigger while on.gb");
     assert!(emulator.passes_blargg_ram_test_rom());
 }
 
 #[test]
 fn sound_11_regs_after_power() {
-    let mut emulator = Gameboy::new("tests/blargg/roms/dmg_sound/rom_singles/11-regs after power.gb");
+    let mut emulator =
+        Gameboy::new("tests/blargg/roms/dmg_sound/rom_singles/11-regs after power.gb");
     assert!(emulator.passes_blargg_ram_test_rom());
 }
 
 #[test]
 fn sound_12_wave_write_while_on() {
-    let mut emulator = Gameboy::new("tests/blargg/roms/dmg_sound/rom_singles/12-wave write while on.gb");
+    let mut emulator =
+        Gameboy::new("tests/blargg/roms/dmg_sound/rom_singles/12-wave write while on.gb");
     assert!(emulator.passes_blargg_ram_test_rom());
 }
 
