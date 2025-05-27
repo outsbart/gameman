@@ -9,6 +9,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 gameman = { path = "..", default-features = false }
-rust-libretro = "0.3"
+rust-libretro = { version = "0.3", features = ["unstable-env-commands"] }
 bincode = "1"
 libc = "0.2"

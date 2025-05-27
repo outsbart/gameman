@@ -25,7 +25,32 @@ blargg's cpu_instrs, instr_timing, mem_timing, dmg_sound test ROMs are passing.
 
 ## Cartridge support
 
-Supported: ROM only, MBC1, MBC2, MBC3, MBC5 (rumble silently ignored).
+Supported: ROM only, MBC1, MBC2, MBC3 (with Real-Time Clock for Pokémon Gold/Silver/Crystal), MBC5 (rumble silently ignored).
+
+## Libretro / RetroArch
+
+A libretro core (`gameman-libretro`) is available for use with RetroArch.
+
+### Building and installing
+
+```bash
+cargo build --release -p gameman-libretro
+cp target/release/libgameman_libretro.so ~/.config/retroarch/cores/
+cp gameman-libretro/gameman_libretro.info ~/.config/retroarch/cores/
+```
+
+### Features
+
+- **Save files** — cart RAM is saved and loaded by RetroArch automatically (`.srm`)
+- **Save states** — full state serialization; RetroArch manages slots and rewind
+- **Real-Time Clock** — MBC3 RTC state is preserved across sessions via a `.rtc` file managed by RetroArch
+- **Color palettes** — selectable in Quick Menu → Options:
+  - Classic (Green) *(default)*
+  - Grayscale
+  - DMG Green
+  - GB Pocket
+- **RetroAchievements** — memory descriptors expose WRAM, VRAM, OAM, HRAM and cart RAM; all achievement addresses resolve correctly
+- **Cheats** — RetroArch cheat search and apply work via the same memory descriptor map
 
 ## TODO
 - Refactor, refactor and refactor code

@@ -16,9 +16,9 @@ pub struct MMU<M: GPUMemoriesAccess> {
     bios: [u8; 0x0100],
 
     #[serde(with = "BigArray")]
-    wram: [u8; 0x2000],
+    pub wram: [u8; 0x2000],
     #[serde(with = "BigArray")]
-    zram: [u8; 0x0080],
+    pub zram: [u8; 0x0080],
 
     pub cartridge: CartridgeKind,
     pub timers: Timers,

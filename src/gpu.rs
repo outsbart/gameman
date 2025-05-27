@@ -117,9 +117,9 @@ impl Palette {
 #[derive(Serialize, Deserialize)]
 pub struct GPU {
     #[serde(with = "BigArray")]
-    vram: [u8; 8192],
+    pub vram: [u8; 8192],
     #[serde(with = "BigArray")]
-    oam: [u8; 160],
+    pub oam: [u8; 160],
     #[serde(with = "BigArray")]
     buffer: [u8; 160 * 144],
 

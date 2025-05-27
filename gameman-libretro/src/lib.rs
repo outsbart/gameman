@@ -122,6 +122,34 @@ impl Core for GameboyCore {
         self.gameboy = Some(Gameboy::new(&path));
         self.rom_path = path;
         self.prev_buttons = JoypadState::empty();
+
+        let gb = self.gameboy.as_mut().unwrap();
+        let wram_ptr     = gb.cpu.mmu.wram.as_mut_ptr() as *mut _;
+        let vram_ptr     = gb.cpu.mmu.gpu.vram.as_mut_ptr() as *mut _;
+        let oam_ptr      = gb.cpu.mmu.gpu.oam.as_mut_ptr() as *mut _;
+        let hram_ptr     = gb.cpu.mmu.zram.as_mut_ptr() as *mut _;
+        let cart_ram_ptr = gb.cpu.mmu.cartridge.inner_cart().ram.as_ptr() as *mut _;
+        let cart_ram_len = gb.cpu.mmu.cartridge.inner_cart().ram.len();
+
+        let zero = unsafe { std::mem::zeroed::<retro_memory_descriptor>() };
+        let mut descriptors = vec![
+            retro_memory_descriptor { flags: RETRO_MEMDESC_SYSTEM_RAM as u64, ptr: wram_ptr, start: 0xC000, len: 0x2000, ..zero },
+            retro_memory_descriptor { flags: RETRO_MEMDESC_VIDEO_RAM  as u64, ptr: vram_ptr, start: 0x8000, len: 0x2000, ..zero },
+            retro_memory_descriptor { flags: 0,                               ptr: oam_ptr,  start: 0xFE00, select: 0xFF00, len: 0x00A0, ..zero },
+            retro_memory_descriptor { flags: RETRO_MEMDESC_SYSTEM_RAM as u64, ptr: hram_ptr, start: 0xFF80, len: 0x0080, ..zero },
+        ];
+        if cart_ram_len > 0 {
+            descriptors.push(retro_memory_descriptor {
+                flags: RETRO_MEMDESC_SAVE_RAM as u64,
+                ptr: cart_ram_ptr,
+                start: 0xA000,
+                len: cart_ram_len,
+                ..zero
+            });
+        }
+        let map = retro_memory_map { descriptors: descriptors.as_ptr(), num_descriptors: descriptors.len() as u32 };
+        unsafe { ctx.set_memory_maps(map) };
+
         Ok(())
     }
 
