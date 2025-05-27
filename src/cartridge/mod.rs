@@ -232,6 +232,13 @@ impl CartridgeKind {
     pub fn restore(&mut self) -> io::Result<()> {
         self.inner_cart_mut().restore()
     }
+
+    pub fn rtc_base_secs_mut(&mut self) -> Option<&mut u64> {
+        match self {
+            CartridgeKind::MBC3(c) => c.rtc.as_mut().map(|r| &mut r.base_unix_secs),
+            _ => None,
+        }
+    }
 }
 
 fn is_mbc1_multicart(rom: &[u8]) -> bool {
@@ -295,7 +302,10 @@ pub fn load_rom(path: &str) -> CartridgeKind {
             }
         }
         0x05 | 0x06 => CartridgeKind::MBC2(CartridgeMBC2::new(cart)),
-        0x0F..=0x13 => CartridgeKind::MBC3(CartridgeMBC3::new(cart)),
+        0x0F..=0x13 => {
+            let has_rtc = matches!(cart_type, 0x0F | 0x10);
+            CartridgeKind::MBC3(CartridgeMBC3::new(cart, has_rtc))
+        }
         0x19..=0x1E => CartridgeKind::MBC5(CartridgeMBC5::new(cart)),
         _ => panic!("Cartridge type {:x} not implemented", cart_type),
     }
