@@ -19,7 +19,7 @@ learning Rust and to have fun with the challenges of emulation.
 - **RetroAchievements** *(libretro)* — earn achievements while you play via RetroArch
 - **Cheats** *(libretro)* — GameShark and Game Genie codes via RetroArch's built-in cheat system
 
-## Accuracy
+## Test Suites
 
 The emulator is machine-cycle accurate. All blargg and mooneye test ROM suites pass:
 

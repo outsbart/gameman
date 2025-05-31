@@ -1,4 +1,3 @@
-extern crate gameman;
 extern crate sdl3;
 
 use gameman::gameboy::Gameboy;
@@ -46,7 +45,7 @@ fn main() {
     stream.resume().unwrap();
 
     let window = video_subsystem
-        .window("gameman", SCREEN_WIDTH, SCREEN_HEIGHT)
+        .window("Gameman", SCREEN_WIDTH, SCREEN_HEIGHT)
         .position_centered()
         .build()
         .unwrap();

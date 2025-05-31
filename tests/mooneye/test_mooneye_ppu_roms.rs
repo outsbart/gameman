@@ -1,5 +1,3 @@
-extern crate gameman;
-
 #[path = "../helpers/mod.rs"]
 mod helpers;
 use helpers::GameboyTestExt;
