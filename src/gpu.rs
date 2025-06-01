@@ -146,13 +146,14 @@ pub struct GPU {
     mode: u8,
     line: u8,
 
-    bg_enabled: bool,     // draw bg?
-    obj_enabled: bool,    // draw sprites?
-    obj_size: bool,       // sprite is tall 16 or 8 pixel?
-    bg_map: bool,         // which tilemap to use for the bg
-    bg_tile: bool,        // tiles data to use for both bg and window
-    window_enabled: bool, // draw window?
-    window_map: bool,     // which tilemap use for the window?
+    bg_enabled: bool,         // draw bg? (DMG only; always drawn in CGB mode)
+    bg_master_priority: bool, // CGB only: LCDC bit 0; when false, sprites always win
+    obj_enabled: bool,        // draw sprites?
+    obj_size: bool,           // sprite is tall 16 or 8 pixel?
+    bg_map: bool,             // which tilemap to use for the bg
+    bg_tile: bool,            // tiles data to use for both bg and window
+    window_enabled: bool,     // draw window?
+    window_map: bool,         // which tilemap use for the window?
     lcd_enabled: bool,
 
     compare_enabled: bool,   // stat reg. Should compare with compare line?
@@ -311,8 +312,15 @@ impl GPUMemoriesAccess for GPU {
     fn read_byte(&mut self, addr: u16) -> u8 {
         match addr {
             0xFF40 => {
-                (if self.bg_enabled { 0x01 } else { 0 })
-                    | (if self.obj_enabled { 0x02 } else { 0 })
+                (if if self.cgb_mode {
+                    self.bg_master_priority
+                } else {
+                    self.bg_enabled
+                } {
+                    0x01
+                } else {
+                    0
+                }) | (if self.obj_enabled { 0x02 } else { 0 })
                     | (if self.obj_size { 0x04 } else { 0 })
                     | (if self.bg_map { 0x08 } else { 0 })
                     | (if self.bg_tile { 0x10 } else { 0 })
@@ -354,7 +362,12 @@ impl GPUMemoriesAccess for GPU {
         match addr {
             0xFF40 => {
                 // LCD Control
-                self.bg_enabled = (byte & 0x01) != 0;
+                // bit 0: DMG = bg_enable; CGB = BG/window master priority (BG always drawn)
+                if self.cgb_mode {
+                    self.bg_master_priority = (byte & 0x01) != 0;
+                } else {
+                    self.bg_enabled = (byte & 0x01) != 0;
+                }
                 self.obj_enabled = (byte & 0x02) != 0;
                 self.obj_size = (byte & 0x04) != 0;
                 self.bg_map = (byte & 0x08) != 0;
@@ -517,6 +530,7 @@ impl GPU {
             mode: 2,
             line: 0,
             bg_enabled: false,
+            bg_master_priority: true,
             obj_enabled: false,
             obj_size: false,
             bg_map: false,
@@ -556,9 +570,13 @@ impl GPU {
 
     pub fn set_dmg_palette(&mut self, palette: [u32; 4]) {
         self.dmg_palette = palette;
-        self.bg_colors[0] = Self::dmg_colors_from_palette(&self.bg_palette, &self.dmg_palette);
-        self.obj_colors[0] = Self::dmg_colors_from_palette(&self.obj_palette_0, &self.dmg_palette);
-        self.obj_colors[1] = Self::dmg_colors_from_palette(&self.obj_palette_1, &self.dmg_palette);
+        if !self.cgb_mode {
+            self.bg_colors[0] = Self::dmg_colors_from_palette(&self.bg_palette, &self.dmg_palette);
+            self.obj_colors[0] =
+                Self::dmg_colors_from_palette(&self.obj_palette_0, &self.dmg_palette);
+            self.obj_colors[1] =
+                Self::dmg_colors_from_palette(&self.obj_palette_1, &self.dmg_palette);
+        }
     }
 
     fn dmg_colors_from_palette(palette: &Palette, dmg_palette: &[u32; 4]) -> [u32; 4] {
@@ -646,8 +664,8 @@ impl GPU {
         // plus bg-priority flag from CGB tile attr in bit 2. 0 colour number = transparent.
         let mut rendering_row = [0u8; 160];
 
-        // background
-        if self.bg_enabled {
+        // background (always drawn in CGB mode regardless of LCDC bit 0)
+        if self.cgb_mode || self.bg_enabled {
             let tilemap_offset = if self.bg_map {
                 TILEMAP1_OFFSET
             } else {
@@ -798,8 +816,13 @@ impl GPU {
                     }
 
                     // bg-priority tile attr (CGB) or z-order with non-transparent bg pixel
-                    let bg_wins = (rendering_row[curr_x as usize] & 0x04 != 0)
-                        || (z && rendering_row[curr_x as usize] & 0x03 != 0);
+                    // In CGB mode with master priority off, sprites always win
+                    let bg_wins = if self.cgb_mode && !self.bg_master_priority {
+                        false
+                    } else {
+                        (rendering_row[curr_x as usize] & 0x04 != 0)
+                            || (z && rendering_row[curr_x as usize] & 0x03 != 0)
+                    };
                     if bg_wins {
                         continue;
                     }

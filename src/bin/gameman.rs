@@ -26,6 +26,10 @@ fn main() {
 
     let mut gameboy = Gameboy::new(rom_path.as_str());
 
+    if std::path::Path::new("boot/cgb_boot.bin").exists() {
+        gameboy.load_bios("boot/cgb_boot.bin");
+    }
+
     let sdl = sdl3::init().unwrap();
     let video_subsystem = sdl.video().unwrap();
     let audio_subsystem = sdl.audio().unwrap();
