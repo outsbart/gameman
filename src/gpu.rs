@@ -793,6 +793,11 @@ impl GPU {
                 }
             }
 
+            // DMG: lower X-coordinate wins; CGB: lower OAM index wins (already in order)
+            if !self.cgb_mode || self.dmg_compat {
+                visible[..visible_count].sort_by_key(|&i| self.oam[i * 4 + 1]);
+            }
+
             for &sprite_num in &visible[..visible_count] {
                 let base = sprite_num * 4;
                 let y = self.oam[base].wrapping_sub(16);

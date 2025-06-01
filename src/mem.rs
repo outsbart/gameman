@@ -42,6 +42,11 @@ pub struct MMU<M: GPUMemoriesAccess> {
 
     // CGB KEY1: bit 7 = current speed (0=normal, 1=double), bit 0 = prepare-switch
     pub key1: u8,
+
+    // CGB: IR port (FF56), undocumented (FF6C, FF72-FF75)
+    ir_port: u8,
+    ff6c: u8,
+    cgb_undoc: [u8; 4],
 }
 
 impl<M: GPUMemoriesAccess> MMU<M> {
@@ -72,6 +77,9 @@ impl<M: GPUMemoriesAccess> MMU<M> {
             hbdma_active: false,
             hbdma_remaining: 0,
             key1: 0,
+            ir_port: 0,
+            ff6c: 0,
+            cgb_undoc: [0; 4],
         };
         mmu.post_boot_init();
         mmu
@@ -187,7 +195,13 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                             self.hbdma_remaining.wrapping_sub(1) // bit 7 = 0 means active
                         }
                         0xFF4D if self.gpu.cgb_mode() => (self.key1 & 0x81) | 0x7E,
+                        0xFF56 if self.gpu.cgb_mode() => (self.ir_port & 0x02) | 0xC1,
+                        0xFF6C if self.gpu.cgb_mode() => self.ff6c | 0xFE,
                         0xFF70 if self.gpu.cgb_mode() => self.wram_bank | 0xF8,
+                        0xFF72 if self.gpu.cgb_mode() => self.cgb_undoc[0],
+                        0xFF73 if self.gpu.cgb_mode() => self.cgb_undoc[1],
+                        0xFF74 if self.gpu.cgb_mode() => self.cgb_undoc[2],
+                        0xFF75 if self.gpu.cgb_mode() => self.cgb_undoc[3] | 0x8F,
                         0xFF40..=0xFF45 | 0xFF47..=0xFF7F => self.gpu.read_byte(addr),
                         0xFF80..=0xFFFE => self.zram[(addr & 0x7F) as usize],
                         0xFFFF => self.interrupt_enable,
@@ -306,9 +320,19 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                         0xFF4D if self.gpu.cgb_mode() => {
                             self.key1 = (self.key1 & !0x01) | (byte & 0x01);
                         }
+                        0xFF56 if self.gpu.cgb_mode() => {
+                            self.ir_port = byte & 0x02;
+                        }
+                        0xFF6C if self.gpu.cgb_mode() => {
+                            self.ff6c = byte & 0x01;
+                        }
                         0xFF70 if self.gpu.cgb_mode() => {
                             self.wram_bank = (byte & 0x07).max(1);
                         }
+                        0xFF72 if self.gpu.cgb_mode() => self.cgb_undoc[0] = byte,
+                        0xFF73 if self.gpu.cgb_mode() => self.cgb_undoc[1] = byte,
+                        0xFF74 if self.gpu.cgb_mode() => self.cgb_undoc[2] = byte,
+                        0xFF75 if self.gpu.cgb_mode() => self.cgb_undoc[3] = byte & 0x70,
                         0xFF50 => self.still_bios = false,
                         0xFF40..=0xFF45 | 0xFF47..=0xFF7F => self.gpu.write_byte(addr, byte),
                         0xFF80..=0xFFFE => self.zram[(addr & 0x007F) as usize] = byte,
