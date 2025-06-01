@@ -13,7 +13,7 @@ use serde_big_array::BigArray;
 pub struct MMU<M: GPUMemoriesAccess> {
     still_bios: bool,
     #[serde(with = "BigArray")]
-    bios: [u8; 0x0100],
+    bios: [u8; 0x0900],
 
     #[serde(with = "BigArray")]
     pub wram: [u8; 0x8000],
@@ -45,7 +45,7 @@ impl<M: GPUMemoriesAccess> MMU<M> {
     pub fn new(gpu: M, cartridge: CartridgeKind) -> MMU<M> {
         let mut mmu = MMU {
             still_bios: false,
-            bios: [0; 0x0100],
+            bios: [0; 0x0900],
 
             wram: [0; 0x8000],
             wram_bank: 1,
@@ -78,9 +78,9 @@ impl<M: GPUMemoriesAccess> MMU<M> {
         self.gpu.post_boot_init();
     }
 
-    pub fn set_bios(&mut self, bios: [u8; 0x0100]) {
+    pub fn set_bios(&mut self, bios: [u8; 0x0900]) {
         self.bios = bios;
-        self.still_bios = true; // TODO: move this into a reset fn
+        self.still_bios = true;
     }
 
     pub fn request_interrupt(&mut self, interrupt: Interrupt) {
@@ -124,8 +124,8 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                 if self.still_bios && addr <= 0x00FF {
                     return self.bios[addr as usize];
                 }
-                if self.still_bios && addr == 0x0100 {
-                    self.still_bios = false;
+                if self.still_bios && self.gpu.cgb_mode() && (0x0200..0x0900).contains(&addr) {
+                    return self.bios[addr as usize];
                 }
                 self.cartridge.read_rom(addr)
             }
@@ -294,6 +294,7 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                         0xFF70 if self.gpu.cgb_mode() => {
                             self.wram_bank = (byte & 0x07).max(1);
                         }
+                        0xFF50 => self.still_bios = false,
                         0xFF40..=0xFF45 | 0xFF47..=0xFF7F => self.gpu.write_byte(addr, byte),
                         0xFF80..=0xFFFE => self.zram[(addr & 0x007F) as usize] = byte,
                         _ => {}
@@ -607,8 +608,8 @@ mod tests {
     fn gpu_registers_write() {
         let mut mmu = MMU::new(DummyGPU::new(), dummy_cartridge());
 
-        // 0xFF46 = OAM DMA trigger, 0xFF51-0xFF55 = CGB HDMA, 0xFF70 = WRAM bank — all handled by MMU, not routed to GPU
-        let skip = |addr: u16| matches!(addr, 0xFF46 | 0xFF51..=0xFF55 | 0xFF70);
+        // 0xFF46 = OAM DMA trigger, 0xFF50 = BIOS disable, 0xFF51-0xFF55 = CGB HDMA, 0xFF70 = WRAM bank — all handled by MMU, not routed to GPU
+        let skip = |addr: u16| matches!(addr, 0xFF46 | 0xFF50 | 0xFF51..=0xFF55 | 0xFF70);
         for i in 0u16..64u16 {
             if skip(0xFF40 + i) {
                 continue;

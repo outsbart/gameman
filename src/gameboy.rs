@@ -27,11 +27,17 @@ impl Gameboy {
         Gameboy { cpu }
     }
 
-    pub fn load_bios(&mut self) {
-        let bios: [u8; 0x0100] = std::fs::read("roms/DMG_ROM.bin")
-            .expect("couldn't open boot rom")
-            .try_into()
-            .expect("boot rom must be 256 bytes");
+    pub fn load_bios(&mut self, path: &str) {
+        let bytes = std::fs::read(path).expect("couldn't open boot rom");
+        assert!(
+            bytes.len() == 0x0100 || bytes.len() == 0x0900,
+            "boot rom must be 256 (DMG) or 2304 (GBC) bytes"
+        );
+        let mut bios = [0u8; 0x0900];
+        bios[..bytes.len()].copy_from_slice(&bytes);
+        if bytes.len() == 0x0900 {
+            self.cpu.mmu.gpu.cgb_mode = true;
+        }
         self.cpu.mmu.set_bios(bios);
         self.cpu.write_reg(Operand::PC, 0);
     }
