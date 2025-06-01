@@ -126,6 +126,9 @@ impl CartridgeMBC3 {
 
     pub fn read_ram(&self, addr: u16) -> u8 {
         if self.cart.mode == 1 {
+            if !self.ram_and_timer_enabled {
+                return 0xFF;
+            }
             return match &self.rtc {
                 Some(rtc) => rtc.read(self.cart.ram_bank - 0x08),
                 None => 0xFF,
@@ -141,9 +144,11 @@ impl CartridgeMBC3 {
 
     pub fn write_ram(&mut self, addr: u16, byte: u8) {
         if self.cart.mode == 1 {
-            let reg = self.cart.ram_bank - 0x08;
-            if let Some(rtc) = &mut self.rtc {
-                rtc.write(reg, byte);
+            if self.ram_and_timer_enabled {
+                let reg = self.cart.ram_bank - 0x08;
+                if let Some(rtc) = &mut self.rtc {
+                    rtc.write(reg, byte);
+                }
             }
             return;
         }

@@ -196,10 +196,15 @@ impl<M: Memory> CPU<M> {
     }
 
     fn tick_m(&mut self) {
-        self.mmu.tick_t();
-        self.mmu.tick_t();
-        self.mmu.tick_t();
-        self.mmu.tick_t();
+        if self.mmu.is_double_speed() {
+            self.mmu.tick_t();
+            self.mmu.tick_t();
+        } else {
+            self.mmu.tick_t();
+            self.mmu.tick_t();
+            self.mmu.tick_t();
+            self.mmu.tick_t();
+        }
     }
 
     // fetches the next byte from the ram, advancing one M-cycle
@@ -422,7 +427,14 @@ impl<M: Memory> CPU<M> {
             4
         };
 
-        (instr, cycles)
+        // In double-speed mode tick_m() advances the GPU by 2 T-cycles per M-cycle instead of 4.
+        // Halve the reported cycle count so the frame counter tracks GPU T-cycles correctly.
+        let gpu_cycles = if self.mmu.is_double_speed() {
+            cycles / 2
+        } else {
+            cycles
+        };
+        (instr, gpu_cycles)
     }
 
     pub fn enable_ime_if_scheduled(&mut self) {
@@ -595,7 +607,11 @@ impl<M: Memory> CPU<M> {
 
     fn stop(&mut self) -> u8 {
         self.fetch_next_byte(); // consume the mandatory 0x00 operand
-        self.stopped = true;
+        if self.mmu.is_speed_switch() {
+            self.mmu.do_speed_switch();
+        } else {
+            self.stopped = true;
+        }
         4
     }
 

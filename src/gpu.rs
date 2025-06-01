@@ -131,6 +131,8 @@ pub struct GPU {
 
     // CGB support
     pub cgb_mode: bool,
+    #[serde(default)]
+    pub dmg_compat: bool, // DMG game running on GBC hardware (boot ROM colorization)
     vram_bank: u8,
     #[serde(with = "BigArray")]
     bg_palette_data: [u8; 64],
@@ -141,6 +143,10 @@ pub struct GPU {
     bg_colors: [[u32; 4]; 8],
     obj_colors: [[u32; 4]; 8],
     dmg_palette: [u32; 4],
+    #[serde(default)]
+    compat_bg_ref: [u32; 4], // CGB BG palette 0 colors set by boot ROM
+    #[serde(default)]
+    compat_obj_ref: [[u32; 4]; 2], // CGB OBJ palettes 0+1 set by boot ROM
 
     modeclock: u16,
     mode: u8,
@@ -154,6 +160,7 @@ pub struct GPU {
     bg_tile: bool,            // tiles data to use for both bg and window
     window_enabled: bool,     // draw window?
     window_map: bool,         // which tilemap use for the window?
+    window_line: u8,          // internal counter: increments per rendered window scanline
     lcd_enabled: bool,
 
     compare_enabled: bool,   // stat reg. Should compare with compare line?
@@ -379,6 +386,7 @@ impl GPUMemoriesAccess for GPU {
                 if !was_enabled && self.lcd_enabled {
                     self.mode = 2;
                     self.line = 0;
+                    self.window_line = 0;
                     self.modeclock = 4; // hardware starts mode 2 ~1 M-cycle in, not at T=0
                     self.lyc_flag = self.line == self.compare_line;
                     // 16T: compensates for the write firing "early" (at T1 of the write M-cycle)
@@ -394,6 +402,7 @@ impl GPUMemoriesAccess for GPU {
                     self.line = 0;
                     self.modeclock = 0;
                     self.lcd_startup_ticks = 0;
+                    self.window_line = 0;
                     // lyc_flag intentionally NOT updated here — frozen at last value
                     // stat_line = lyc_source only (mode sources gated by lcd_enabled)
                     self.stat_line = self.compute_stat_line();
@@ -435,21 +444,30 @@ impl GPUMemoriesAccess for GPU {
             }
             0xFF47 => {
                 self.bg_palette.update(byte);
-                if !self.cgb_mode {
+                if self.dmg_compat {
+                    self.bg_colors[0] =
+                        Self::dmg_colors_from_palette(&self.bg_palette, &self.compat_bg_ref);
+                } else if !self.cgb_mode {
                     self.bg_colors[0] =
                         Self::dmg_colors_from_palette(&self.bg_palette, &self.dmg_palette);
                 }
             }
             0xFF48 => {
                 self.obj_palette_0.update(byte);
-                if !self.cgb_mode {
+                if self.dmg_compat {
+                    self.obj_colors[0] =
+                        Self::dmg_colors_from_palette(&self.obj_palette_0, &self.compat_obj_ref[0]);
+                } else if !self.cgb_mode {
                     self.obj_colors[0] =
                         Self::dmg_colors_from_palette(&self.obj_palette_0, &self.dmg_palette);
                 }
             }
             0xFF49 => {
                 self.obj_palette_1.update(byte);
-                if !self.cgb_mode {
+                if self.dmg_compat {
+                    self.obj_colors[1] =
+                        Self::dmg_colors_from_palette(&self.obj_palette_1, &self.compat_obj_ref[1]);
+                } else if !self.cgb_mode {
                     self.obj_colors[1] =
                         Self::dmg_colors_from_palette(&self.obj_palette_1, &self.dmg_palette);
                 }
@@ -470,6 +488,10 @@ impl GPUMemoriesAccess for GPU {
                 let index = self.bcps & 0x3F;
                 self.bg_palette_data[index as usize] = byte;
                 Self::recompute_cgb_color(&self.bg_palette_data, &mut self.bg_colors, index);
+                if self.dmg_compat && (index / 8) == 0 {
+                    let colour_num = ((index % 8) / 2) as usize;
+                    self.compat_bg_ref[colour_num] = self.bg_colors[0][colour_num];
+                }
                 if self.bcps & 0x80 != 0 {
                     self.bcps = (self.bcps & 0x80) | ((index + 1) & 0x3F);
                 }
@@ -481,6 +503,14 @@ impl GPUMemoriesAccess for GPU {
                 let index = self.ocps & 0x3F;
                 self.obj_palette_data[index as usize] = byte;
                 Self::recompute_cgb_color(&self.obj_palette_data, &mut self.obj_colors, index);
+                if self.dmg_compat {
+                    let palette_idx = (index / 8) as usize;
+                    let colour_num = ((index % 8) / 2) as usize;
+                    if palette_idx < 2 {
+                        self.compat_obj_ref[palette_idx][colour_num] =
+                            self.obj_colors[palette_idx][colour_num];
+                    }
+                }
                 if self.ocps & 0x80 != 0 {
                     self.ocps = (self.ocps & 0x80) | ((index + 1) & 0x3F);
                 }
@@ -518,6 +548,9 @@ impl GPU {
             oam: [0; 160],
             buffer: [0; 160 * 144],
             cgb_mode,
+            dmg_compat: false,
+            compat_bg_ref: [0u32; 4],
+            compat_obj_ref: [[0u32; 4]; 2],
             vram_bank: 0,
             bg_palette_data: [0; 64],
             obj_palette_data: [0; 64],
@@ -537,6 +570,7 @@ impl GPU {
             bg_tile: false,
             window_enabled: false,
             window_map: false,
+            window_line: 0,
             lcd_enabled: false,
             compare_enabled: false,
             compare_line: 0,
@@ -626,7 +660,11 @@ impl GPU {
         cell_y: usize,
     ) -> (u8, u32, bool) {
         let tile_id = self.vram[tilemap_index]; // bank 0
-        let attr = self.vram[8192 + tilemap_index]; // bank 1 (always 0 in DMG)
+        let attr = if self.dmg_compat {
+            0
+        } else {
+            self.vram[8192 + tilemap_index]
+        };
         let palette_idx = (attr & 0x07) as usize;
         let tile_bank = ((attr >> 3) & 0x01) as usize;
         let flip_h = (attr >> 5) & 0x01 != 0;
@@ -712,16 +750,13 @@ impl GPU {
                 TILEMAP0_OFFSET
             };
 
-            let window_line: usize = self.line.wrapping_sub(self.window_y) as usize;
-            let tilemap_y: usize = (window_line / TILE_SIZE) % TILES_IN_A_TILEMAP_COL;
-            let cell_y: usize = window_line % TILE_SIZE;
+            let win_line = self.window_line as usize;
+            let tilemap_y: usize = (win_line / TILE_SIZE) % TILES_IN_A_TILEMAP_COL;
+            let cell_y: usize = win_line % TILE_SIZE;
 
             #[allow(clippy::needless_range_loop)]
             for pixel in (window_x as usize)..TILES_IN_A_SCREEN_ROW * TILE_SIZE {
-                let mut curr_pixel_x = (pixel as u8).wrapping_add(self.scroll_x);
-                if curr_pixel_x >= window_x {
-                    curr_pixel_x = pixel as u8 - window_x;
-                }
+                let curr_pixel_x = (pixel - window_x as usize) as u8;
 
                 let tilemap_x: usize = (curr_pixel_x as usize / TILE_SIZE) % TILES_IN_A_TILEMAP_ROW;
                 let cell_x: usize = curr_pixel_x as usize % TILE_SIZE;
@@ -735,6 +770,7 @@ impl GPU {
                 let index = (self.line as usize * TILES_IN_A_SCREEN_ROW * TILE_SIZE) + pixel;
                 self.buffer[index] = color;
             }
+            self.window_line += 1;
         }
 
         // sprites
@@ -743,7 +779,21 @@ impl GPU {
 
             let mut sprite_occupied = [false; 160usize];
 
+            let mut visible: [usize; 10] = [0; 10];
+            let mut visible_count = 0usize;
             for sprite_num in 0..40usize {
+                let base = sprite_num * 4;
+                let y = self.oam[base].wrapping_sub(16);
+                if self.line.wrapping_sub(y) < sprite_height {
+                    visible[visible_count] = sprite_num;
+                    visible_count += 1;
+                    if visible_count == 10 {
+                        break;
+                    }
+                }
+            }
+
+            for &sprite_num in &visible[..visible_count] {
                 let base = sprite_num * 4;
                 let y = self.oam[base].wrapping_sub(16);
                 let x = self.oam[base + 1].wrapping_sub(8);
@@ -753,25 +803,24 @@ impl GPU {
                 let flip_y = (opt & 0x40) != 0;
                 let flip_x = (opt & 0x20) != 0;
                 let z = (opt & 0x80) != 0;
-                // CGB mode: bits 0-2 = palette index (0-7); DMG mode: bit 4 = OBP0/OBP1
-                let cgb_palette = if self.cgb_mode {
+                // CGB mode: bits 0-2 = palette index (0-7); DMG/compat: bit 4 = OBP0/OBP1
+                let cgb_palette = if self.cgb_mode && !self.dmg_compat {
                     (opt & 0x07) as usize
                 } else {
                     ((opt >> 4) & 0x01) as usize
                 };
-                // CGB mode: bit 3 = tile VRAM bank; DMG: always bank 0
-                let tile_vbank = if self.cgb_mode {
+                // CGB mode: bit 3 = tile VRAM bank; DMG/compat: always bank 0
+                let tile_vbank = if self.cgb_mode && !self.dmg_compat {
                     ((opt >> 3) & 0x01) as usize
                 } else {
                     0
                 };
 
-                // not intersecting with scanline, don't draw
-                if self.line.wrapping_sub(y) >= sprite_height {
-                    continue;
-                }
-
-                let mut pos = pos_base;
+                let mut pos = if self.obj_size {
+                    pos_base & 0xFE
+                } else {
+                    pos_base
+                };
 
                 // handle upside down
                 let mut sprite_pixel_row = if flip_y {
@@ -970,6 +1019,7 @@ impl GPU {
                         self.mode = 2;
                         self.accessed_oam_row = 0;
                         self.line = 0;
+                        self.window_line = 0;
                     }
                     self.lyc_flag = self.line == self.compare_line;
                 }

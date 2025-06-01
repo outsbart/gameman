@@ -39,6 +39,9 @@ pub struct MMU<M: GPUMemoriesAccess> {
     hdma_dst: u16,
     hbdma_active: bool,
     hbdma_remaining: u8,
+
+    // CGB KEY1: bit 7 = current speed (0=normal, 1=double), bit 0 = prepare-switch
+    pub key1: u8,
 }
 
 impl<M: GPUMemoriesAccess> MMU<M> {
@@ -68,6 +71,7 @@ impl<M: GPUMemoriesAccess> MMU<M> {
             hdma_dst: 0xFFFF,
             hbdma_active: false,
             hbdma_remaining: 0,
+            key1: 0,
         };
         mmu.post_boot_init();
         mmu
@@ -111,6 +115,13 @@ pub trait Memory {
     fn tick_t(&mut self) {}
     fn before_fetch(&mut self) {}
     fn handle_oam_corruption(&mut self, _opcode: u8, _rr: u16) {}
+    fn is_speed_switch(&self) -> bool {
+        false
+    }
+    fn do_speed_switch(&mut self) {}
+    fn is_double_speed(&self) -> bool {
+        false
+    }
 }
 
 impl<M: GPUMemoriesAccess> Memory for MMU<M> {
@@ -175,6 +186,7 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                         0xFF55 if self.gpu.cgb_mode() && self.hbdma_active => {
                             self.hbdma_remaining.wrapping_sub(1) // bit 7 = 0 means active
                         }
+                        0xFF4D if self.gpu.cgb_mode() => (self.key1 & 0x81) | 0x7E,
                         0xFF70 if self.gpu.cgb_mode() => self.wram_bank | 0xF8,
                         0xFF40..=0xFF45 | 0xFF47..=0xFF7F => self.gpu.read_byte(addr),
                         0xFF80..=0xFFFE => self.zram[(addr & 0x7F) as usize],
@@ -247,14 +259,14 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                         0xFF51..=0xFF55 if self.gpu.cgb_mode() => {
                             match addr {
                                 0xFF51 => {
-                                    self.hdma_src = (self.hdma_src & 0x00F0) | ((byte as u16) << 8);
+                                    self.hdma_src = (self.hdma_src & 0x00FF) | ((byte as u16) << 8);
                                 }
                                 0xFF52 => {
                                     self.hdma_src =
                                         (self.hdma_src & 0xFF00) | ((byte & 0xF0) as u16);
                                 }
                                 0xFF53 => {
-                                    self.hdma_dst = (self.hdma_dst & 0x00F0) | ((byte as u16) << 8);
+                                    self.hdma_dst = (self.hdma_dst & 0x00FF) | ((byte as u16) << 8);
                                 }
                                 0xFF54 => {
                                     self.hdma_dst =
@@ -290,6 +302,9 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                                 }
                                 _ => {}
                             }
+                        }
+                        0xFF4D if self.gpu.cgb_mode() => {
+                            self.key1 = (self.key1 & !0x01) | (byte & 0x01);
                         }
                         0xFF70 if self.gpu.cgb_mode() => {
                             self.wram_bank = (byte & 0x07).max(1);
@@ -359,6 +374,16 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
     }
     fn handle_oam_corruption(&mut self, opcode: u8, rr: u16) {
         self.oam_dma.handle_corruption(&mut self.gpu, opcode, rr);
+    }
+    fn is_speed_switch(&self) -> bool {
+        self.gpu.cgb_mode() && self.key1 & 0x01 != 0
+    }
+    fn do_speed_switch(&mut self) {
+        self.key1 ^= 0x80;
+        self.key1 &= !0x01;
+    }
+    fn is_double_speed(&self) -> bool {
+        self.key1 & 0x80 != 0
     }
 }
 

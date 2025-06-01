@@ -27,6 +27,10 @@ impl Gameboy {
         Gameboy { cpu }
     }
 
+    pub fn is_cgb(&self) -> bool {
+        self.cpu.mmu.gpu.cgb_mode
+    }
+
     pub fn load_bios(&mut self, path: &str) {
         let bytes = std::fs::read(path).expect("couldn't open boot rom");
         assert!(
@@ -36,6 +40,9 @@ impl Gameboy {
         let mut bios = [0u8; 0x0900];
         bios[..bytes.len()].copy_from_slice(&bytes);
         if bytes.len() == 0x0900 {
+            if !self.cpu.mmu.gpu.cgb_mode {
+                self.cpu.mmu.gpu.dmg_compat = true;
+            }
             self.cpu.mmu.gpu.cgb_mode = true;
         }
         self.cpu.mmu.set_bios(bios);
