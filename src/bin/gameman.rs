@@ -219,14 +219,9 @@ fn main() {
                 for y in 0..144 {
                     for x in 0..160 {
                         let pixel = gpu_buffer[x + y * 160];
-
-                        let (r, g, b): (u8, u8, u8) = match pixel {
-                            0b00 => (0xc4, 0xf0, 0xc2),
-                            0b01 => (0x5a, 0xb9, 0xa8),
-                            0b10 => (0x1e, 0x60, 0x6e),
-                            0b11 => (0x2d, 0x1b, 0x00),
-                            _ => panic!("unexpected pixel color"),
-                        };
+                        let r = ((pixel >> 16) & 0xFF) as u8;
+                        let g = ((pixel >> 8) & 0xFF) as u8;
+                        let b = (pixel & 0xFF) as u8;
 
                         let x_out = x * 3;
                         let y_out = y * pitch;

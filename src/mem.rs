@@ -16,7 +16,8 @@ pub struct MMU<M: GPUMemoriesAccess> {
     bios: [u8; 0x0100],
 
     #[serde(with = "BigArray")]
-    pub wram: [u8; 0x2000],
+    pub wram: [u8; 0x8000],
+    wram_bank: u8,
     #[serde(with = "BigArray")]
     pub zram: [u8; 0x0080],
 
@@ -32,6 +33,12 @@ pub struct MMU<M: GPUMemoriesAccess> {
     pub gpu: M,
     pub key: Key,
     pub link: Link,
+
+    // CGB HDMA
+    hdma_src: u16,
+    hdma_dst: u16,
+    hbdma_active: bool,
+    hbdma_remaining: u8,
 }
 
 impl<M: GPUMemoriesAccess> MMU<M> {
@@ -40,7 +47,8 @@ impl<M: GPUMemoriesAccess> MMU<M> {
             still_bios: false,
             bios: [0; 0x0100],
 
-            wram: [0; 0x2000],
+            wram: [0; 0x8000],
+            wram_bank: 1,
             zram: [0; 0x0080],
 
             cartridge,
@@ -56,6 +64,10 @@ impl<M: GPUMemoriesAccess> MMU<M> {
             gpu,
             key: Key::new(),
             link: Link::new(),
+            hdma_src: 0xFFFF,
+            hdma_dst: 0xFFFF,
+            hbdma_active: false,
+            hbdma_remaining: 0,
         };
         mmu.post_boot_init();
         mmu
@@ -121,11 +133,14 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
             0x1000..=0x7000 => self.cartridge.read_rom(addr),
             0x8000 | 0x9000 => self.gpu.read_vram(addr & 0x1FFF), // VRAM
             0xA000 | 0xB000 => self.cartridge.read_ram(addr & 0x1FFF), // External RAM
-            0xC000 | 0xD000 | 0xE000 => self.wram[(addr & 0x1FFF) as usize], // Working RAM
+            0xC000 | 0xE000 => self.wram[(addr & 0x0FFF) as usize], // Working RAM bank 0 fixed
+            0xD000 => self.wram[self.wram_bank as usize * 0x1000 + (addr & 0x0FFF) as usize], // Working RAM banked
 
             0xF000 => {
                 match addr & 0x0F00 {
-                    0x0000..=0x0D00 => self.wram[(addr & 0x1FFF) as usize], // Working RAM echo
+                    0x0000..=0x0D00 => {
+                        self.wram[self.wram_bank as usize * 0x1000 + (addr & 0x0FFF) as usize]
+                    } // Working RAM echo (mirrors 0xD000-0xDDFF banked area)
 
                     // GPU OAM
                     0x0E00 => {
@@ -152,6 +167,15 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                         0xFF0F => self.interrupt_flags | 0xE0,
                         0xFF10..=0xFF3F => self.sound.read_byte(addr),
                         0xFF46 => self.oam_dma.source,
+                        // HDMA: source/dest reads return current register values; 0xFF55 = 0xFF (no active transfer)
+                        0xFF51 if self.gpu.cgb_mode() => (self.hdma_src >> 8) as u8,
+                        0xFF52 if self.gpu.cgb_mode() => (self.hdma_src & 0xFF) as u8,
+                        0xFF53 if self.gpu.cgb_mode() => (self.hdma_dst >> 8) as u8,
+                        0xFF54 if self.gpu.cgb_mode() => (self.hdma_dst & 0xFF) as u8,
+                        0xFF55 if self.gpu.cgb_mode() && self.hbdma_active => {
+                            self.hbdma_remaining.wrapping_sub(1) // bit 7 = 0 means active
+                        }
+                        0xFF70 if self.gpu.cgb_mode() => self.wram_bank | 0xF8,
                         0xFF40..=0xFF45 | 0xFF47..=0xFF7F => self.gpu.read_byte(addr),
                         0xFF80..=0xFFFE => self.zram[(addr & 0x7F) as usize],
                         0xFFFF => self.interrupt_enable,
@@ -177,13 +201,19 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                 self.cartridge.write_ram(addr & 0x1FFF, byte);
             }
             // Working RAM
-            0xC000 | 0xD000 | 0xE000 => {
-                self.wram[(addr & 0x1FFF) as usize] = byte;
+            0xC000 | 0xE000 => {
+                self.wram[(addr & 0x0FFF) as usize] = byte; // bank 0 fixed
+            }
+            0xD000 => {
+                self.wram[self.wram_bank as usize * 0x1000 + (addr & 0x0FFF) as usize] = byte;
             }
 
             0xF000 => {
                 match addr & 0x0F00 {
-                    0x0000..=0x0D00 => self.wram[(addr & 0x1FFF) as usize] = byte,
+                    0x0000..=0x0D00 => {
+                        self.wram[self.wram_bank as usize * 0x1000 + (addr & 0x0FFF) as usize] =
+                            byte;
+                    } // Working RAM echo (mirrors 0xD000-0xDDFF banked area)
                     // GPU OAM
                     0x0E00 => {
                         // Sprite Attribute Table (OAM - Object Attribute Memory) at $FE00-FE9F
@@ -213,6 +243,57 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                         0xFF07 => self.timers.write_tac(byte),
                         0xFF10..=0xFF3F => self.sound.write_byte(addr, byte),
                         0xFF46 => self.oam_dma.trigger(byte),
+                        // CGB HDMA registers — only active in CGB mode
+                        0xFF51..=0xFF55 if self.gpu.cgb_mode() => {
+                            match addr {
+                                0xFF51 => {
+                                    self.hdma_src = (self.hdma_src & 0x00F0) | ((byte as u16) << 8);
+                                }
+                                0xFF52 => {
+                                    self.hdma_src =
+                                        (self.hdma_src & 0xFF00) | ((byte & 0xF0) as u16);
+                                }
+                                0xFF53 => {
+                                    self.hdma_dst = (self.hdma_dst & 0x00F0) | ((byte as u16) << 8);
+                                }
+                                0xFF54 => {
+                                    self.hdma_dst =
+                                        (self.hdma_dst & 0xFF00) | ((byte & 0xF0) as u16);
+                                }
+                                0xFF55 => {
+                                    if self.hbdma_active && byte & 0x80 == 0 {
+                                        // Cancel active HBDMA
+                                        self.hbdma_active = false;
+                                    } else if byte & 0x80 == 0 {
+                                        // GDMA: copy all bytes now; CPU is stalled so the
+                                        // GPU does not advance independently during the transfer.
+                                        let length = ((byte & 0x7F) as u16 + 1) * 16;
+                                        let src = self.hdma_src;
+                                        let dst = self.hdma_dst;
+                                        // Source must be ROM or WRAM/SRAM
+                                        if !(src < 0x8000 || (0xA000..=0xDFFF).contains(&src)) {
+                                            return;
+                                        }
+                                        for i in 0..length {
+                                            let b = self.read_byte(src.wrapping_add(i));
+                                            self.gpu.write_vram((dst.wrapping_add(i)) & 0x1FFF, b);
+                                        }
+                                        self.hdma_src = src.wrapping_add(length);
+                                        self.hdma_dst =
+                                            (dst.wrapping_add(length) & 0x1FFF) | 0x8000;
+                                    } else {
+                                        // HBDMA: arm the transfer; one 16-byte chunk fires
+                                        // per HBlank in tick_t.
+                                        self.hbdma_active = true;
+                                        self.hbdma_remaining = (byte & 0x7F) + 1;
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        0xFF70 if self.gpu.cgb_mode() => {
+                            self.wram_bank = (byte & 0x07).max(1);
+                        }
                         0xFF40..=0xFF45 | 0xFF47..=0xFF7F => self.gpu.write_byte(addr, byte),
                         0xFF80..=0xFFFE => self.zram[(addr & 0x007F) as usize] = byte,
                         _ => {}
@@ -254,6 +335,21 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
         }
         if stat {
             self.request_interrupt(Interrupt::Stat);
+        }
+        // HBDMA: fire one 16-byte chunk per HBlank.
+        if self.hbdma_active && self.gpu.take_hblank() {
+            let src = self.hdma_src;
+            let dst = self.hdma_dst;
+            for i in 0..16u16 {
+                let b = self.read_byte(src.wrapping_add(i));
+                self.gpu.write_vram((dst.wrapping_add(i)) & 0x1FFF, b);
+            }
+            self.hdma_src = src.wrapping_add(16);
+            self.hdma_dst = (dst.wrapping_add(16) & 0x1FFF) | 0x8000;
+            self.hbdma_remaining -= 1;
+            if self.hbdma_remaining == 0 {
+                self.hbdma_active = false;
+            }
         }
     }
 
@@ -387,7 +483,7 @@ mod tests {
     fn wram_access() {
         let mut mmu = MMU::new(DummyGPU::new(), dummy_cartridge());
 
-        mmu.wram = [1; 0x2000];
+        mmu.wram = [1; 0x8000];
         mmu.wram[0xD000 & 0x1FFF] = 2;
 
         assert_eq!(mmu.read_byte(0xBFFF), 0xFF);
@@ -511,10 +607,12 @@ mod tests {
     fn gpu_registers_write() {
         let mut mmu = MMU::new(DummyGPU::new(), dummy_cartridge());
 
+        // 0xFF46 = OAM DMA trigger, 0xFF51-0xFF55 = CGB HDMA, 0xFF70 = WRAM bank — all handled by MMU, not routed to GPU
+        let skip = |addr: u16| matches!(addr, 0xFF46 | 0xFF51..=0xFF55 | 0xFF70);
         for i in 0u16..64u16 {
-            if 0xFF40 + i == 0xFF46 {
+            if skip(0xFF40 + i) {
                 continue;
-            } // skip OAM DMA trigger
+            }
             mmu.write_byte(0xFF40 + i, 1);
         }
 
@@ -524,9 +622,9 @@ mod tests {
         assert_eq!(mmu.gpu.registers[0xFF80], 0);
 
         for i in 0u16..64u16 {
-            if 0xFF40 + i == 0xFF46 {
+            if skip(0xFF40 + i) {
                 continue;
-            } // skip OAM DMA trigger
+            }
             assert_eq!(mmu.read_byte(0xFF40 + i), 1);
         }
     }

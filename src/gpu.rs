@@ -39,6 +39,12 @@ pub trait GPUMemoriesAccess {
     fn is_lcd_enabled(&self) -> bool {
         false
     }
+    fn cgb_mode(&self) -> bool {
+        false
+    }
+    fn take_hblank(&mut self) -> bool {
+        false
+    }
     fn oam_accessible(&self) -> bool {
         true
     }
@@ -117,11 +123,24 @@ impl Palette {
 #[derive(Serialize, Deserialize)]
 pub struct GPU {
     #[serde(with = "BigArray")]
-    pub vram: [u8; 8192],
+    pub vram: [u8; 16384],
     #[serde(with = "BigArray")]
     pub oam: [u8; 160],
     #[serde(with = "BigArray")]
-    buffer: [u8; 160 * 144],
+    buffer: [u32; 160 * 144],
+
+    // CGB support
+    pub cgb_mode: bool,
+    vram_bank: u8,
+    #[serde(with = "BigArray")]
+    bg_palette_data: [u8; 64],
+    #[serde(with = "BigArray")]
+    obj_palette_data: [u8; 64],
+    bcps: u8,
+    ocps: u8,
+    bg_colors: [[u32; 4]; 8],
+    obj_colors: [[u32; 4]; 8],
+    dmg_palette: [u32; 4],
 
     modeclock: u16,
     mode: u8,
@@ -138,6 +157,7 @@ pub struct GPU {
 
     compare_enabled: bool,   // stat reg. Should compare with compare line?
     compare_line: u8,        // when line == compare_line an interrupt is triggered
+    hblank_flag: bool,       // set on mode 3→0 transition; consumed by MMU for HBDMA
     mode0_int_enabled: bool, // stat reg. Fire STAT interrupt on mode 0 (HBlank) start?
     mode1_int_enabled: bool, // stat reg. Fire STAT interrupt on mode 1 (VBlank) start?
     mode2_int_enabled: bool, // stat reg. Fire STAT interrupt on mode 2 start?
@@ -175,6 +195,14 @@ impl GPUMemoriesAccess for GPU {
     }
     fn is_lcd_enabled(&self) -> bool {
         self.lcd_enabled
+    }
+    fn cgb_mode(&self) -> bool {
+        self.cgb_mode
+    }
+    fn take_hblank(&mut self) -> bool {
+        let v = self.hblank_flag;
+        self.hblank_flag = false;
+        v
     }
     fn oam_accessible(&self) -> bool {
         !self.lcd_enabled || (self.mode != 2 && self.mode != 3)
@@ -273,10 +301,12 @@ impl GPUMemoriesAccess for GPU {
         }
     }
     fn read_vram(&mut self, addr: u16) -> u8 {
-        self.vram[addr as usize]
+        let offset = self.vram_bank as usize * 8192;
+        self.vram[offset + addr as usize]
     }
     fn write_vram(&mut self, addr: u16, byte: u8) {
-        self.vram[addr as usize] = byte
+        let offset = self.vram_bank as usize * 8192;
+        self.vram[offset + addr as usize] = byte;
     }
     fn read_byte(&mut self, addr: u16) -> u8 {
         match addr {
@@ -312,6 +342,11 @@ impl GPUMemoriesAccess for GPU {
             0xFF49 => self.obj_palette_1.byte,
             0xFF4A => self.window_y,
             0xFF4B => self.window_x,
+            0xFF4F if self.cgb_mode => self.vram_bank | 0xFE,
+            0xFF68 if self.cgb_mode => self.bcps,
+            0xFF69 if self.cgb_mode => self.bg_palette_data[(self.bcps & 0x3F) as usize],
+            0xFF6A if self.cgb_mode => self.ocps,
+            0xFF6B if self.cgb_mode => self.obj_palette_data[(self.ocps & 0x3F) as usize],
             _ => 0xFF,
         }
     }
@@ -387,18 +422,55 @@ impl GPUMemoriesAccess for GPU {
             }
             0xFF47 => {
                 self.bg_palette.update(byte);
+                if !self.cgb_mode {
+                    self.bg_colors[0] =
+                        Self::dmg_colors_from_palette(&self.bg_palette, &self.dmg_palette);
+                }
             }
             0xFF48 => {
                 self.obj_palette_0.update(byte);
+                if !self.cgb_mode {
+                    self.obj_colors[0] =
+                        Self::dmg_colors_from_palette(&self.obj_palette_0, &self.dmg_palette);
+                }
             }
             0xFF49 => {
                 self.obj_palette_1.update(byte);
+                if !self.cgb_mode {
+                    self.obj_colors[1] =
+                        Self::dmg_colors_from_palette(&self.obj_palette_1, &self.dmg_palette);
+                }
             }
             0xFF4A => {
                 self.window_y = byte;
             }
             0xFF4B => {
                 self.window_x = byte;
+            }
+            0xFF4F if self.cgb_mode => {
+                self.vram_bank = byte & 0x01;
+            }
+            0xFF68 => {
+                self.bcps = byte;
+            }
+            0xFF69 => {
+                let index = self.bcps & 0x3F;
+                self.bg_palette_data[index as usize] = byte;
+                Self::recompute_cgb_color(&self.bg_palette_data, &mut self.bg_colors, index);
+                if self.bcps & 0x80 != 0 {
+                    self.bcps = (self.bcps & 0x80) | ((index + 1) & 0x3F);
+                }
+            }
+            0xFF6A => {
+                self.ocps = byte;
+            }
+            0xFF6B => {
+                let index = self.ocps & 0x3F;
+                self.obj_palette_data[index as usize] = byte;
+                Self::recompute_cgb_color(&self.obj_palette_data, &mut self.obj_colors, index);
+                if self.ocps & 0x80 != 0 {
+                    self.ocps = (self.ocps & 0x80) | ((index + 1) & 0x3F);
+                }
             }
             _ => {}
         }
@@ -418,11 +490,29 @@ impl GPUMemoriesAccess for GPU {
 }
 
 impl GPU {
-    pub fn new() -> Self {
+    pub fn new(cgb_mode: bool) -> Self {
+        let dmg_palette = [0x00C4F0C2u32, 0x005AB9A8, 0x001E606E, 0x002D1B00];
+        let bg_pal = Palette::new();
+        let obj_pal_0 = Palette::new();
+        let obj_pal_1 = Palette::new();
+        let mut bg_colors = [[0u32; 4]; 8];
+        let mut obj_colors = [[0u32; 4]; 8];
+        bg_colors[0] = Self::dmg_colors_from_palette(&bg_pal, &dmg_palette);
+        obj_colors[0] = Self::dmg_colors_from_palette(&obj_pal_0, &dmg_palette);
+        obj_colors[1] = Self::dmg_colors_from_palette(&obj_pal_1, &dmg_palette);
         GPU {
-            vram: [0; 8192],
+            vram: [0; 16384],
             oam: [0; 160],
             buffer: [0; 160 * 144],
+            cgb_mode,
+            vram_bank: 0,
+            bg_palette_data: [0; 64],
+            obj_palette_data: [0; 64],
+            bcps: 0,
+            ocps: 0,
+            bg_colors,
+            obj_colors,
+            dmg_palette,
             modeclock: 0,
             mode: 2,
             line: 0,
@@ -436,6 +526,7 @@ impl GPU {
             lcd_enabled: false,
             compare_enabled: false,
             compare_line: 0,
+            hblank_flag: false,
             mode0_int_enabled: false,
             mode1_int_enabled: false,
             mode2_int_enabled: false,
@@ -447,9 +538,9 @@ impl GPU {
             lcd_startup_ticks: 0,
             scroll_x: 0,
             scroll_y: 0,
-            bg_palette: Palette::new(),
-            obj_palette_0: Palette::new(),
-            obj_palette_1: Palette::new(),
+            bg_palette: bg_pal,
+            obj_palette_0: obj_pal_0,
+            obj_palette_1: obj_pal_1,
             window_x: 0,
             window_y: 0,
         }
@@ -459,8 +550,39 @@ impl GPU {
         self.line == self.compare_line
     }
 
-    pub fn get_buffer(&self) -> &[u8; 160 * 144] {
+    pub fn get_buffer(&self) -> &[u32; 160 * 144] {
         &self.buffer
+    }
+
+    pub fn set_dmg_palette(&mut self, palette: [u32; 4]) {
+        self.dmg_palette = palette;
+        self.bg_colors[0] = Self::dmg_colors_from_palette(&self.bg_palette, &self.dmg_palette);
+        self.obj_colors[0] = Self::dmg_colors_from_palette(&self.obj_palette_0, &self.dmg_palette);
+        self.obj_colors[1] = Self::dmg_colors_from_palette(&self.obj_palette_1, &self.dmg_palette);
+    }
+
+    fn dmg_colors_from_palette(palette: &Palette, dmg_palette: &[u32; 4]) -> [u32; 4] {
+        let mut colors = [0u32; 4];
+        for cn in 0u8..4 {
+            colors[cn as usize] = dmg_palette[palette.get(cn) as usize];
+        }
+        colors
+    }
+
+    fn color15_to_xrgb(c: u16) -> u32 {
+        let expand = |v: u8| (v << 3) | (v >> 2);
+        let r = expand((c & 0x1F) as u8);
+        let g = expand(((c >> 5) & 0x1F) as u8);
+        let b = expand(((c >> 10) & 0x1F) as u8);
+        ((r as u32) << 16) | ((g as u32) << 8) | b as u32
+    }
+
+    fn recompute_cgb_color(palette_data: &[u8; 64], colors: &mut [[u32; 4]; 8], index: u8) {
+        let raw_index = (index & !1) as usize;
+        let c = u16::from_le_bytes([palette_data[raw_index], palette_data[raw_index + 1]]);
+        let palette_idx = (index / 8) as usize;
+        let colour_num = ((index % 8) / 2) as usize;
+        colors[palette_idx][colour_num] = Self::color15_to_xrgb(c);
     }
 
     fn get_tileset_index(&self, mut index: u8) -> usize {
@@ -478,11 +600,50 @@ impl GPU {
         offset + 2 * TILE_SIZE * (index as usize)
     }
 
+    // Decode one BG/window tile pixel. Returns (colour_number, XRGB8888 color, bg_priority).
+    fn resolve_tile_pixel(
+        &self,
+        tilemap_index: usize,
+        cell_x: usize,
+        cell_y: usize,
+    ) -> (u8, u32, bool) {
+        let tile_id = self.vram[tilemap_index]; // bank 0
+        let attr = self.vram[8192 + tilemap_index]; // bank 1 (always 0 in DMG)
+        let palette_idx = (attr & 0x07) as usize;
+        let tile_bank = ((attr >> 3) & 0x01) as usize;
+        let flip_h = (attr >> 5) & 0x01 != 0;
+        let flip_v = (attr >> 6) & 0x01 != 0;
+        let bg_priority = (attr >> 7) & 0x01 != 0;
+
+        let effective_cell_y = if flip_v { 7 - cell_y } else { cell_y };
+        let bit_pos = if flip_h {
+            cell_x as u8
+        } else {
+            7 - cell_x as u8
+        };
+        let bank_offset = tile_bank * 8192;
+
+        let tileset_index = self.get_tileset_index(tile_id) + 2 * effective_cell_y;
+        let byte_1 = self.vram[bank_offset + tileset_index];
+        let byte_2 = self.vram[bank_offset + tileset_index + 1];
+
+        let high_bit = is_bit_set(bit_pos, byte_2 as u16) as u8;
+        let low_bit = is_bit_set(bit_pos, byte_1 as u16) as u8;
+        let colour_number = (high_bit << 1) | low_bit;
+
+        (
+            colour_number,
+            self.bg_colors[palette_idx][colour_number as usize],
+            bg_priority,
+        )
+    }
+
     // draws a line on the buffer
     pub fn render_scan_to_buffer(&mut self) {
         let line_to_draw: usize = self.line.wrapping_add(self.scroll_y) as usize;
 
-        // save colour numbers being rendered before palette application. 0 is transparent
+        // save colour numbers being rendered before palette application (bits 0-1),
+        // plus bg-priority flag from CGB tile attr in bit 2. 0 colour number = transparent.
         let mut rendering_row = [0u8; 160];
 
         // background
@@ -514,26 +675,12 @@ impl GPU {
                 let tilemap_index =
                     tilemap_offset + (tilemap_y * TILES_IN_A_TILEMAP_ROW + tilemap_x);
 
-                let pos = self.vram[tilemap_index];
+                let (colour_number, color, bg_priority) =
+                    self.resolve_tile_pixel(tilemap_index, cell_x, cell_y);
 
-                // find out the row in the tile data
-                let tileset_index: usize = self.get_tileset_index(pos) + 2 * cell_y;
-
-                // a tile pixel line is encoded in two consecutive bytes
-                let byte_1 = self.vram[tileset_index];
-                let byte_2 = self.vram[tileset_index + 1];
-
-                // get the pixel colour from the line
-                let high_bit: u8 = is_bit_set(7 - cell_x as u8, byte_2 as u16) as u8;
-                let low_bit: u8 = is_bit_set(7 - cell_x as u8, byte_1 as u16) as u8;
-                let colour_number = (high_bit << 1) + low_bit;
-                let palette_colour = self.bg_palette.get(colour_number);
-
-                rendering_row[row_pixel] = colour_number;
-
-                let index: usize =
-                    (self.line as usize * TILES_IN_A_SCREEN_ROW * TILE_SIZE) + row_pixel;
-                self.buffer[index] = palette_colour as u8;
+                rendering_row[row_pixel] = colour_number | ((bg_priority as u8) << 2);
+                let index = (self.line as usize * TILES_IN_A_SCREEN_ROW * TILE_SIZE) + row_pixel;
+                self.buffer[index] = color;
             }
         }
 
@@ -548,11 +695,7 @@ impl GPU {
             };
 
             let window_line: usize = self.line.wrapping_sub(self.window_y) as usize;
-
-            // the row of the cell in the window tilemap
             let tilemap_y: usize = (window_line / TILE_SIZE) % TILES_IN_A_TILEMAP_COL;
-
-            // the row of the pixel in the cell
             let cell_y: usize = window_line % TILE_SIZE;
 
             #[allow(clippy::needless_range_loop)]
@@ -562,35 +705,17 @@ impl GPU {
                     curr_pixel_x = pixel as u8 - window_x;
                 }
 
-                // the col of the cell in the tilemap
                 let tilemap_x: usize = (curr_pixel_x as usize / TILE_SIZE) % TILES_IN_A_TILEMAP_ROW;
-
-                // the col of the pixel in the cell
                 let cell_x: usize = curr_pixel_x as usize % TILE_SIZE;
-
-                // find the tile in the vram
                 let tilemap_index =
                     tilemap_offset + (tilemap_y * TILES_IN_A_TILEMAP_ROW + tilemap_x);
 
-                let pos = self.vram[tilemap_index];
+                let (colour_number, color, bg_priority) =
+                    self.resolve_tile_pixel(tilemap_index, cell_x, cell_y);
 
-                // find out the row in the tile data
-                let tileset_index: usize = self.get_tileset_index(pos) + 2 * cell_y;
-
-                // a tile pixel line is encoded in two consecutive bytes
-                let byte_1 = self.vram[tileset_index];
-                let byte_2 = self.vram[tileset_index + 1];
-
-                // get the pixel colour from the line
-                let high_bit: u8 = is_bit_set(7 - cell_x as u8, byte_2 as u16) as u8;
-                let low_bit: u8 = is_bit_set(7 - cell_x as u8, byte_1 as u16) as u8;
-                let colour_number = (high_bit << 1) + low_bit;
-                let palette_colour = self.bg_palette.get(colour_number);
-
-                rendering_row[pixel] = colour_number;
-
-                let index: usize = (self.line as usize * TILES_IN_A_SCREEN_ROW * TILE_SIZE) + pixel;
-                self.buffer[index] = palette_colour as u8;
+                rendering_row[pixel] = colour_number | ((bg_priority as u8) << 2);
+                let index = (self.line as usize * TILES_IN_A_SCREEN_ROW * TILE_SIZE) + pixel;
+                self.buffer[index] = color;
             }
         }
 
@@ -610,7 +735,18 @@ impl GPU {
                 let flip_y = (opt & 0x40) != 0;
                 let flip_x = (opt & 0x20) != 0;
                 let z = (opt & 0x80) != 0;
-                let palette = (opt & 0x10) != 0;
+                // CGB mode: bits 0-2 = palette index (0-7); DMG mode: bit 4 = OBP0/OBP1
+                let cgb_palette = if self.cgb_mode {
+                    (opt & 0x07) as usize
+                } else {
+                    ((opt >> 4) & 0x01) as usize
+                };
+                // CGB mode: bit 3 = tile VRAM bank; DMG: always bank 0
+                let tile_vbank = if self.cgb_mode {
+                    ((opt >> 3) & 0x01) as usize
+                } else {
+                    0
+                };
 
                 // not intersecting with scanline, don't draw
                 if self.line.wrapping_sub(y) >= sprite_height {
@@ -632,13 +768,14 @@ impl GPU {
                     sprite_pixel_row -= 8;
                 }
 
-                // sprites always use tiledata1
+                // sprites always use tiledata1; tile_vbank selects VRAM bank
+                let bank_offset = tile_vbank * 8192;
                 let tile_in_tileset: usize =
                     TILEDATA1_OFFSET + (2 * 8 * pos as usize + sprite_pixel_row as usize * 2);
 
                 // a tile pixel line is encoded in two consecutive bytes
-                let byte_1 = self.vram[tile_in_tileset];
-                let byte_2 = self.vram[tile_in_tileset + 1];
+                let byte_1 = self.vram[bank_offset + tile_in_tileset];
+                let byte_2 = self.vram[bank_offset + tile_in_tileset + 1];
 
                 for pixel in 0..8u8 {
                     let ix = if flip_x { pixel } else { 7 - pixel };
@@ -653,15 +790,17 @@ impl GPU {
                     let high_bit: u8 = is_bit_set(7 - ix, byte_2 as u16) as u8;
                     let low_bit: u8 = is_bit_set(7 - ix, byte_1 as u16) as u8;
 
-                    let colour_number = (high_bit << 1) + low_bit;
+                    let colour_number = (high_bit << 1) | low_bit;
 
                     // transparent, don't draw
                     if colour_number == 0 {
                         continue;
                     }
 
-                    // bg pixel wins over sprite, don't draw
-                    if z && (rendering_row[curr_x as usize] != 0) {
+                    // bg-priority tile attr (CGB) or z-order with non-transparent bg pixel
+                    let bg_wins = (rendering_row[curr_x as usize] & 0x04 != 0)
+                        || (z && rendering_row[curr_x as usize] & 0x03 != 0);
+                    if bg_wins {
                         continue;
                     }
 
@@ -671,23 +810,13 @@ impl GPU {
                     }
                     sprite_occupied[curr_x as usize] = true;
 
-                    let obj_palette = if palette {
-                        &self.obj_palette_1
-                    } else {
-                        &self.obj_palette_0
-                    };
-                    let colour = obj_palette.get(colour_number);
+                    let colour = self.obj_colors[cgb_palette][colour_number as usize];
                     let index: usize =
                         (self.line as usize * TILES_IN_A_SCREEN_ROW * TILE_SIZE) + curr_x as usize;
-                    self.buffer[index] = colour as u8;
+                    self.buffer[index] = colour;
                 }
             }
         }
-    }
-
-    // returns true if compare stat interrupt should raise
-    fn check_compare_int(&self) -> bool {
-        self.compare_enabled && self.compare()
     }
 
     fn compute_stat_line(&self) -> bool {
@@ -786,6 +915,7 @@ impl GPU {
                 if self.modeclock >= 172 + self.mode3_extra {
                     self.modeclock = 0;
                     self.mode = 0;
+                    self.hblank_flag = true;
                     self.render_scan_to_buffer();
                 }
             }
@@ -835,7 +965,7 @@ impl GPU {
 
 impl Default for GPU {
     fn default() -> Self {
-        GPU::new()
+        GPU::new(false)
     }
 }
 
@@ -845,7 +975,7 @@ mod tests {
     // test scroll_y write and read access, as well as the default value
     #[test]
     fn test_scroll_y() {
-        let mut gpu = GPU::new();
+        let mut gpu = GPU::new(false);
 
         assert_eq!(gpu.scroll_y, 0);
 
@@ -858,7 +988,7 @@ mod tests {
     // test scroll_x write and read access, as well as the default value
     #[test]
     fn test_scroll_x() {
-        let mut gpu = GPU::new();
+        let mut gpu = GPU::new(false);
 
         assert_eq!(gpu.scroll_x, 0);
 
@@ -871,7 +1001,7 @@ mod tests {
     // test palette write and read access, as well as the default value
     #[test]
     fn test_bg_palette() {
-        let mut gpu = GPU::new();
+        let mut gpu = GPU::new(false);
 
         // default value
         assert_eq!(gpu.bg_palette.byte, 0xFF);
@@ -884,7 +1014,7 @@ mod tests {
     // test obj palette 0 write and read access, as well as the default value
     #[test]
     fn test_obj_palette_0() {
-        let mut gpu = GPU::new();
+        let mut gpu = GPU::new(false);
 
         // default value
         assert_eq!(gpu.obj_palette_0.byte, 0xFF);
@@ -897,7 +1027,7 @@ mod tests {
     // test palette write and read access, as well as the default value
     #[test]
     fn test_obj_palette_1() {
-        let mut gpu = GPU::new();
+        let mut gpu = GPU::new(false);
 
         // default value
         assert_eq!(gpu.obj_palette_1.byte, 0xFF);
@@ -909,7 +1039,7 @@ mod tests {
 
     #[test]
     fn test_window_x_y() {
-        let mut gpu = GPU::new();
+        let mut gpu = GPU::new(false);
 
         // default value
         assert_eq!(gpu.window_y, 0);
@@ -925,7 +1055,7 @@ mod tests {
     // test control write and read access, as well as the default value
     #[test]
     fn test_control() {
-        let mut gpu = GPU::new();
+        let mut gpu = GPU::new(false);
 
         assert!(!gpu.bg_enabled);
         assert!(!gpu.obj_enabled);
@@ -972,7 +1102,7 @@ mod tests {
     // test line read and write access
     #[test]
     fn test_line() {
-        let mut gpu = GPU::new();
+        let mut gpu = GPU::new(false);
 
         assert_eq!(gpu.line, 0);
         gpu.write_byte(0xFF44, 1);
@@ -986,7 +1116,7 @@ mod tests {
     // test OAM write and read
     #[test]
     fn test_sprite() {
-        let mut gpu = GPU::new();
+        let mut gpu = GPU::new(false);
 
         gpu.write_oam(0, 18);
         assert_eq!(gpu.read_oam(0), 18);

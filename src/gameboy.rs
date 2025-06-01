@@ -16,9 +16,14 @@ pub struct Gameboy {
 
 impl Gameboy {
     pub fn new(path: &str) -> Gameboy {
-        let cartridge = load_rom(path);
-        let mmu = MMU::new(GPU::new(), cartridge);
-        let cpu = CPU::new(mmu);
+        let (cartridge, cgb_mode) = load_rom(path);
+        let mmu = MMU::new(GPU::new(cgb_mode), cartridge);
+        let mut cpu = CPU::new(mmu);
+        if cgb_mode {
+            // GBC hardware signals its presence via A=0x11 after the bootrom.
+            // Games like Pokemon Yellow check this to decide whether to enable CGB features.
+            cpu.write_reg(Operand::A, 0x11);
+        }
         Gameboy { cpu }
     }
 
@@ -58,8 +63,12 @@ impl Gameboy {
         }
     }
 
-    pub fn get_framebuffer(&self) -> &[u8; 160 * 144] {
+    pub fn get_framebuffer(&self) -> &[u32; 160 * 144] {
         self.cpu.mmu.gpu.get_buffer()
+    }
+
+    pub fn set_dmg_palette(&mut self, palette: [u32; 4]) {
+        self.cpu.mmu.gpu.set_dmg_palette(palette);
     }
 
     pub fn drain_audio(&mut self) -> Vec<i16> {

@@ -258,7 +258,7 @@ fn is_mbc1_multicart(rom: &[u8]) -> bool {
     })
 }
 
-pub fn load_rom(path: &str) -> CartridgeKind {
+pub fn load_rom(path: &str) -> (CartridgeKind, bool) {
     let mut rom: Vec<u8> = Vec::new();
 
     match File::open(path) {
@@ -271,6 +271,7 @@ pub fn load_rom(path: &str) -> CartridgeKind {
         Err(_) => panic!("couldnt open the rom file"),
     }
 
+    let cgb_mode = (rom[0x143] & 0x80) != 0;
     let cart_type = rom[0x147] as usize;
 
     let ram_size = if cart_type == 0x05 || cart_type == 0x06 {
@@ -295,7 +296,7 @@ pub fn load_rom(path: &str) -> CartridgeKind {
     let multicart = (1..=3).contains(&cart_type) && is_mbc1_multicart(&rom);
     let cart = Cartridge::new(PathBuf::from(path), rom, ram_size);
 
-    match cart_type {
+    let cartridge = match cart_type {
         0 => CartridgeKind::NoMBC(CartridgeNoMBC::new(cart)),
         1..=3 => {
             if multicart {
@@ -311,5 +312,6 @@ pub fn load_rom(path: &str) -> CartridgeKind {
         }
         0x19..=0x1E => CartridgeKind::MBC5(CartridgeMBC5::new(cart)),
         _ => panic!("Cartridge type {:x} not implemented", cart_type),
-    }
+    };
+    (cartridge, cgb_mode)
 }

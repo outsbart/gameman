@@ -72,6 +72,9 @@ impl Core for GameboyCore {
             Some("pocket") => PALETTE_POCKET,
             _ => PALETTE_CLASSIC,
         };
+        if let Some(gb) = self.gameboy.as_mut() {
+            gb.set_dmg_palette(self.palette);
+        }
     }
 
     fn get_info(&self) -> SystemInfo {
@@ -115,7 +118,9 @@ impl Core for GameboyCore {
             CStr::from_ptr(info.path).to_str()?.to_owned()
         };
 
-        self.gameboy = Some(Gameboy::new(&path));
+        let mut gb = Gameboy::new(&path);
+        gb.set_dmg_palette(self.palette);
+        self.gameboy = Some(gb);
         self.rom_path = path;
         self.prev_buttons = JoypadState::empty();
 
@@ -140,7 +145,7 @@ impl Core for GameboyCore {
                 flags: RETRO_MEMDESC_VIDEO_RAM as u64,
                 ptr: vram_ptr,
                 start: 0x8000,
-                len: 0x2000,
+                len: 0x4000,
                 ..zero
             },
             retro_memory_descriptor {
@@ -183,7 +188,9 @@ impl Core for GameboyCore {
 
     fn on_reset(&mut self, _ctx: &mut ResetContext) {
         if !self.rom_path.is_empty() {
-            self.gameboy = Some(Gameboy::new(&self.rom_path));
+            let mut gb = Gameboy::new(&self.rom_path);
+            gb.set_dmg_palette(self.palette);
+            self.gameboy = Some(gb);
             self.prev_buttons = JoypadState::empty();
         }
     }
@@ -228,11 +235,9 @@ impl Core for GameboyCore {
             audio_ctx.batch_audio_samples(&chunk);
         }
 
-        // Video: palette index → XRGB8888
+        // Video: framebuffer is already XRGB8888
         let fb = gb.get_framebuffer();
-        let pixels: Vec<u32> = fb.iter().map(|&c| self.palette[c as usize]).collect();
-        let bytes =
-            unsafe { std::slice::from_raw_parts(pixels.as_ptr() as *const u8, pixels.len() * 4) };
+        let bytes = unsafe { std::slice::from_raw_parts(fb.as_ptr() as *const u8, fb.len() * 4) };
         ctx.draw_frame(bytes, 160, 144, 160 * 4);
     }
 
@@ -287,7 +292,7 @@ impl Core for GameboyCore {
     }
 
     fn get_serialize_size(&mut self, _ctx: &mut GetSerializeSizeContext) -> usize {
-        256 * 1024
+        512 * 1024
     }
 
     fn on_serialize(&mut self, slice: &mut [u8], _ctx: &mut SerializeContext) -> bool {
