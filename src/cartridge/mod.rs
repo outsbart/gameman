@@ -1,13 +1,19 @@
+pub mod huc1;
+pub mod huc3;
 pub mod mbc1;
 pub mod mbc2;
 pub mod mbc3;
 pub mod mbc5;
+pub mod mbc7;
 pub mod nombc;
 
+use crate::cartridge::huc1::CartridgeHuC1;
+use crate::cartridge::huc3::CartridgeHuC3;
 use crate::cartridge::mbc1::{CartridgeMBC1, CartridgeMBC1Multicart};
 use crate::cartridge::mbc2::CartridgeMBC2;
 use crate::cartridge::mbc3::CartridgeMBC3;
 use crate::cartridge::mbc5::CartridgeMBC5;
+use crate::cartridge::mbc7::CartridgeMBC7;
 use crate::cartridge::nombc::CartridgeNoMBC;
 
 use serde::{Deserialize, Serialize};
@@ -179,6 +185,9 @@ macro_rules! dispatch_cartridge {
             CartridgeKind::MBC2(c) => c.$method($($arg),*),
             CartridgeKind::MBC3(c) => c.$method($($arg),*),
             CartridgeKind::MBC5(c) => c.$method($($arg),*),
+            CartridgeKind::MBC7(c) => c.$method($($arg),*),
+            CartridgeKind::HuC1(c) => c.$method($($arg),*),
+            CartridgeKind::HuC3(c) => c.$method($($arg),*),
         }
     };
 }
@@ -191,6 +200,9 @@ pub enum CartridgeKind {
     MBC2(CartridgeMBC2),
     MBC3(CartridgeMBC3),
     MBC5(CartridgeMBC5),
+    MBC7(CartridgeMBC7),
+    HuC1(CartridgeHuC1),
+    HuC3(CartridgeHuC3),
 }
 
 impl CartridgeKind {
@@ -218,6 +230,9 @@ impl CartridgeKind {
             CartridgeKind::MBC2(c) => &c.cart,
             CartridgeKind::MBC3(c) => &c.cart,
             CartridgeKind::MBC5(c) => &c.cart,
+            CartridgeKind::MBC7(c) => &c.cart,
+            CartridgeKind::HuC1(c) => &c.cart,
+            CartridgeKind::HuC3(c) => &c.cart,
         }
     }
 
@@ -229,6 +244,9 @@ impl CartridgeKind {
             CartridgeKind::MBC2(c) => &mut c.cart,
             CartridgeKind::MBC3(c) => &mut c.cart,
             CartridgeKind::MBC5(c) => &mut c.cart,
+            CartridgeKind::MBC7(c) => &mut c.cart,
+            CartridgeKind::HuC1(c) => &mut c.cart,
+            CartridgeKind::HuC3(c) => &mut c.cart,
         }
     }
 
@@ -292,7 +310,19 @@ pub fn load_rom(path: &str) -> (CartridgeKind, bool) {
         // 0xA000-0xBFFF are not silently dropped.
         let cart_type_has_ram = matches!(
             cart_type,
-            0x02 | 0x03 | 0x08 | 0x09 | 0x10 | 0x12 | 0x13 | 0x1A | 0x1B | 0x1D | 0x1E
+            0x02 | 0x03
+                | 0x08
+                | 0x09
+                | 0x10
+                | 0x12
+                | 0x13
+                | 0x1A
+                | 0x1B
+                | 0x1D
+                | 0x1E
+                | 0x22
+                | 0xFE
+                | 0xFF
         );
         if declared == 0 && cart_type_has_ram {
             8 * 1024
@@ -323,6 +353,9 @@ pub fn load_rom(path: &str) -> (CartridgeKind, bool) {
             CartridgeKind::MBC3(CartridgeMBC3::new(cart, has_rtc))
         }
         0x19..=0x1E => CartridgeKind::MBC5(CartridgeMBC5::new(cart)),
+        0x22 => CartridgeKind::MBC7(CartridgeMBC7::new(cart)),
+        0xFE => CartridgeKind::HuC3(CartridgeHuC3::new(cart)),
+        0xFF => CartridgeKind::HuC1(CartridgeHuC1::new(cart)),
         _ => panic!("Cartridge type {:x} not implemented", cart_type),
     };
     (cartridge, cgb_mode)
