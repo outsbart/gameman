@@ -60,7 +60,7 @@ impl<M: GPUMemoriesAccess> MMU<M> {
             zram: [0; 0x0080],
 
             cartridge,
-            sound: Sound::new(),
+            sound: Sound::new(gpu.cgb_mode()),
 
             timers: Timers::new(),
 
@@ -202,6 +202,7 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                         0xFF73 if self.gpu.cgb_mode() => self.cgb_undoc[1],
                         0xFF74 if self.gpu.cgb_mode() => self.cgb_undoc[2],
                         0xFF75 if self.gpu.cgb_mode() => self.cgb_undoc[3] | 0x8F,
+                        0xFF76 | 0xFF77 if self.gpu.cgb_mode() => self.sound.read_byte(addr),
                         0xFF40..=0xFF45 | 0xFF47..=0xFF7F => self.gpu.read_byte(addr),
                         0xFF80..=0xFFFE => self.zram[(addr & 0x7F) as usize],
                         0xFFFF => self.interrupt_enable,

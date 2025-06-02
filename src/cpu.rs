@@ -518,7 +518,12 @@ impl<M: Memory> CPU<M> {
                 self.write_reg(Operand::PC, 0x0000);
             }
 
-            return 20;
+            let raw = 20u8;
+            return if self.mmu.is_double_speed() {
+                raw / 2
+            } else {
+                raw
+            };
         }
 
         0

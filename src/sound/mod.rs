@@ -112,6 +112,8 @@ pub struct Sound {
 
     // sound circuit enabled?
     power: bool,
+
+    cgb_mode: bool,
 }
 
 impl Memory for Sound {
@@ -138,7 +140,11 @@ impl Memory for Sound {
             0x24 => self.get_nr50(),
             0x25 => self.get_nr51(),
             0x26 => self.get_nr52(),
-            0x30..=0x3f => self.wave.read_ram_sample((addr - WAVE_TABLE_START) as u8),
+            0x30..=0x3f => self
+                .wave
+                .read_ram_sample((addr - WAVE_TABLE_START) as u8, self.cgb_mode),
+            0x76 => self.get_pcm12(),
+            0x77 => self.get_pcm34(),
             _ => 0xFF,
         }
     }
@@ -168,7 +174,7 @@ impl Memory for Sound {
             0x26 => self.set_nr52(byte),
             0x30..=0x3F => {
                 self.wave
-                    .write_ram_sample((addr - WAVE_TABLE_START) as u8, byte);
+                    .write_ram_sample((addr - WAVE_TABLE_START) as u8, byte, self.cgb_mode);
             }
             _ => (),
         }
@@ -379,7 +385,7 @@ impl Default for OutputBuffer {
 }
 
 impl Sound {
-    pub fn new() -> Self {
+    pub fn new(cgb_mode: bool) -> Self {
         Sound {
             square_1: SquareChannel::new(),
             square_2: SquareChannel::new(),
@@ -393,6 +399,8 @@ impl Sound {
             right_sound_output: SoundOutput::new(),
 
             power: false,
+
+            cgb_mode,
         }
     }
 
@@ -819,6 +827,13 @@ impl Sound {
             | (if self.square_1.is_running() { 1 } else { 0 })
     }
 
+    pub fn get_pcm12(&self) -> u8 {
+        0x00
+    }
+    pub fn get_pcm34(&self) -> u8 {
+        0x00
+    }
+
     // called when power is set to off, through register nr52
     pub fn reset(&mut self) {
         self.left_sound_output = SoundOutput::new();
@@ -860,7 +875,7 @@ impl Sound {
 
 impl Default for Sound {
     fn default() -> Self {
-        Sound::new()
+        Sound::new(false)
     }
 }
 

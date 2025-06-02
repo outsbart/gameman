@@ -278,15 +278,27 @@ pub fn load_rom(path: &str) -> (CartridgeKind, bool) {
         // MBC2 has 512 × 4-bit internal RAM; header always reports 0 external RAM
         512
     } else {
-        (match rom[0x149] {
-            0x00 => 0,
+        let declared = (match rom[0x149] {
+            0x00 => 0usize,
             0x01 => 2,
             0x02 => 8,
             0x03 => 32,
             0x04 => 128,
             0x05 => 64,
             _ => panic!("Unrecognized cartridge ram size"),
-        }) * 1024
+        }) * 1024;
+        // Some test ROMs (e.g. blargg interrupt_time) declare a +RAM cart type but
+        // report 0 bytes in the header. Provide a minimum 8 KiB so writes to
+        // 0xA000-0xBFFF are not silently dropped.
+        let cart_type_has_ram = matches!(
+            cart_type,
+            0x02 | 0x03 | 0x08 | 0x09 | 0x10 | 0x12 | 0x13 | 0x1A | 0x1B | 0x1D | 0x1E
+        );
+        if declared == 0 && cart_type_has_ram {
+            8 * 1024
+        } else {
+            declared
+        }
     };
 
     println!("rom size = 0x{:x}", rom.len());
@@ -297,7 +309,7 @@ pub fn load_rom(path: &str) -> (CartridgeKind, bool) {
     let cart = Cartridge::new(PathBuf::from(path), rom, ram_size);
 
     let cartridge = match cart_type {
-        0 => CartridgeKind::NoMBC(CartridgeNoMBC::new(cart)),
+        0 | 0x08 | 0x09 => CartridgeKind::NoMBC(CartridgeNoMBC::new(cart)),
         1..=3 => {
             if multicart {
                 CartridgeKind::MBC1Multicart(CartridgeMBC1Multicart::new(cart))

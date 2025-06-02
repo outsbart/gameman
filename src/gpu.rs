@@ -3,6 +3,16 @@ use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
 const TILES_IN_A_TILEMAP_ROW: usize = 32;
+
+fn arr_u8_160() -> [u8; 160] {
+    [0u8; 160]
+}
+fn arr_bool_160() -> [bool; 160] {
+    [false; 160]
+}
+fn arr_sprite_10() -> [SpriteData; 10] {
+    [SpriteData::default(); 10]
+}
 const TILES_IN_A_TILEMAP_COL: usize = 32;
 const TILES_IN_A_SCREEN_ROW: usize = 20;
 const TILES_IN_A_SCREEN_COL: usize = 18;
@@ -120,6 +130,15 @@ impl Palette {
     }
 }
 
+/// One OAM sprite entry cached for per-dot rendering.
+#[derive(Copy, Clone, Default, Serialize, Deserialize)]
+struct SpriteData {
+    y: u8,    // raw OAM byte 0 (screen_y = y - 16)
+    x: u8,    // raw OAM byte 1 (screen_x = x - 8)
+    tile: u8, // raw OAM byte 2
+    attr: u8, // raw OAM byte 3
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct GPU {
     #[serde(with = "BigArray")]
@@ -183,6 +202,18 @@ pub struct GPU {
     obj_palette_1: Palette,
     window_x: u8,
     window_y: u8,
+
+    // Per-dot rendering state (rebuilt every scanline at Mode 2→3 transition)
+    #[serde(default)]
+    dot_x: u8, // next pixel to output in Mode 3 (0..=159)
+    #[serde(default)]
+    scan_sprite_count: u8,
+    #[serde(default = "arr_sprite_10")]
+    scan_sprites: [SpriteData; 10],
+    #[serde(default = "arr_u8_160", with = "BigArray")]
+    bg_row: [u8; 160], // colour_number | (bg_priority << 2) for each pixel this line
+    #[serde(default = "arr_bool_160", with = "BigArray")]
+    sprite_occupied: [bool; 160], // first sprite wins per pixel position
 }
 
 impl GPUMemoriesAccess for GPU {
@@ -591,6 +622,11 @@ impl GPU {
             obj_palette_1: obj_pal_1,
             window_x: 0,
             window_y: 0,
+            dot_x: 0,
+            scan_sprite_count: 0,
+            scan_sprites: [SpriteData::default(); 10],
+            bg_row: [0u8; 160],
+            sprite_occupied: [false; 160],
         }
     }
 
@@ -694,204 +730,138 @@ impl GPU {
         )
     }
 
-    // draws a line on the buffer
-    pub fn render_scan_to_buffer(&mut self) {
-        let line_to_draw: usize = self.line.wrapping_add(self.scroll_y) as usize;
+    /// Render one pixel (screen column `px`) of the current scanline into the framebuffer.
+    /// Called once per T-cycle during Mode 3.  Uses whatever register state is current at
+    /// that moment, giving correct mid-scanline effects for scroll / palette changes.
+    fn render_dot(&mut self, px: usize) {
+        let line = self.line as usize;
+        let fb_index = line * 160 + px;
 
-        // save colour numbers being rendered before palette application (bits 0-1),
-        // plus bg-priority flag from CGB tile attr in bit 2. 0 colour number = transparent.
-        let mut rendering_row = [0u8; 160];
+        // --- BG / Window ---
+        let win_x_adj: usize = if self.window_x < 7 {
+            0
+        } else {
+            (self.window_x - 7) as usize
+        };
+        let use_window = self.window_enabled && (self.window_y <= self.line) && px >= win_x_adj;
 
-        // background (always drawn in CGB mode regardless of LCDC bit 0)
-        if self.cgb_mode || self.bg_enabled {
-            let tilemap_offset = if self.bg_map {
-                TILEMAP1_OFFSET
-            } else {
-                TILEMAP0_OFFSET
-            };
-
-            // the row of the cell in the tilemap
-            let tilemap_y: usize = (line_to_draw / TILE_SIZE) % TILES_IN_A_TILEMAP_COL;
-
-            // the row of the pixel in the cell
-            let cell_y: usize = line_to_draw % TILE_SIZE;
-
-            // for each pixel in the line (which is long 160 pixel)
-            #[allow(clippy::needless_range_loop)]
-            for row_pixel in 0..TILES_IN_A_SCREEN_ROW * TILE_SIZE {
-                let curr_pixel_x = self.scroll_x as usize + row_pixel;
-
-                // the col of the cell in the tilemap
-                let tilemap_x: usize = (curr_pixel_x / TILE_SIZE) % TILES_IN_A_TILEMAP_ROW;
-
-                // the col of the pixel in the cell
-                let cell_x: usize = curr_pixel_x % TILE_SIZE;
-
-                // find the tile in the vram
-                let tilemap_index =
-                    tilemap_offset + (tilemap_y * TILES_IN_A_TILEMAP_ROW + tilemap_x);
-
-                let (colour_number, color, bg_priority) =
-                    self.resolve_tile_pixel(tilemap_index, cell_x, cell_y);
-
-                rendering_row[row_pixel] = colour_number | ((bg_priority as u8) << 2);
-                let index = (self.line as usize * TILES_IN_A_SCREEN_ROW * TILE_SIZE) + row_pixel;
-                self.buffer[index] = color;
-            }
-        }
-
-        // window
-        if self.window_enabled && self.window_y <= self.line {
-            // window_x is treated as 7 if it's anywhere from 0-6
-            let window_x = (if self.window_x < 7 { 7 } else { self.window_x }).wrapping_sub(7);
+        let (colour_number, color, bg_priority) = if use_window {
+            let win_px = px - win_x_adj;
+            let win_line = self.window_line as usize;
             let tilemap_offset = if self.window_map {
                 TILEMAP1_OFFSET
             } else {
                 TILEMAP0_OFFSET
             };
+            let tilemap_y = (win_line / TILE_SIZE) % TILES_IN_A_TILEMAP_COL;
+            let cell_y = win_line % TILE_SIZE;
+            let tilemap_x = (win_px / TILE_SIZE) % TILES_IN_A_TILEMAP_ROW;
+            let cell_x = win_px % TILE_SIZE;
+            let tilemap_index = tilemap_offset + tilemap_y * TILES_IN_A_TILEMAP_ROW + tilemap_x;
+            self.resolve_tile_pixel(tilemap_index, cell_x, cell_y)
+        } else if self.cgb_mode || self.bg_enabled {
+            let line_to_draw = line.wrapping_add(self.scroll_y as usize) & 0xFF;
+            let curr_pixel_x = self.scroll_x as usize + px;
+            let tilemap_offset = if self.bg_map {
+                TILEMAP1_OFFSET
+            } else {
+                TILEMAP0_OFFSET
+            };
+            let tilemap_y = (line_to_draw / TILE_SIZE) % TILES_IN_A_TILEMAP_COL;
+            let cell_y = line_to_draw % TILE_SIZE;
+            let tilemap_x = (curr_pixel_x / TILE_SIZE) % TILES_IN_A_TILEMAP_ROW;
+            let cell_x = curr_pixel_x % TILE_SIZE;
+            let tilemap_index = tilemap_offset + tilemap_y * TILES_IN_A_TILEMAP_ROW + tilemap_x;
+            self.resolve_tile_pixel(tilemap_index, cell_x, cell_y)
+        } else {
+            // BG disabled in DMG mode: blank (colour 0, white)
+            (0, self.bg_colors[0][0], false)
+        };
 
-            let win_line = self.window_line as usize;
-            let tilemap_y: usize = (win_line / TILE_SIZE) % TILES_IN_A_TILEMAP_COL;
-            let cell_y: usize = win_line % TILE_SIZE;
+        self.bg_row[px] = colour_number | ((bg_priority as u8) << 2);
+        self.buffer[fb_index] = color;
 
-            #[allow(clippy::needless_range_loop)]
-            for pixel in (window_x as usize)..TILES_IN_A_SCREEN_ROW * TILE_SIZE {
-                let curr_pixel_x = (pixel - window_x as usize) as u8;
-
-                let tilemap_x: usize = (curr_pixel_x as usize / TILE_SIZE) % TILES_IN_A_TILEMAP_ROW;
-                let cell_x: usize = curr_pixel_x as usize % TILE_SIZE;
-                let tilemap_index =
-                    tilemap_offset + (tilemap_y * TILES_IN_A_TILEMAP_ROW + tilemap_x);
-
-                let (colour_number, color, bg_priority) =
-                    self.resolve_tile_pixel(tilemap_index, cell_x, cell_y);
-
-                rendering_row[pixel] = colour_number | ((bg_priority as u8) << 2);
-                let index = (self.line as usize * TILES_IN_A_SCREEN_ROW * TILE_SIZE) + pixel;
-                self.buffer[index] = color;
-            }
-            self.window_line += 1;
-        }
-
-        // sprites
+        // --- Sprite compositing ---
         if self.obj_enabled {
-            let sprite_height: u8 = if self.obj_size { 16 } else { 8 };
+            let sprite_height = if self.obj_size { 16u8 } else { 8u8 };
+            let count = self.scan_sprite_count as usize;
 
-            let mut sprite_occupied = [false; 160usize];
-
-            let mut visible: [usize; 10] = [0; 10];
-            let mut visible_count = 0usize;
-            for sprite_num in 0..40usize {
-                let base = sprite_num * 4;
-                let y = self.oam[base].wrapping_sub(16);
-                if self.line.wrapping_sub(y) < sprite_height {
-                    visible[visible_count] = sprite_num;
-                    visible_count += 1;
-                    if visible_count == 10 {
-                        break;
-                    }
+            for i in 0..count {
+                let spr = self.scan_sprites[i];
+                // spr.x is the raw OAM X byte; screen left edge = spr.x - 8
+                let spr_screen_left = spr.x as i16 - 8;
+                let spr_col = px as i16 - spr_screen_left; // column within sprite (0 = leftmost)
+                if !(0..8).contains(&spr_col) {
+                    continue;
                 }
-            }
 
-            // DMG: lower X-coordinate wins; CGB: lower OAM index wins (already in order)
-            if !self.cgb_mode || self.dmg_compat {
-                visible[..visible_count].sort_by_key(|&i| self.oam[i * 4 + 1]);
-            }
+                // A higher-priority sprite already drew here; no lower sprite can overwrite
+                if self.sprite_occupied[px] {
+                    break;
+                }
 
-            for &sprite_num in &visible[..visible_count] {
-                let base = sprite_num * 4;
-                let y = self.oam[base].wrapping_sub(16);
-                let x = self.oam[base + 1].wrapping_sub(8);
-                let pos_base = self.oam[base + 2];
-                let opt = self.oam[base + 3];
-
-                let flip_y = (opt & 0x40) != 0;
-                let flip_x = (opt & 0x20) != 0;
-                let z = (opt & 0x80) != 0;
-                // CGB mode: bits 0-2 = palette index (0-7); DMG/compat: bit 4 = OBP0/OBP1
+                let flip_x = (spr.attr & 0x20) != 0;
+                let flip_y = (spr.attr & 0x40) != 0;
+                let z = (spr.attr & 0x80) != 0;
                 let cgb_palette = if self.cgb_mode && !self.dmg_compat {
-                    (opt & 0x07) as usize
+                    (spr.attr & 0x07) as usize
                 } else {
-                    ((opt >> 4) & 0x01) as usize
+                    ((spr.attr >> 4) & 0x01) as usize
                 };
-                // CGB mode: bit 3 = tile VRAM bank; DMG/compat: always bank 0
                 let tile_vbank = if self.cgb_mode && !self.dmg_compat {
-                    ((opt >> 3) & 0x01) as usize
+                    ((spr.attr >> 3) & 0x01) as usize
                 } else {
                     0
                 };
 
-                let mut pos = if self.obj_size {
-                    pos_base & 0xFE
+                let screen_y = spr.y.wrapping_sub(16);
+                let mut sprite_row = self.line.wrapping_sub(screen_y);
+                let mut tile = if self.obj_size {
+                    spr.tile & 0xFE
                 } else {
-                    pos_base
+                    spr.tile
                 };
 
-                // handle upside down
-                let mut sprite_pixel_row = if flip_y {
-                    sprite_height - self.line.wrapping_sub(y) - 1
-                } else {
-                    self.line.wrapping_sub(y)
-                };
-
-                // go to next tile if we have to render 2nd part of the 16pixel sprite
-                if sprite_pixel_row >= 8 {
-                    pos = pos.wrapping_add(1);
-                    sprite_pixel_row -= 8;
+                if flip_y {
+                    sprite_row = sprite_height - sprite_row - 1;
+                }
+                if sprite_row >= 8 {
+                    tile = tile.wrapping_add(1);
+                    sprite_row -= 8;
                 }
 
-                // sprites always use tiledata1; tile_vbank selects VRAM bank
                 let bank_offset = tile_vbank * 8192;
-                let tile_in_tileset: usize =
-                    TILEDATA1_OFFSET + (2 * 8 * pos as usize + sprite_pixel_row as usize * 2);
+                let tile_offset =
+                    TILEDATA1_OFFSET + 2 * 8 * tile as usize + sprite_row as usize * 2;
+                let byte_1 = self.vram[bank_offset + tile_offset];
+                let byte_2 = self.vram[bank_offset + tile_offset + 1];
 
-                // a tile pixel line is encoded in two consecutive bytes
-                let byte_1 = self.vram[bank_offset + tile_in_tileset];
-                let byte_2 = self.vram[bank_offset + tile_in_tileset + 1];
+                // bit_pos: no flip → leftmost pixel = bit 7 (MSB); flip → leftmost = bit 0
+                let bit_pos = if flip_x {
+                    spr_col as u8
+                } else {
+                    7 - spr_col as u8
+                };
+                let high_bit = is_bit_set(bit_pos, byte_2 as u16) as u8;
+                let low_bit = is_bit_set(bit_pos, byte_1 as u16) as u8;
+                let spr_colour = (high_bit << 1) | low_bit;
 
-                for pixel in 0..8u8 {
-                    let ix = if flip_x { pixel } else { 7 - pixel };
-
-                    let curr_x = x.wrapping_add(7 - pixel);
-
-                    // out of the line, don't draw
-                    if curr_x >= 160 {
-                        continue;
-                    }
-
-                    let high_bit: u8 = is_bit_set(7 - ix, byte_2 as u16) as u8;
-                    let low_bit: u8 = is_bit_set(7 - ix, byte_1 as u16) as u8;
-
-                    let colour_number = (high_bit << 1) | low_bit;
-
-                    // transparent, don't draw
-                    if colour_number == 0 {
-                        continue;
-                    }
-
-                    // bg-priority tile attr (CGB) or z-order with non-transparent bg pixel
-                    // In CGB mode with master priority off, sprites always win
-                    let bg_wins = if self.cgb_mode && !self.bg_master_priority {
-                        false
-                    } else {
-                        (rendering_row[curr_x as usize] & 0x04 != 0)
-                            || (z && rendering_row[curr_x as usize] & 0x03 != 0)
-                    };
-                    if bg_wins {
-                        continue;
-                    }
-
-                    // lower OAM index wins over higher index
-                    if sprite_occupied[curr_x as usize] {
-                        continue;
-                    }
-                    sprite_occupied[curr_x as usize] = true;
-
-                    let colour = self.obj_colors[cgb_palette][colour_number as usize];
-                    let index: usize =
-                        (self.line as usize * TILES_IN_A_SCREEN_ROW * TILE_SIZE) + curr_x as usize;
-                    self.buffer[index] = colour;
+                if spr_colour == 0 {
+                    continue; // transparent; let lower-priority sprite try
                 }
+
+                let bg_wins = if self.cgb_mode && !self.bg_master_priority {
+                    false
+                } else {
+                    (self.bg_row[px] & 0x04 != 0) || (z && self.bg_row[px] & 0x03 != 0)
+                };
+                if bg_wins {
+                    continue; // BG wins; let lower-priority sprite try (matches batch renderer)
+                }
+
+                self.sprite_occupied[px] = true;
+                self.buffer[fb_index] = self.obj_colors[cgb_palette][spr_colour as usize];
+                break;
             }
         }
     }
@@ -908,27 +878,33 @@ impl GPU {
         lyc_source || mode_sources
     }
 
-    fn collect_scanline_sprite_xs(&self) -> ([u8; 10], usize) {
-        let mut xs = [0u8; 10];
+    /// Collect full sprite data for all sprites visible on the current scanline.
+    fn collect_sprites_full(&self) -> ([SpriteData; 10], usize) {
+        let mut sprites = [SpriteData::default(); 10];
         let mut count = 0usize;
         if !self.obj_enabled {
-            return (xs, 0);
+            return (sprites, 0);
         }
         let sprite_height: u8 = if self.obj_size { 16 } else { 8 };
         for i in 0..40usize {
-            let y = self.oam[i * 4].wrapping_sub(16);
-            if self.line.wrapping_sub(y) < sprite_height {
-                let x = self.oam[i * 4 + 1];
-                if x < 168 {
-                    xs[count] = x;
-                    count += 1;
-                    if count >= 10 {
-                        break;
-                    }
+            let base = i * 4;
+            let y = self.oam[base];
+            let x = self.oam[base + 1];
+            let screen_y = y.wrapping_sub(16);
+            if x < 168 && self.line.wrapping_sub(screen_y) < sprite_height {
+                sprites[count] = SpriteData {
+                    y,
+                    x,
+                    tile: self.oam[base + 2],
+                    attr: self.oam[base + 3],
+                };
+                count += 1;
+                if count >= 10 {
+                    break;
                 }
             }
         }
-        (xs, count)
+        (sprites, count)
     }
 
     fn compute_mode3_sprite_penalty(xs: &[u8]) -> u16 {
@@ -982,18 +958,42 @@ impl GPU {
                     self.modeclock = 0;
                     self.mode = 3;
                     self.accessed_oam_row = 0xFF;
-                    let (xs, count) = self.collect_scanline_sprite_xs();
-                    self.mode3_extra = Self::compute_mode3_sprite_penalty(&xs[..count]);
+                    // Collect sprite data; extract X values for the timing penalty calculation
+                    let (mut sprites, scount) = self.collect_sprites_full();
+                    let xs: [u8; 10] = std::array::from_fn(|i| sprites[i].x);
+                    self.mode3_extra = Self::compute_mode3_sprite_penalty(&xs[..scount]);
+                    // DMG/compat: lower X wins; CGB: OAM-index order (already collected that way)
+                    if !self.cgb_mode || self.dmg_compat {
+                        sprites[..scount].sort_by_key(|s| s.x);
+                    }
+                    self.scan_sprites = sprites;
+                    self.scan_sprite_count = scount as u8;
+                    // Reset per-scanline pixel state
+                    self.dot_x = 0;
+                    self.bg_row = [0u8; 160];
+                    self.sprite_occupied = [false; 160];
                 }
             }
-            // scanline, vram read mode
+            // scanline, vram read mode — render one pixel per T-cycle
             3 => {
                 self.accessed_oam_row = 0xFF;
+                if self.dot_x < 160 {
+                    self.render_dot(self.dot_x as usize);
+                    self.dot_x += 1;
+                }
                 if self.modeclock >= 172 + self.mode3_extra {
                     self.modeclock = 0;
                     self.mode = 0;
                     self.hblank_flag = true;
-                    self.render_scan_to_buffer();
+                    // Flush any pixels that weren't rendered (shouldn't happen: 160 ≤ 172)
+                    while self.dot_x < 160 {
+                        self.render_dot(self.dot_x as usize);
+                        self.dot_x += 1;
+                    }
+                    // Increment window line counter (same condition as the old batch renderer)
+                    if self.window_enabled && self.window_y <= self.line {
+                        self.window_line += 1;
+                    }
                 }
             }
             // hblank
@@ -1210,5 +1210,86 @@ mod tests {
 
         gpu.write_oam(159, 0b00010000);
         assert_eq!(gpu.read_oam(159), 0b00010000);
+    }
+
+    // Verify per-dot rendering: a scroll_x change mid-Mode-3 affects only the remaining pixels.
+    // With the old batch renderer the whole line would use the final scroll_x value.
+    #[test]
+    fn test_mid_scanline_scroll_x() {
+        let mut gpu = GPU::new(false);
+
+        // Standard DMG palette: colour 0→off, 1→light, 2→dark, 3→on
+        gpu.write_byte(0xFF47, 0xE4);
+
+        // Tile 0 (TILEDATA1, offset 0): all pixels = colour 1
+        // byte_1=0xFF, byte_2=0x00 → colour_number = (0<<1)|1 = 1
+        for row in 0..8usize {
+            gpu.vram[row * 2] = 0xFF;
+            gpu.vram[row * 2 + 1] = 0x00;
+        }
+        // Tile 1 (offset 16): all pixels = colour 3
+        // byte_1=0xFF, byte_2=0xFF → colour_number = (1<<1)|1 = 3
+        for row in 0..8usize {
+            gpu.vram[16 + row * 2] = 0xFF;
+            gpu.vram[16 + row * 2 + 1] = 0xFF;
+        }
+        // Tilemap row 0 (TILEMAP0): col 0 = tile 0, cols 1..31 = tile 1
+        gpu.vram[TILEMAP0_OFFSET] = 0;
+        for col in 1..32usize {
+            gpu.vram[TILEMAP0_OFFSET + col] = 1;
+        }
+
+        // Put GPU directly into Mode 3 start (line 0, no sprites, no window)
+        gpu.lcd_enabled = true;
+        gpu.bg_enabled = true;
+        gpu.bg_tile = true; // TILEDATA1: tiles at VRAM offset 0
+        gpu.bg_map = false; // TILEMAP0
+        gpu.obj_enabled = false;
+        gpu.window_enabled = false;
+        gpu.scroll_x = 0;
+        gpu.scroll_y = 0;
+        gpu.line = 0;
+        gpu.mode = 3;
+        gpu.modeclock = 0;
+        gpu.mode3_extra = 0;
+        gpu.dot_x = 0;
+        gpu.bg_row = [0u8; 160];
+        gpu.sprite_occupied = [false; 160];
+        gpu.scan_sprite_count = 0;
+
+        // Render the first 8 pixels with scroll_x=0 → tile 0 → colour 1
+        for _ in 0..8 {
+            gpu.step(1);
+        }
+
+        // Change scroll_x mid-scanline: pixels 8..159 now map into tile 1 territory
+        gpu.scroll_x = 8;
+
+        // Drive Mode 3 to completion (172 T-cycles total; 8 already consumed)
+        for _ in 0..164 {
+            gpu.step(1);
+        }
+
+        let color_1 = gpu.bg_colors[0][1]; // tile 0
+        let color_3 = gpu.bg_colors[0][3]; // tile 1
+        assert_ne!(
+            color_1, color_3,
+            "palette colours must be distinct for this test to be meaningful"
+        );
+
+        // Pixels 0-7 were emitted before the scroll change → tile 0
+        for px in 0..8usize {
+            assert_eq!(
+                gpu.buffer[px], color_1,
+                "pixel {px}: expected tile-0 colour"
+            );
+        }
+        // Pixels 8-159 were emitted after the scroll change → tile 1
+        for px in 8..160usize {
+            assert_eq!(
+                gpu.buffer[px], color_3,
+                "pixel {px}: expected tile-1 colour"
+            );
+        }
     }
 }

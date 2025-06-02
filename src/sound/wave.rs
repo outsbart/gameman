@@ -177,27 +177,25 @@ impl WaveChannel {
         self.timer.restart();
     }
 
-    pub fn write_ram_sample(&mut self, pos: u8, value: u8) {
+    pub fn write_ram_sample(&mut self, pos: u8, value: u8, cgb_mode: bool) {
         // If the wave channel is enabled, accessing any byte from $FF30-$FF3F is
         // equivalent to accessing the current byte selected by the waveform
-        // position. Further, on the DMG accesses will only work in this manner if
-        // made within a couple of clocks of the wave channel accessing wave RAM;
-        // if made at any other time, reads return $FF and writes have no effect.
+        // position. On DMG accesses only work within a couple of clocks of the
+        // channel reading wave RAM; on CGB the window restriction does not apply.
         if !self.running {
             self.samples[pos as usize] = value;
             return;
         }
-        if self.wave_ram_accessible {
+        if self.wave_ram_accessible || cgb_mode {
             self.samples[self.position as usize / 2] = value;
         }
     }
 
-    pub fn read_ram_sample(&self, pos: u8) -> u8 {
-        // Just like write
+    pub fn read_ram_sample(&self, pos: u8, cgb_mode: bool) -> u8 {
         if !self.running {
             return self.samples[pos as usize];
         }
-        if self.wave_ram_accessible {
+        if self.wave_ram_accessible || cgb_mode {
             return self.samples[self.position as usize / 2];
         }
         0xFF
