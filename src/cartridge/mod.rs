@@ -4,6 +4,7 @@ pub mod mbc1;
 pub mod mbc2;
 pub mod mbc3;
 pub mod mbc5;
+pub mod mbc6;
 pub mod mbc7;
 pub mod nombc;
 
@@ -13,6 +14,7 @@ use crate::cartridge::mbc1::{CartridgeMBC1, CartridgeMBC1Multicart};
 use crate::cartridge::mbc2::CartridgeMBC2;
 use crate::cartridge::mbc3::CartridgeMBC3;
 use crate::cartridge::mbc5::CartridgeMBC5;
+use crate::cartridge::mbc6::CartridgeMBC6;
 use crate::cartridge::mbc7::CartridgeMBC7;
 use crate::cartridge::nombc::CartridgeNoMBC;
 
@@ -185,6 +187,7 @@ macro_rules! dispatch_cartridge {
             CartridgeKind::MBC2(c) => c.$method($($arg),*),
             CartridgeKind::MBC3(c) => c.$method($($arg),*),
             CartridgeKind::MBC5(c) => c.$method($($arg),*),
+            CartridgeKind::MBC6(c) => c.$method($($arg),*),
             CartridgeKind::MBC7(c) => c.$method($($arg),*),
             CartridgeKind::HuC1(c) => c.$method($($arg),*),
             CartridgeKind::HuC3(c) => c.$method($($arg),*),
@@ -200,6 +203,7 @@ pub enum CartridgeKind {
     MBC2(CartridgeMBC2),
     MBC3(CartridgeMBC3),
     MBC5(CartridgeMBC5),
+    MBC6(CartridgeMBC6),
     MBC7(CartridgeMBC7),
     HuC1(CartridgeHuC1),
     HuC3(CartridgeHuC3),
@@ -230,6 +234,7 @@ impl CartridgeKind {
             CartridgeKind::MBC2(c) => &c.cart,
             CartridgeKind::MBC3(c) => &c.cart,
             CartridgeKind::MBC5(c) => &c.cart,
+            CartridgeKind::MBC6(c) => &c.cart,
             CartridgeKind::MBC7(c) => &c.cart,
             CartridgeKind::HuC1(c) => &c.cart,
             CartridgeKind::HuC3(c) => &c.cart,
@@ -244,6 +249,7 @@ impl CartridgeKind {
             CartridgeKind::MBC2(c) => &mut c.cart,
             CartridgeKind::MBC3(c) => &mut c.cart,
             CartridgeKind::MBC5(c) => &mut c.cart,
+            CartridgeKind::MBC6(c) => &mut c.cart,
             CartridgeKind::MBC7(c) => &mut c.cart,
             CartridgeKind::HuC1(c) => &mut c.cart,
             CartridgeKind::HuC3(c) => &mut c.cart,
@@ -320,6 +326,7 @@ pub fn load_rom(path: &str) -> (CartridgeKind, bool) {
                 | 0x1B
                 | 0x1D
                 | 0x1E
+                | 0x20
                 | 0x22
                 | 0xFE
                 | 0xFF
@@ -353,6 +360,7 @@ pub fn load_rom(path: &str) -> (CartridgeKind, bool) {
             CartridgeKind::MBC3(CartridgeMBC3::new(cart, has_rtc))
         }
         0x19..=0x1E => CartridgeKind::MBC5(CartridgeMBC5::new(cart)),
+        0x20 => CartridgeKind::MBC6(CartridgeMBC6::new(cart)),
         0x22 => CartridgeKind::MBC7(CartridgeMBC7::new(cart)),
         0xFE => CartridgeKind::HuC3(CartridgeHuC3::new(cart)),
         0xFF => CartridgeKind::HuC1(CartridgeHuC1::new(cart)),

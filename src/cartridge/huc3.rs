@@ -62,3 +62,66 @@ impl CartridgeHuC3 {
         self.cart.save()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cartridge::{Cartridge, RAM_BANK_SIZE, ROM_BANK_SIZE};
+    use std::path::PathBuf;
+
+    fn make_huc3(num_rom_banks: usize) -> CartridgeHuC3 {
+        let mut rom = vec![0u8; num_rom_banks * ROM_BANK_SIZE];
+        for b in 0..num_rom_banks {
+            rom[b * ROM_BANK_SIZE + 0x100] = b as u8;
+        }
+        let cart = Cartridge::new(PathBuf::from("test.gb"), rom, 0);
+        CartridgeHuC3::new(cart)
+    }
+
+    #[test]
+    fn mode_0a_allows_ram_readwrite() {
+        let mut c = make_huc3(2);
+        c.cart.ram = vec![0u8; RAM_BANK_SIZE];
+        c.write_rom(0x0000, 0x0A); // set mode 0x0A, enables RAM
+        c.write_ram(0, 0x55);
+        assert_eq!(c.read_ram(0), 0x55);
+    }
+
+    #[test]
+    fn other_modes_read_return_correct_values() {
+        let mut c = make_huc3(2);
+        c.cart.ram = vec![0u8; RAM_BANK_SIZE];
+        c.write_rom(0x0000, 0x00); // disabled mode
+        assert_eq!(c.read_ram(0), 0xFF);
+        c.write_rom(0x0000, 0x0B); // RTC command stub
+        assert_eq!(c.read_ram(0), 0x01);
+        c.write_rom(0x0000, 0x0C); // RTC read stub
+        assert_eq!(c.read_ram(0), 0x01);
+    }
+
+    #[test]
+    fn write_outside_mode_0a_is_ignored() {
+        let mut c = make_huc3(2);
+        c.cart.ram = vec![0u8; RAM_BANK_SIZE];
+        c.write_rom(0x0000, 0x0A); // enable RAM
+        c.write_ram(0, 0x42);
+        c.write_rom(0x0000, 0x0B); // switch away from RAM mode
+        c.write_ram(0, 0xFF); // should be ignored
+        c.write_rom(0x0000, 0x0A); // re-enable
+        assert_eq!(c.read_ram(0), 0x42);
+    }
+
+    #[test]
+    fn rom_bank_zero_clamps_to_one() {
+        let mut c = make_huc3(2);
+        c.write_rom(0x2000, 0x00);
+        assert_eq!(c.read_rom(0x4100), 1);
+    }
+
+    #[test]
+    fn rom_banking_switchable_window() {
+        let mut c = make_huc3(4);
+        c.write_rom(0x2000, 3);
+        assert_eq!(c.read_rom(0x4100), 3);
+    }
+}

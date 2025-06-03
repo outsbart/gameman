@@ -214,6 +214,8 @@ pub struct GPU {
     bg_row: [u8; 160], // colour_number | (bg_priority << 2) for each pixel this line
     #[serde(default = "arr_bool_160", with = "BigArray")]
     sprite_occupied: [bool; 160], // first sprite wins per pixel position
+    #[serde(default)]
+    window_triggered: bool, // true if any window pixel was rendered this scanline
 }
 
 impl GPUMemoriesAccess for GPU {
@@ -627,6 +629,7 @@ impl GPU {
             scan_sprites: [SpriteData::default(); 10],
             bg_row: [0u8; 160],
             sprite_occupied: [false; 160],
+            window_triggered: false,
         }
     }
 
@@ -746,6 +749,7 @@ impl GPU {
         let use_window = self.window_enabled && (self.window_y <= self.line) && px >= win_x_adj;
 
         let (colour_number, color, bg_priority) = if use_window {
+            self.window_triggered = true;
             let win_px = px - win_x_adj;
             let win_line = self.window_line as usize;
             let tilemap_offset = if self.window_map {
@@ -856,7 +860,7 @@ impl GPU {
                     (self.bg_row[px] & 0x04 != 0) || (z && self.bg_row[px] & 0x03 != 0)
                 };
                 if bg_wins {
-                    continue; // BG wins; let lower-priority sprite try (matches batch renderer)
+                    break; // BG wins; pixel is settled — lower sprites don't retry
                 }
 
                 self.sprite_occupied[px] = true;
@@ -962,6 +966,7 @@ impl GPU {
                     let (mut sprites, scount) = self.collect_sprites_full();
                     let xs: [u8; 10] = std::array::from_fn(|i| sprites[i].x);
                     self.mode3_extra = Self::compute_mode3_sprite_penalty(&xs[..scount]);
+                    self.mode3_extra += (self.scroll_x & 7) as u16;
                     // DMG/compat: lower X wins; CGB: OAM-index order (already collected that way)
                     if !self.cgb_mode || self.dmg_compat {
                         sprites[..scount].sort_by_key(|s| s.x);
@@ -972,6 +977,7 @@ impl GPU {
                     self.dot_x = 0;
                     self.bg_row = [0u8; 160];
                     self.sprite_occupied = [false; 160];
+                    self.window_triggered = false;
                 }
             }
             // scanline, vram read mode — render one pixel per T-cycle
@@ -990,8 +996,9 @@ impl GPU {
                         self.render_dot(self.dot_x as usize);
                         self.dot_x += 1;
                     }
-                    // Increment window line counter (same condition as the old batch renderer)
-                    if self.window_enabled && self.window_y <= self.line {
+                    // WLY increments only when at least one window pixel was output this scanline.
+                    // (WX=167 parks the window off-screen; real hardware does not advance WLY.)
+                    if self.window_triggered {
                         self.window_line += 1;
                     }
                 }

@@ -30,3 +30,33 @@ impl CartridgeNoMBC {
         self.cart.save()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cartridge::{Cartridge, RAM_BANK_SIZE, ROM_BANK_SIZE};
+    use std::path::PathBuf;
+
+    #[test]
+    fn ram_auto_enabled_on_construction() {
+        let rom = vec![0u8; ROM_BANK_SIZE];
+        let mut cart = Cartridge::new(PathBuf::from("test.gb"), rom, 0);
+        cart.ram = vec![0u8; RAM_BANK_SIZE];
+        cart.ram[0] = 0x42;
+        let mut c = CartridgeNoMBC::new(cart);
+        // No write_rom call needed — RAM is accessible immediately
+        assert_eq!(c.read_ram(0), 0x42);
+        c.write_ram(5, 0xBB);
+        assert_eq!(c.read_ram(5), 0xBB);
+    }
+
+    #[test]
+    fn write_rom_is_a_no_op() {
+        let rom = vec![0u8; ROM_BANK_SIZE];
+        let cart = Cartridge::new(PathBuf::from("test.gb"), rom, 0);
+        let mut c = CartridgeNoMBC::new(cart);
+        c.write_rom(0x0000, 0xFF); // shouldn't panic or change anything
+        c.write_rom(0x7FFF, 0xFF);
+        assert_eq!(c.read_rom(0), 0); // ROM unchanged
+    }
+}

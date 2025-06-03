@@ -292,8 +292,7 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                                         // Cancel active HBDMA
                                         self.hbdma_active = false;
                                     } else if byte & 0x80 == 0 {
-                                        // GDMA: copy all bytes now; CPU is stalled so the
-                                        // GPU does not advance independently during the transfer.
+                                        // GDMA: copy all bytes now; CPU is stalled.
                                         let length = ((byte & 0x7F) as u16 + 1) * 16;
                                         let src = self.hdma_src;
                                         let dst = self.hdma_dst;
@@ -304,6 +303,14 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                                         for i in 0..length {
                                             let b = self.read_byte(src.wrapping_add(i));
                                             self.gpu.write_vram((dst.wrapping_add(i)) & 0x1FFF, b);
+                                            // Advance 32 T-cycles per 16-byte block — 8 M-cycles
+                                            // at normal speed, 16 at double speed; both equal 32
+                                            // GPU T-cycles (Pan Docs: ~8 µs per block, both modes).
+                                            if (i + 1) % 16 == 0 {
+                                                for _ in 0..32u16 {
+                                                    self.tick_t();
+                                                }
+                                            }
                                         }
                                         self.hdma_src = src.wrapping_add(length);
                                         self.hdma_dst =
@@ -377,8 +384,11 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
         if stat {
             self.request_interrupt(Interrupt::Stat);
         }
-        // HBDMA: fire one 16-byte chunk per HBlank.
-        if self.hbdma_active && self.gpu.take_hblank() {
+        // HBDMA: fire one 16-byte chunk per HBlank. Always consume the
+        // hblank flag so it doesn't accumulate when HBDMA is inactive
+        // and cause a spurious extra fire on the next ARM.
+        let hblank = self.gpu.take_hblank();
+        if self.hbdma_active && hblank {
             let src = self.hdma_src;
             let dst = self.hdma_dst;
             for i in 0..16u16 {

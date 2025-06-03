@@ -212,6 +212,13 @@ struct SoundOutput {
     volume_master: VolumeMaster,
     #[serde(skip)]
     out_buffer: OutputBuffer,
+    // Tracks the charge on the physical output coupling capacitor.
+    // The real hardware has an RC high-pass on each stereo output:
+    //   RC ≈ 0.54 s  (a ~47 µF cap driving ~10 kΩ headphones)  → fc ≈ 0.3 Hz
+    //   α  = e^(−1/(RC·fs)) = e^(−1/(0.54·44100)) ≈ 0.999958
+    // Skipped from save states: it reconverges within a handful of samples.
+    #[serde(skip)]
+    capacitor: f32,
 }
 
 impl SoundOutput {
@@ -220,6 +227,7 @@ impl SoundOutput {
             mixer: Mixer::new(),
             volume_master: VolumeMaster::new(),
             out_buffer: OutputBuffer::new(),
+            capacitor: 0.0,
         }
     }
 
@@ -227,7 +235,15 @@ impl SoundOutput {
         let mixed = self.mixer.mix(channel_outputs);
         let scaled = self.volume_master.apply(mixed);
 
-        self.out_buffer.push(scaled);
+        // High-pass filter modelling the output coupling capacitor.
+        // Without this, switching a DAC on/off injects a DC step → audible click.
+        //   out       = in − capacitor
+        //   capacitor = in − out × α        (α ≈ 0.999958, see field comment)
+        let sample = scaled.0 as f32;
+        let out = sample - self.capacitor;
+        self.capacitor = sample - out * 0.999958;
+
+        self.out_buffer.push(Voltage(out as i16));
     }
 }
 

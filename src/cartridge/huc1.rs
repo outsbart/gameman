@@ -100,3 +100,72 @@ impl CartridgeHuC1 {
         self.cart.save()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cartridge::{Cartridge, RAM_BANK_SIZE, ROM_BANK_SIZE};
+    use std::path::PathBuf;
+
+    fn make_huc1(num_rom_banks: usize) -> CartridgeHuC1 {
+        let mut rom = vec![0u8; num_rom_banks * ROM_BANK_SIZE];
+        for b in 0..num_rom_banks {
+            rom[b * ROM_BANK_SIZE + 0x100] = b as u8;
+        }
+        let cart = Cartridge::new(PathBuf::from("test.gb"), rom, 0);
+        CartridgeHuC1::new(cart)
+    }
+
+    #[test]
+    fn ir_mode_on_by_default() {
+        let mut c = make_huc1(2);
+        c.cart.ram = vec![0x42; RAM_BANK_SIZE];
+        assert_eq!(c.read_ram(0), 0xFF);
+    }
+
+    #[test]
+    fn write_0a_disables_ir_mode() {
+        let mut c = make_huc1(2);
+        c.cart.ram = vec![0u8; RAM_BANK_SIZE];
+        c.cart.ram[0] = 0x42;
+        c.write_rom(0x0000, 0x0A);
+        assert_eq!(c.read_ram(0), 0x42);
+    }
+
+    #[test]
+    fn non_0a_write_reenables_ir_mode() {
+        let mut c = make_huc1(2);
+        c.cart.ram = vec![0u8; RAM_BANK_SIZE];
+        c.cart.ram[0] = 0x42;
+        c.write_rom(0x0000, 0x0A); // enable RAM
+        c.write_rom(0x0000, 0x00); // back to IR mode
+        c.write_ram(0, 0xFF); // ignored in IR mode
+        c.write_rom(0x0000, 0x0A); // re-enable to verify
+        assert_eq!(c.read_ram(0), 0x42);
+    }
+
+    #[test]
+    fn rom_bank_zero_clamps_to_one() {
+        let mut c = make_huc1(2);
+        c.write_rom(0x2000, 0x00);
+        assert_eq!(c.read_rom(0x4100), 1);
+    }
+
+    #[test]
+    fn upper_rom_bank_bits_from_0x4000() {
+        let mut c = make_huc1(64);
+        c.write_rom(0x2000, 0x01); // low bits = 1
+        c.write_rom(0x4000, 0x01); // upper bits = 0b01 → rom_bank = 0x21 = 33
+        assert_eq!(c.read_rom(0x4100), 33);
+    }
+
+    #[test]
+    fn mode1_redirects_bank0_window() {
+        let mut c = make_huc1(64);
+        c.write_rom(0x2000, 0x01); // low bits = 1
+        c.write_rom(0x4000, 0x01); // rom_bank = 0x21; upper bits in 0x60 mask = 0x20 = 32
+        assert_eq!(c.read_rom(0x0100), 0); // mode 0: bank-0 window = bank 0
+        c.write_rom(0x6000, 0x01); // switch to mode 1
+        assert_eq!(c.read_rom(0x0100), 32); // (0x21 & 0x60) & 63 = 32
+    }
+}

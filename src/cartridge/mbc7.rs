@@ -265,3 +265,150 @@ impl CartridgeMBC7 {
         self.cart.save()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cartridge::{Cartridge, ROM_BANK_SIZE};
+    use std::path::PathBuf;
+
+    fn make_mbc7() -> CartridgeMBC7 {
+        let rom = vec![0u8; 2 * ROM_BANK_SIZE];
+        let mut cart = Cartridge::new(PathBuf::from("test.gb"), rom, 0);
+        cart.ram = vec![0u8; 256]; // 128 × 16-bit EEPROM words
+        CartridgeMBC7::new(cart)
+    }
+
+    fn enable_ram(c: &mut CartridgeMBC7) {
+        c.write_rom(0x0000, 0x0A); // step 1
+        c.write_rom(0x4000, 0x40); // step 2
+    }
+
+    // Toggle CLK to produce one rising edge with the given DI value.
+    fn send_bit(c: &mut CartridgeMBC7, di: bool) {
+        let b = if di { 0x02 } else { 0x00 };
+        c.write_ram(0x0080, 0x80 | b); // CS=1, CLK=0
+        c.write_ram(0x0080, 0x80 | 0x40 | b); // CS=1, CLK=1 (rising edge)
+    }
+
+    // Send start bit + 2-bit opcode + 7-bit address (10 bits total).
+    fn eeprom_cmd(c: &mut CartridgeMBC7, opcode: u8, addr: u8) {
+        c.write_ram(0x0080, 0x00); // CS=0 → reset EEPROM phase
+        c.write_ram(0x0080, 0x80); // CS=1, CLK=0
+        send_bit(c, true); // start bit
+        send_bit(c, (opcode >> 1) & 1 != 0);
+        send_bit(c, opcode & 1 != 0);
+        for i in (0..7).rev() {
+            send_bit(c, (addr >> i) & 1 != 0);
+        }
+    }
+
+    // Clock in 16 data bits MSB-first (used after a WRITE command).
+    fn eeprom_write_word(c: &mut CartridgeMBC7, word: u16) {
+        for i in (0..16).rev() {
+            send_bit(c, (word >> i) & 1 != 0);
+        }
+    }
+
+    // Clock out 16 data bits MSB-first (used after a READ command).
+    fn eeprom_read_word(c: &mut CartridgeMBC7) -> u16 {
+        let mut word = 0u16;
+        for _ in 0..16 {
+            c.write_ram(0x0080, 0x80); // CS=1, CLK=0
+            c.write_ram(0x0080, 0x80 | 0x40); // CS=1, CLK=1 → updates do_out
+            word = (word << 1) | ((c.read_ram(0x0080) >> 1) & 1) as u16;
+        }
+        word
+    }
+
+    #[test]
+    fn ram_disabled_reads_return_0xff() {
+        let mut c = make_mbc7();
+        c.write_rom(0x0000, 0x0A); // step 1 only, no step 2
+        assert_eq!(c.read_ram(0x0080), 0xFF);
+    }
+
+    #[test]
+    fn dual_enable_required() {
+        let mut c = make_mbc7();
+        c.write_rom(0x0000, 0x0A); // step 1
+        assert_eq!(c.read_ram(0x0080), 0xFF); // not enabled yet
+        c.write_rom(0x4000, 0x40); // step 2
+        assert_eq!(c.read_ram(0x0080), 0x02); // do_out starts true → bit 1 set
+    }
+
+    #[test]
+    fn wrong_second_byte_disables_ram() {
+        let mut c = make_mbc7();
+        c.write_rom(0x0000, 0x0A);
+        c.write_rom(0x4000, 0x41); // wrong byte → both enables cleared
+        assert_eq!(c.read_ram(0x0080), 0xFF);
+    }
+
+    #[test]
+    fn accel_not_latched_reads_0xff() {
+        let mut c = make_mbc7();
+        enable_ram(&mut c);
+        assert_eq!(c.read_ram(0x0002), 0xFF); // X axis lo — not yet latched
+    }
+
+    #[test]
+    fn accel_latch_returns_center() {
+        let mut c = make_mbc7();
+        enable_ram(&mut c);
+        c.write_ram(0x0000, 0x00); // latch accelerometer
+        assert_eq!(c.read_ram(0x0002), 0x00); // X lo = 0x8000 & 0xFF
+        assert_eq!(c.read_ram(0x0003), 0x80); // X hi = 0x8000 >> 8
+        assert_eq!(c.read_ram(0x0004), 0x00); // Y lo
+        assert_eq!(c.read_ram(0x0005), 0x80); // Y hi
+    }
+
+    #[test]
+    fn eeprom_write_blocked_without_ewen() {
+        let mut c = make_mbc7();
+        enable_ram(&mut c);
+        eeprom_cmd(&mut c, 0b01, 5); // WRITE addr 5, no EWEN
+        eeprom_write_word(&mut c, 0xABCD);
+        eeprom_cmd(&mut c, 0b10, 5); // READ addr 5
+        assert_eq!(eeprom_read_word(&mut c), 0x0000); // backing RAM unchanged
+    }
+
+    #[test]
+    fn eeprom_write_read_roundtrip() {
+        let mut c = make_mbc7();
+        enable_ram(&mut c);
+        eeprom_cmd(&mut c, 0b00, 0x60); // EWEN (subcmd = 0b11)
+        eeprom_cmd(&mut c, 0b01, 5); // WRITE addr 5
+        eeprom_write_word(&mut c, 0xABCD);
+        eeprom_cmd(&mut c, 0b10, 5); // READ addr 5
+        assert_eq!(eeprom_read_word(&mut c), 0xABCD);
+    }
+
+    #[test]
+    fn eeprom_erase_fills_word_with_0xffff() {
+        let mut c = make_mbc7();
+        enable_ram(&mut c);
+        eeprom_cmd(&mut c, 0b00, 0x60); // EWEN
+        eeprom_cmd(&mut c, 0b01, 3); // WRITE addr 3
+        eeprom_write_word(&mut c, 0x1234);
+        eeprom_cmd(&mut c, 0b11, 3); // ERASE addr 3
+        eeprom_cmd(&mut c, 0b10, 3); // READ addr 3
+        assert_eq!(eeprom_read_word(&mut c), 0xFFFF);
+    }
+
+    #[test]
+    fn eeprom_eral_erases_all() {
+        let mut c = make_mbc7();
+        enable_ram(&mut c);
+        eeprom_cmd(&mut c, 0b00, 0x60); // EWEN
+        eeprom_cmd(&mut c, 0b01, 0); // WRITE addr 0
+        eeprom_write_word(&mut c, 0x1111);
+        eeprom_cmd(&mut c, 0b01, 1); // WRITE addr 1
+        eeprom_write_word(&mut c, 0x2222);
+        eeprom_cmd(&mut c, 0b00, 0x40); // ERAL (subcmd = 0b10)
+        eeprom_cmd(&mut c, 0b10, 0); // READ addr 0
+        assert_eq!(eeprom_read_word(&mut c), 0xFFFF);
+        eeprom_cmd(&mut c, 0b10, 1); // READ addr 1
+        assert_eq!(eeprom_read_word(&mut c), 0xFFFF);
+    }
+}
