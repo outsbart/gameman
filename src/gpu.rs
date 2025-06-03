@@ -2,29 +2,45 @@ use crate::cpu::is_bit_set;
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
+// --- Screen / framebuffer geometry ---
+const SCREEN_WIDTH: usize = 160;
+const SCREEN_HEIGHT: usize = 144;
+const FRAMEBUFFER_LEN: usize = SCREEN_WIDTH * SCREEN_HEIGHT;
+
+// --- Tile / tilemap geometry ---
+const TILE_SIZE: usize = 8;
+const BYTES_PER_TILE_ROW: usize = 2;
 const TILES_IN_A_TILEMAP_ROW: usize = 32;
+const TILES_IN_A_TILEMAP_COL: usize = 32;
+
+// --- VRAM layout (offsets within an 8 KiB bank) ---
+const VRAM_BANK_SIZE: usize = 8192;
+const TILEMAP0_OFFSET: usize = 0x9800 - 0x8000;
+const TILEMAP1_OFFSET: usize = 0x9C00 - 0x8000;
+const TILEDATA1_OFFSET: usize = 0;
+const TILEDATA0_OFFSET: usize = 0x9000 - 0x8000;
+const TILEDATA_SHARED: usize = 0x8800 - 0x8000; // when tile index >= 128
+
+// --- PPU timing (T-cycles / dots) ---
+const MODE2_DOTS: u16 = 80;
+const MODE3_BASE_DOTS: u16 = 172;
+const MODE0_BASE_DOTS: u16 = 204;
+const SCANLINE_DOTS: u16 = 456;
+const VBLANK_START_LINE: u8 = 144;
+const LAST_LINE: u8 = 153;
+
 const COLOR_CORRECTION: bool = cfg!(feature = "color-correction");
 
-fn arr_u8_160() -> [u8; 160] {
-    [0u8; 160]
+// serde default helpers for per-scanline scratch arrays
+fn arr_u8_160() -> [u8; SCREEN_WIDTH] {
+    [0u8; SCREEN_WIDTH]
 }
-fn arr_bool_160() -> [bool; 160] {
-    [false; 160]
+fn arr_bool_160() -> [bool; SCREEN_WIDTH] {
+    [false; SCREEN_WIDTH]
 }
 fn arr_sprite_10() -> [SpriteData; 10] {
     [SpriteData::default(); 10]
 }
-const TILES_IN_A_TILEMAP_COL: usize = 32;
-const TILES_IN_A_SCREEN_ROW: usize = 20;
-const TILES_IN_A_SCREEN_COL: usize = 18;
-const TILE_SIZE: usize = 8;
-
-const TILEMAP0_OFFSET: usize = 0x9800 - 0x8000;
-const TILEMAP1_OFFSET: usize = 0x9C00 - 0x8000;
-
-const TILEDATA1_OFFSET: usize = 0;
-const TILEDATA0_OFFSET: usize = 0x9000 - 0x8000;
-const TILEDATA_SHARED: usize = 0x8800 - 0x8000; // when tile index >= 128
 
 /// Expose the memories of the GPU
 pub trait GPUMemoriesAccess {
@@ -77,18 +93,6 @@ impl Colour {
             2 => Colour::Dark,
             3 => Colour::On,
             _ => Colour::Off,
-        }
-    }
-}
-
-impl From<u8> for Colour {
-    fn from(val: u8) -> Self {
-        match val {
-            0 => Colour::Off,
-            1 => Colour::Light,
-            2 => Colour::Dark,
-            3 => Colour::On,
-            _ => panic!("Impossible colour"),
         }
     }
 }
@@ -147,7 +151,7 @@ pub struct GPU {
     #[serde(with = "BigArray")]
     pub oam: [u8; 160],
     #[serde(with = "BigArray")]
-    buffer: [u32; 160 * 144],
+    buffer: [u32; FRAMEBUFFER_LEN],
 
     // CGB support
     pub cgb_mode: bool,
@@ -212,9 +216,9 @@ pub struct GPU {
     #[serde(default = "arr_sprite_10")]
     scan_sprites: [SpriteData; 10],
     #[serde(default = "arr_u8_160", with = "BigArray")]
-    bg_row: [u8; 160], // colour_number | (bg_priority << 2) for each pixel this line
+    bg_row: [u8; SCREEN_WIDTH], // colour_number | (bg_priority << 2) for each pixel this line
     #[serde(default = "arr_bool_160", with = "BigArray")]
-    sprite_occupied: [bool; 160], // first sprite wins per pixel position
+    sprite_occupied: [bool; SCREEN_WIDTH], // first sprite wins per pixel position
     #[serde(default)]
     window_triggered: bool, // true if any window pixel was rendered this scanline
 }
@@ -250,138 +254,23 @@ impl GPUMemoriesAccess for GPU {
         !self.lcd_enabled || (self.mode != 2 && self.mode != 3)
     }
     fn apply_oam_corruption(&mut self, r: u8) {
-        if !self.lcd_enabled {
-            return;
-        }
-        let r = r as usize;
-        if !(8..=152).contains(&r) {
-            return;
-        }
-        let a = self.oam[r] as u16 | ((self.oam[r + 1] as u16) << 8);
-        let b = self.oam[r - 8] as u16 | ((self.oam[r - 7] as u16) << 8);
-        let c = self.oam[r - 4] as u16 | ((self.oam[r - 3] as u16) << 8);
-        let result = ((a ^ c) & (b ^ c)) ^ c;
-        self.oam[r] = result as u8;
-        self.oam[r + 1] = (result >> 8) as u8;
-        for i in 2..8usize {
-            self.oam[r + i] = self.oam[r - 8 + i];
-        }
+        crate::oam_dma::apply_oam_corruption(&mut self.oam, self.lcd_enabled, r);
     }
-    // POP read corruption (GB_trigger_oam_bug_read in SameBoy).
-    // Each formula variant modifies the scan row (r-8), then scan row is always
-    // copied to the corrupted row (r) — matches the unconditional copy in SameBoy.
     fn apply_oam_read_corruption(&mut self, r: u8) {
-        if !self.lcd_enabled {
-            return;
-        }
-        let r = r as usize;
-        if !(8..=152).contains(&r) {
-            return;
-        }
-        match r & 0x18 {
-            // Standard: b | (a & c) on scan row bytes 0-1
-            0x08 | 0x18 => {
-                for i in 0..2usize {
-                    let a = self.oam[r + i];
-                    let b = self.oam[r - 8 + i];
-                    let c = self.oam[r - 4 + i];
-                    self.oam[r - 8 + i] = b | (a & c);
-                }
-            }
-            // Secondary: formula on scan row bytes 0-1; copy scan row → prev2
-            0x10 => {
-                for i in 0..2usize {
-                    let a = self.oam[r - 16 + i];
-                    let b = self.oam[r - 8 + i];
-                    let c = self.oam[r + i];
-                    let d = self.oam[r - 4 + i];
-                    self.oam[r - 8 + i] = (b & (a | c | d)) | (a & c & d);
-                }
-                for i in 0..8usize {
-                    self.oam[r - 16 + i] = self.oam[r - 8 + i];
-                }
-            }
-            // Tertiary/quaternary: formula on scan row bytes 0-1; copy scan row → prev2 and prev4
-            0x00 => {
-                for i in 0..2usize {
-                    let a = self.oam[r + i];
-                    let b = self.oam[r - 4 + i];
-                    let c = self.oam[r - 8 + i];
-                    let d = self.oam[r - 16 + i];
-                    let e = self.oam[r - 32 + i];
-                    self.oam[r - 8 + i] = match r {
-                        0x20 => (c & (a | b | d | e)) | (a & b & d & e), // tertiary_2
-                        0x40 => {
-                            // quaternary_dmg
-                            // SameBoy: (e & (h|g|(~d&f)|c|b)) | (c&g&h)
-                            // where b=oam[r+i], c=oam[r-4+i], d=oam[r-6+i], e=oam[r-8+i],
-                            //       f=oam[r-14+i], g=oam[r-16+i], h=oam[r-32+i]
-                            let sb_d = self.oam[r - 6 + i];
-                            let sb_f = self.oam[r - 14 + i];
-                            // my c=sb_e, my b=sb_c, my a=sb_b, my d=sb_g, my e=sb_h
-                            (c & (e | d | ((!sb_d) & sb_f) | b | a)) | (b & d & e)
-                        }
-                        0x60 => (c & (a | b | d | e)) | (b & d & e), // tertiary_3
-                        _ => c | (a & b & d & e),                    // tertiary_1 (r==0x80)
-                    };
-                }
-                for i in 0..8usize {
-                    self.oam[r - 16 + i] = self.oam[r - 8 + i];
-                    self.oam[r - 32 + i] = self.oam[r - 8 + i];
-                }
-            }
-            _ => return,
-        }
-        // Always: copy (possibly modified) scan row → corrupted row
-        for i in 0..8usize {
-            self.oam[r + i] = self.oam[r - 8 + i];
-        }
-        if r == 0x80 {
-            for i in 0..8usize {
-                self.oam[i] = self.oam[0x80 + i];
-            }
-        }
+        crate::oam_dma::apply_oam_read_corruption(&mut self.oam, self.lcd_enabled, r);
     }
     fn read_vram(&mut self, addr: u16) -> u8 {
-        let offset = self.vram_bank as usize * 8192;
+        let offset = self.vram_bank as usize * VRAM_BANK_SIZE;
         self.vram[offset + addr as usize]
     }
     fn write_vram(&mut self, addr: u16, byte: u8) {
-        let offset = self.vram_bank as usize * 8192;
+        let offset = self.vram_bank as usize * VRAM_BANK_SIZE;
         self.vram[offset + addr as usize] = byte;
     }
     fn read_byte(&mut self, addr: u16) -> u8 {
         match addr {
-            0xFF40 => {
-                (if if self.cgb_mode {
-                    self.bg_master_priority
-                } else {
-                    self.bg_enabled
-                } {
-                    0x01
-                } else {
-                    0
-                }) | (if self.obj_enabled { 0x02 } else { 0 })
-                    | (if self.obj_size { 0x04 } else { 0 })
-                    | (if self.bg_map { 0x08 } else { 0 })
-                    | (if self.bg_tile { 0x10 } else { 0 })
-                    | (if self.window_enabled { 0x20 } else { 0 })
-                    | (if self.window_map { 0x40 } else { 0 })
-                    | (if self.lcd_enabled { 0x80 } else { 0 })
-            }
-            0xFF41 => {
-                let mode_bits = if self.lcd_startup_ticks > 0 {
-                    0
-                } else {
-                    self.mode & 0x03
-                };
-                0x80 | mode_bits
-                    | (if self.compare_enabled { 0x40 } else { 0 })
-                    | (if self.mode2_int_enabled { 0x20 } else { 0 })
-                    | (if self.mode1_int_enabled { 0x10 } else { 0 })
-                    | (if self.mode0_int_enabled { 0x08 } else { 0 })
-                    | (if self.lyc_flag { 0x04 } else { 0 })
-            }
+            0xFF40 => self.read_lcdc(),
+            0xFF41 => self.read_stat(),
             0xFF42 => self.scroll_y,
             0xFF43 => self.scroll_x,
             0xFF44 => self.line,
@@ -401,58 +290,8 @@ impl GPUMemoriesAccess for GPU {
     }
     fn write_byte(&mut self, addr: u16, byte: u8) {
         match addr {
-            0xFF40 => {
-                // LCD Control
-                // bit 0: DMG = bg_enable; CGB = BG/window master priority (BG always drawn)
-                if self.cgb_mode {
-                    self.bg_master_priority = (byte & 0x01) != 0;
-                } else {
-                    self.bg_enabled = (byte & 0x01) != 0;
-                }
-                self.obj_enabled = (byte & 0x02) != 0;
-                self.obj_size = (byte & 0x04) != 0;
-                self.bg_map = (byte & 0x08) != 0;
-                self.bg_tile = (byte & 0x10) != 0;
-                self.window_enabled = (byte & 0x20) != 0;
-                self.window_map = (byte & 0x40) != 0;
-                let was_enabled = self.lcd_enabled;
-                self.lcd_enabled = (byte & 0x80) != 0;
-                if !was_enabled && self.lcd_enabled {
-                    self.mode = 2;
-                    self.line = 0;
-                    self.window_line = 0;
-                    self.modeclock = 4; // hardware starts mode 2 ~1 M-cycle in, not at T=0
-                    self.lyc_flag = self.line == self.compare_line;
-                    // 16T: compensates for the write firing "early" (at T1 of the write M-cycle)
-                    // rather than at T4, leaving the mode-0 window visible for the next STAT read.
-                    self.lcd_startup_ticks = 16;
-                    let new_stat = self.compute_stat_line();
-                    if !self.stat_line && new_stat {
-                        self.pending_stat = true;
-                    }
-                    self.stat_line = new_stat;
-                } else if was_enabled && !self.lcd_enabled {
-                    self.mode = 0;
-                    self.line = 0;
-                    self.modeclock = 0;
-                    self.lcd_startup_ticks = 0;
-                    self.window_line = 0;
-                    // lyc_flag intentionally NOT updated here — frozen at last value
-                    // stat_line = lyc_source only (mode sources gated by lcd_enabled)
-                    self.stat_line = self.compute_stat_line();
-                }
-            }
-            0xFF41 => {
-                let old_stat = self.stat_line;
-                self.compare_enabled = (byte & 0x40) != 0;
-                self.mode2_int_enabled = (byte & 0x20) != 0;
-                self.mode1_int_enabled = (byte & 0x10) != 0;
-                self.mode0_int_enabled = (byte & 0x08) != 0;
-                self.stat_line = self.compute_stat_line();
-                if !old_stat && self.stat_line {
-                    self.pending_stat = true;
-                }
-            }
+            0xFF40 => self.write_lcdc(byte),
+            0xFF41 => self.write_stat(byte),
             0xFF42 => {
                 self.scroll_y = byte;
             }
@@ -478,32 +317,24 @@ impl GPUMemoriesAccess for GPU {
             }
             0xFF47 => {
                 self.bg_palette.update(byte);
-                if self.dmg_compat {
-                    self.bg_colors[0] =
-                        Self::dmg_colors_from_palette(&self.bg_palette, &self.compat_bg_ref);
-                } else if !self.cgb_mode {
-                    self.bg_colors[0] =
-                        Self::dmg_colors_from_palette(&self.bg_palette, &self.dmg_palette);
+                if let Some(c) = self.dmg_palette_colors(&self.bg_palette, &self.compat_bg_ref) {
+                    self.bg_colors[0] = c;
                 }
             }
             0xFF48 => {
                 self.obj_palette_0.update(byte);
-                if self.dmg_compat {
-                    self.obj_colors[0] =
-                        Self::dmg_colors_from_palette(&self.obj_palette_0, &self.compat_obj_ref[0]);
-                } else if !self.cgb_mode {
-                    self.obj_colors[0] =
-                        Self::dmg_colors_from_palette(&self.obj_palette_0, &self.dmg_palette);
+                if let Some(c) =
+                    self.dmg_palette_colors(&self.obj_palette_0, &self.compat_obj_ref[0])
+                {
+                    self.obj_colors[0] = c;
                 }
             }
             0xFF49 => {
                 self.obj_palette_1.update(byte);
-                if self.dmg_compat {
-                    self.obj_colors[1] =
-                        Self::dmg_colors_from_palette(&self.obj_palette_1, &self.compat_obj_ref[1]);
-                } else if !self.cgb_mode {
-                    self.obj_colors[1] =
-                        Self::dmg_colors_from_palette(&self.obj_palette_1, &self.dmg_palette);
+                if let Some(c) =
+                    self.dmg_palette_colors(&self.obj_palette_1, &self.compat_obj_ref[1])
+                {
+                    self.obj_colors[1] = c;
                 }
             }
             0xFF4A => {
@@ -519,24 +350,29 @@ impl GPUMemoriesAccess for GPU {
                 self.bcps = byte;
             }
             0xFF69 => {
-                let index = self.bcps & 0x3F;
-                self.bg_palette_data[index as usize] = byte;
-                Self::recompute_cgb_color(&self.bg_palette_data, &mut self.bg_colors, index);
+                let index = Self::write_cgb_palette(
+                    &mut self.bg_palette_data,
+                    &mut self.bg_colors,
+                    &mut self.bcps,
+                    byte,
+                );
+                // DMG-compat: snapshot boot-ROM BG palette 0 as the reference for FF47.
                 if self.dmg_compat && (index / 8) == 0 {
                     let colour_num = ((index % 8) / 2) as usize;
                     self.compat_bg_ref[colour_num] = self.bg_colors[0][colour_num];
-                }
-                if self.bcps & 0x80 != 0 {
-                    self.bcps = (self.bcps & 0x80) | ((index + 1) & 0x3F);
                 }
             }
             0xFF6A => {
                 self.ocps = byte;
             }
             0xFF6B => {
-                let index = self.ocps & 0x3F;
-                self.obj_palette_data[index as usize] = byte;
-                Self::recompute_cgb_color(&self.obj_palette_data, &mut self.obj_colors, index);
+                let index = Self::write_cgb_palette(
+                    &mut self.obj_palette_data,
+                    &mut self.obj_colors,
+                    &mut self.ocps,
+                    byte,
+                );
+                // DMG-compat: snapshot boot-ROM OBJ palettes 0+1 as references for FF48/FF49.
                 if self.dmg_compat {
                     let palette_idx = (index / 8) as usize;
                     let colour_num = ((index % 8) / 2) as usize;
@@ -544,9 +380,6 @@ impl GPUMemoriesAccess for GPU {
                         self.compat_obj_ref[palette_idx][colour_num] =
                             self.obj_colors[palette_idx][colour_num];
                     }
-                }
-                if self.ocps & 0x80 != 0 {
-                    self.ocps = (self.ocps & 0x80) | ((index + 1) & 0x3F);
                 }
             }
             _ => {}
@@ -580,7 +413,7 @@ impl GPU {
         GPU {
             vram: [0; 16384],
             oam: [0; 160],
-            buffer: [0; 160 * 144],
+            buffer: [0; FRAMEBUFFER_LEN],
             cgb_mode,
             dmg_compat: false,
             compat_bg_ref: [0u32; 4],
@@ -628,8 +461,8 @@ impl GPU {
             dot_x: 0,
             scan_sprite_count: 0,
             scan_sprites: [SpriteData::default(); 10],
-            bg_row: [0u8; 160],
-            sprite_occupied: [false; 160],
+            bg_row: [0u8; SCREEN_WIDTH],
+            sprite_occupied: [false; SCREEN_WIDTH],
             window_triggered: false,
         }
     }
@@ -638,7 +471,7 @@ impl GPU {
         self.line == self.compare_line
     }
 
-    pub fn get_buffer(&self) -> &[u32; 160 * 144] {
+    pub fn get_buffer(&self) -> &[u32; FRAMEBUFFER_LEN] {
         &self.buffer
     }
 
@@ -659,6 +492,37 @@ impl GPU {
             colors[cn as usize] = dmg_palette[palette.get(cn) as usize];
         }
         colors
+    }
+
+    /// Recompute the colour slot for a DMG palette register (FF47/FF48/FF49), choosing the
+    /// reference palette by mode: boot-ROM colours in DMG-compat, the configured DMG palette
+    /// on real DMG, and nothing in native CGB mode.
+    fn dmg_palette_colors(&self, palette: &Palette, compat_ref: &[u32; 4]) -> Option<[u32; 4]> {
+        if self.dmg_compat {
+            Some(Self::dmg_colors_from_palette(palette, compat_ref))
+        } else if !self.cgb_mode {
+            Some(Self::dmg_colors_from_palette(palette, &self.dmg_palette))
+        } else {
+            None
+        }
+    }
+
+    /// Write one byte to a CGB palette-data register (FF69/FF6B): store it, recompute the
+    /// affected colour, and auto-increment the index control register when its bit 7 is set.
+    /// Returns the index that was written.
+    fn write_cgb_palette(
+        palette_data: &mut [u8; 64],
+        colors: &mut [[u32; 4]; 8],
+        ctrl: &mut u8,
+        byte: u8,
+    ) -> u8 {
+        let index = *ctrl & 0x3F;
+        palette_data[index as usize] = byte;
+        Self::recompute_cgb_color(palette_data, colors, index);
+        if *ctrl & 0x80 != 0 {
+            *ctrl = (*ctrl & 0x80) | ((index + 1) & 0x3F);
+        }
+        index
     }
 
     fn color15_to_xrgb(c: u16) -> u32 {
@@ -697,7 +561,14 @@ impl GPU {
             index -= 128;
         }
 
-        offset + 2 * TILE_SIZE * (index as usize)
+        offset + BYTES_PER_TILE_ROW * TILE_SIZE * (index as usize)
+    }
+
+    /// Combine the two bit-planes of a tile row into a 2-bit colour number for `bit_pos`.
+    fn decode_pixel(byte_low: u8, byte_high: u8, bit_pos: u8) -> u8 {
+        let high_bit = is_bit_set(bit_pos, byte_high as u16) as u8;
+        let low_bit = is_bit_set(bit_pos, byte_low as u16) as u8;
+        (high_bit << 1) | low_bit
     }
 
     // Decode one BG/window tile pixel. Returns (colour_number, XRGB8888 color, bg_priority).
@@ -711,7 +582,7 @@ impl GPU {
         let attr = if self.dmg_compat {
             0
         } else {
-            self.vram[8192 + tilemap_index]
+            self.vram[VRAM_BANK_SIZE + tilemap_index]
         };
         let palette_idx = (attr & 0x07) as usize;
         let tile_bank = ((attr >> 3) & 0x01) as usize;
@@ -725,15 +596,13 @@ impl GPU {
         } else {
             7 - cell_x as u8
         };
-        let bank_offset = tile_bank * 8192;
+        let bank_offset = tile_bank * VRAM_BANK_SIZE;
 
-        let tileset_index = self.get_tileset_index(tile_id) + 2 * effective_cell_y;
+        let tileset_index = self.get_tileset_index(tile_id) + BYTES_PER_TILE_ROW * effective_cell_y;
         let byte_1 = self.vram[bank_offset + tileset_index];
         let byte_2 = self.vram[bank_offset + tileset_index + 1];
 
-        let high_bit = is_bit_set(bit_pos, byte_2 as u16) as u8;
-        let low_bit = is_bit_set(bit_pos, byte_1 as u16) as u8;
-        let colour_number = (high_bit << 1) | low_bit;
+        let colour_number = Self::decode_pixel(byte_1, byte_2, bit_pos);
 
         (
             colour_number,
@@ -742,12 +611,28 @@ impl GPU {
         )
     }
 
+    /// Look up the BG/window pixel at absolute (`pixel_x`, `pixel_y`) within the tilemap
+    /// selected by `use_map1`, returning (colour_number, XRGB8888 color, bg_priority).
+    fn tilemap_pixel(&self, pixel_x: usize, pixel_y: usize, use_map1: bool) -> (u8, u32, bool) {
+        let tilemap_offset = if use_map1 {
+            TILEMAP1_OFFSET
+        } else {
+            TILEMAP0_OFFSET
+        };
+        let tilemap_y = (pixel_y / TILE_SIZE) % TILES_IN_A_TILEMAP_COL;
+        let cell_y = pixel_y % TILE_SIZE;
+        let tilemap_x = (pixel_x / TILE_SIZE) % TILES_IN_A_TILEMAP_ROW;
+        let cell_x = pixel_x % TILE_SIZE;
+        let tilemap_index = tilemap_offset + tilemap_y * TILES_IN_A_TILEMAP_ROW + tilemap_x;
+        self.resolve_tile_pixel(tilemap_index, cell_x, cell_y)
+    }
+
     /// Render one pixel (screen column `px`) of the current scanline into the framebuffer.
     /// Called once per T-cycle during Mode 3.  Uses whatever register state is current at
     /// that moment, giving correct mid-scanline effects for scroll / palette changes.
     fn render_dot(&mut self, px: usize) {
         let line = self.line as usize;
-        let fb_index = line * 160 + px;
+        let fb_index = line * SCREEN_WIDTH + px;
 
         // --- BG / Window ---
         let win_x_adj: usize = if self.window_x < 7 {
@@ -761,31 +646,11 @@ impl GPU {
             self.window_triggered = true;
             let win_px = px - win_x_adj;
             let win_line = self.window_line as usize;
-            let tilemap_offset = if self.window_map {
-                TILEMAP1_OFFSET
-            } else {
-                TILEMAP0_OFFSET
-            };
-            let tilemap_y = (win_line / TILE_SIZE) % TILES_IN_A_TILEMAP_COL;
-            let cell_y = win_line % TILE_SIZE;
-            let tilemap_x = (win_px / TILE_SIZE) % TILES_IN_A_TILEMAP_ROW;
-            let cell_x = win_px % TILE_SIZE;
-            let tilemap_index = tilemap_offset + tilemap_y * TILES_IN_A_TILEMAP_ROW + tilemap_x;
-            self.resolve_tile_pixel(tilemap_index, cell_x, cell_y)
+            self.tilemap_pixel(win_px, win_line, self.window_map)
         } else if self.cgb_mode || self.bg_enabled {
             let line_to_draw = line.wrapping_add(self.scroll_y as usize) & 0xFF;
             let curr_pixel_x = self.scroll_x as usize + px;
-            let tilemap_offset = if self.bg_map {
-                TILEMAP1_OFFSET
-            } else {
-                TILEMAP0_OFFSET
-            };
-            let tilemap_y = (line_to_draw / TILE_SIZE) % TILES_IN_A_TILEMAP_COL;
-            let cell_y = line_to_draw % TILE_SIZE;
-            let tilemap_x = (curr_pixel_x / TILE_SIZE) % TILES_IN_A_TILEMAP_ROW;
-            let cell_x = curr_pixel_x % TILE_SIZE;
-            let tilemap_index = tilemap_offset + tilemap_y * TILES_IN_A_TILEMAP_ROW + tilemap_x;
-            self.resolve_tile_pixel(tilemap_index, cell_x, cell_y)
+            self.tilemap_pixel(curr_pixel_x, line_to_draw, self.bg_map)
         } else {
             // BG disabled in DMG mode: blank (colour 0, white)
             (0, self.bg_colors[0][0], false)
@@ -843,9 +708,10 @@ impl GPU {
                     sprite_row -= 8;
                 }
 
-                let bank_offset = tile_vbank * 8192;
-                let tile_offset =
-                    TILEDATA1_OFFSET + 2 * 8 * tile as usize + sprite_row as usize * 2;
+                let bank_offset = tile_vbank * VRAM_BANK_SIZE;
+                let tile_offset = TILEDATA1_OFFSET
+                    + BYTES_PER_TILE_ROW * TILE_SIZE * tile as usize
+                    + sprite_row as usize * BYTES_PER_TILE_ROW;
                 let byte_1 = self.vram[bank_offset + tile_offset];
                 let byte_2 = self.vram[bank_offset + tile_offset + 1];
 
@@ -855,9 +721,7 @@ impl GPU {
                 } else {
                     7 - spr_col as u8
                 };
-                let high_bit = is_bit_set(bit_pos, byte_2 as u16) as u8;
-                let low_bit = is_bit_set(bit_pos, byte_1 as u16) as u8;
-                let spr_colour = (high_bit << 1) | low_bit;
+                let spr_colour = Self::decode_pixel(byte_1, byte_2, bit_pos);
 
                 if spr_colour == 0 {
                     continue; // transparent; let lower-priority sprite try
@@ -876,6 +740,96 @@ impl GPU {
                 self.buffer[fb_index] = self.obj_colors[cgb_palette][spr_colour as usize];
                 break;
             }
+        }
+    }
+
+    /// Pack the LCDC register (0xFF40). Bit 0 is mode-dependent: BG/window master
+    /// priority in CGB mode, BG enable in DMG mode.
+    fn read_lcdc(&self) -> u8 {
+        let bit0 = if self.cgb_mode {
+            self.bg_master_priority
+        } else {
+            self.bg_enabled
+        };
+        (bit0 as u8)
+            | ((self.obj_enabled as u8) << 1)
+            | ((self.obj_size as u8) << 2)
+            | ((self.bg_map as u8) << 3)
+            | ((self.bg_tile as u8) << 4)
+            | ((self.window_enabled as u8) << 5)
+            | ((self.window_map as u8) << 6)
+            | ((self.lcd_enabled as u8) << 7)
+    }
+
+    /// Unpack a write to the LCDC register (0xFF40), including the LCD enable/disable
+    /// state transitions.
+    fn write_lcdc(&mut self, byte: u8) {
+        // bit 0: DMG = bg_enable; CGB = BG/window master priority (BG always drawn)
+        if self.cgb_mode {
+            self.bg_master_priority = (byte & 0x01) != 0;
+        } else {
+            self.bg_enabled = (byte & 0x01) != 0;
+        }
+        self.obj_enabled = (byte & 0x02) != 0;
+        self.obj_size = (byte & 0x04) != 0;
+        self.bg_map = (byte & 0x08) != 0;
+        self.bg_tile = (byte & 0x10) != 0;
+        self.window_enabled = (byte & 0x20) != 0;
+        self.window_map = (byte & 0x40) != 0;
+        let was_enabled = self.lcd_enabled;
+        self.lcd_enabled = (byte & 0x80) != 0;
+        if !was_enabled && self.lcd_enabled {
+            self.mode = 2;
+            self.line = 0;
+            self.window_line = 0;
+            self.modeclock = 4; // hardware starts mode 2 ~1 M-cycle in, not at T=0
+            self.lyc_flag = self.line == self.compare_line;
+            // 16T: compensates for the write firing "early" (at T1 of the write M-cycle)
+            // rather than at T4, leaving the mode-0 window visible for the next STAT read.
+            self.lcd_startup_ticks = 16;
+            let new_stat = self.compute_stat_line();
+            if !self.stat_line && new_stat {
+                self.pending_stat = true;
+            }
+            self.stat_line = new_stat;
+        } else if was_enabled && !self.lcd_enabled {
+            self.mode = 0;
+            self.line = 0;
+            self.modeclock = 0;
+            self.lcd_startup_ticks = 0;
+            self.window_line = 0;
+            // lyc_flag intentionally NOT updated here — frozen at last value
+            // stat_line = lyc_source only (mode sources gated by lcd_enabled)
+            self.stat_line = self.compute_stat_line();
+        }
+    }
+
+    /// Pack the STAT register (0xFF41). Bit 7 reads as 1; mode bits read 0 during the
+    /// brief mode-0 startup window after LCD enable.
+    fn read_stat(&self) -> u8 {
+        let mode_bits = if self.lcd_startup_ticks > 0 {
+            0
+        } else {
+            self.mode & 0x03
+        };
+        0x80 | mode_bits
+            | ((self.compare_enabled as u8) << 6)
+            | ((self.mode2_int_enabled as u8) << 5)
+            | ((self.mode1_int_enabled as u8) << 4)
+            | ((self.mode0_int_enabled as u8) << 3)
+            | ((self.lyc_flag as u8) << 2)
+    }
+
+    /// Unpack a write to the STAT register (0xFF41), re-evaluating the STAT interrupt line.
+    fn write_stat(&mut self, byte: u8) {
+        let old_stat = self.stat_line;
+        self.compare_enabled = (byte & 0x40) != 0;
+        self.mode2_int_enabled = (byte & 0x20) != 0;
+        self.mode1_int_enabled = (byte & 0x10) != 0;
+        self.mode0_int_enabled = (byte & 0x08) != 0;
+        self.stat_line = self.compute_stat_line();
+        if !old_stat && self.stat_line {
+            self.pending_stat = true;
         }
     }
 
@@ -967,7 +921,7 @@ impl GPU {
             // scanline, oam read mode
             2 => {
                 self.accessed_oam_row = (self.modeclock / 4 * 8) as u8;
-                if self.modeclock >= 80 {
+                if self.modeclock >= MODE2_DOTS {
                     self.modeclock = 0;
                     self.mode = 3;
                     self.accessed_oam_row = 0xFF;
@@ -984,24 +938,24 @@ impl GPU {
                     self.scan_sprite_count = scount as u8;
                     // Reset per-scanline pixel state
                     self.dot_x = 0;
-                    self.bg_row = [0u8; 160];
-                    self.sprite_occupied = [false; 160];
+                    self.bg_row = [0u8; SCREEN_WIDTH];
+                    self.sprite_occupied = [false; SCREEN_WIDTH];
                     self.window_triggered = false;
                 }
             }
             // scanline, vram read mode — render one pixel per T-cycle
             3 => {
                 self.accessed_oam_row = 0xFF;
-                if self.dot_x < 160 {
+                if (self.dot_x as usize) < SCREEN_WIDTH {
                     self.render_dot(self.dot_x as usize);
                     self.dot_x += 1;
                 }
-                if self.modeclock >= 172 + self.mode3_extra {
+                if self.modeclock >= MODE3_BASE_DOTS + self.mode3_extra {
                     self.modeclock = 0;
                     self.mode = 0;
                     self.hblank_flag = true;
                     // Flush any pixels that weren't rendered (shouldn't happen: 160 ≤ 172)
-                    while self.dot_x < 160 {
+                    while (self.dot_x as usize) < SCREEN_WIDTH {
                         self.render_dot(self.dot_x as usize);
                         self.dot_x += 1;
                     }
@@ -1015,12 +969,12 @@ impl GPU {
             // hblank
             0 => {
                 self.accessed_oam_row = 0xFF;
-                if self.modeclock >= 204 - self.mode3_extra {
+                if self.modeclock >= MODE0_BASE_DOTS - self.mode3_extra {
                     self.modeclock = 0;
                     self.line += 1;
                     self.lyc_flag = self.line == self.compare_line;
 
-                    if self.line == 144 {
+                    if self.line == VBLANK_START_LINE {
                         self.mode = 1;
                         vblank_interrupt = true;
                     } else {
@@ -1032,11 +986,11 @@ impl GPU {
             // vblank (10 lines)
             1 => {
                 self.accessed_oam_row = 0xFF;
-                if self.modeclock >= 456 {
+                if self.modeclock >= SCANLINE_DOTS {
                     self.modeclock = 0;
                     self.line += 1;
 
-                    if self.line > 153 {
+                    if self.line > LAST_LINE {
                         self.mode = 2;
                         self.accessed_oam_row = 0;
                         self.line = 0;

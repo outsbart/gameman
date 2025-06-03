@@ -104,3 +104,103 @@ impl OamDma {
         }
     }
 }
+
+// --- OAM bug corruption formulas ---
+// These mutate the 160-byte OAM directly. `r` is the byte offset of the row being
+// corrupted; both are no-ops when the LCD is off or the row is outside the affected range.
+
+/// Write corruption (INC/DEC/PUSH while OAM is being scanned), GB_trigger_oam_bug in SameBoy.
+pub(crate) fn apply_oam_corruption(oam: &mut [u8; 160], lcd_enabled: bool, r: u8) {
+    if !lcd_enabled {
+        return;
+    }
+    let r = r as usize;
+    if !(8..=152).contains(&r) {
+        return;
+    }
+    let a = oam[r] as u16 | ((oam[r + 1] as u16) << 8);
+    let b = oam[r - 8] as u16 | ((oam[r - 7] as u16) << 8);
+    let c = oam[r - 4] as u16 | ((oam[r - 3] as u16) << 8);
+    let result = ((a ^ c) & (b ^ c)) ^ c;
+    oam[r] = result as u8;
+    oam[r + 1] = (result >> 8) as u8;
+    for i in 2..8usize {
+        oam[r + i] = oam[r - 8 + i];
+    }
+}
+
+/// Read corruption (POP / LD A,(HL±) while OAM is being scanned), GB_trigger_oam_bug_read
+/// in SameBoy. Each formula variant modifies the scan row (r-8), then the scan row is always
+/// copied to the corrupted row (r) — matching the unconditional copy in SameBoy.
+pub(crate) fn apply_oam_read_corruption(oam: &mut [u8; 160], lcd_enabled: bool, r: u8) {
+    if !lcd_enabled {
+        return;
+    }
+    let r = r as usize;
+    if !(8..=152).contains(&r) {
+        return;
+    }
+    match r & 0x18 {
+        // Standard: b | (a & c) on scan row bytes 0-1
+        0x08 | 0x18 => {
+            for i in 0..2usize {
+                let a = oam[r + i];
+                let b = oam[r - 8 + i];
+                let c = oam[r - 4 + i];
+                oam[r - 8 + i] = b | (a & c);
+            }
+        }
+        // Secondary: formula on scan row bytes 0-1; copy scan row → prev2
+        0x10 => {
+            for i in 0..2usize {
+                let a = oam[r - 16 + i];
+                let b = oam[r - 8 + i];
+                let c = oam[r + i];
+                let d = oam[r - 4 + i];
+                oam[r - 8 + i] = (b & (a | c | d)) | (a & c & d);
+            }
+            for i in 0..8usize {
+                oam[r - 16 + i] = oam[r - 8 + i];
+            }
+        }
+        // Tertiary/quaternary: formula on scan row bytes 0-1; copy scan row → prev2 and prev4
+        0x00 => {
+            for i in 0..2usize {
+                let a = oam[r + i];
+                let b = oam[r - 4 + i];
+                let c = oam[r - 8 + i];
+                let d = oam[r - 16 + i];
+                let e = oam[r - 32 + i];
+                oam[r - 8 + i] = match r {
+                    0x20 => (c & (a | b | d | e)) | (a & b & d & e), // tertiary_2
+                    0x40 => {
+                        // quaternary_dmg
+                        // SameBoy: (e & (h|g|(~d&f)|c|b)) | (c&g&h)
+                        // where b=oam[r+i], c=oam[r-4+i], d=oam[r-6+i], e=oam[r-8+i],
+                        //       f=oam[r-14+i], g=oam[r-16+i], h=oam[r-32+i]
+                        let sb_d = oam[r - 6 + i];
+                        let sb_f = oam[r - 14 + i];
+                        // my c=sb_e, my b=sb_c, my a=sb_b, my d=sb_g, my e=sb_h
+                        (c & (e | d | ((!sb_d) & sb_f) | b | a)) | (b & d & e)
+                    }
+                    0x60 => (c & (a | b | d | e)) | (b & d & e), // tertiary_3
+                    _ => c | (a & b & d & e),                    // tertiary_1 (r==0x80)
+                };
+            }
+            for i in 0..8usize {
+                oam[r - 16 + i] = oam[r - 8 + i];
+                oam[r - 32 + i] = oam[r - 8 + i];
+            }
+        }
+        _ => return,
+    }
+    // Always: copy (possibly modified) scan row → corrupted row
+    for i in 0..8usize {
+        oam[r + i] = oam[r - 8 + i];
+    }
+    if r == 0x80 {
+        for i in 0..8usize {
+            oam[i] = oam[0x80 + i];
+        }
+    }
+}
