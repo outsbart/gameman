@@ -1,6 +1,7 @@
 # Gameman [![Build Status](https://github.com/outsbart/gameman/actions/workflows/integration.yml/badge.svg)](https://github.com/outsbart/gameman/actions)
 
-Gameman is a fully functional Game Boy (DMG) emulator written in Rust, originally started as a hobby project for
+Gameman is a fully functional Game Boy (DMG) / Game Boy Color (CGB) emulator written in Rust originally started as a
+hobby project for
 learning Rust and to have fun with the challenges of emulation.
 
 <p align="center">
@@ -9,24 +10,18 @@ learning Rust and to have fun with the challenges of emulation.
 
 ## Features
 
+- **Games support** — Full support for Game Boy (DMG) and Game Boy Color (CGB) games
+- **Colors**
+    - for CGB games: full 15-bit color palettes support
+    - for DMG games: automatic colorization + custom palettes available (Authentic green, Grayscale, DMG Pocket, DMG
+      green)
 - **Save files** — written as `.sav` next to the ROM, loaded automatically on startup
 - **Save states** — press F5 to save, F7 to load (slot 0, stored as `.ss0` next to the ROM)
 - **Stereo audio** — all four channels with correct left/right panning
 - **Real-Time Clock** — Pokémon Gold/Silver/Crystal in-game clocks work correctly and advance in real time
-- **Classic Game Boy palette** — rendered in authentic green tones by default; the libretro frontend adds Grayscale, DMG
-  Green, and GB Pocket palette options
-- **Cartridge support** — all major MBCs covered
+- **Cartridge support** — all major types covered
 - **RetroAchievements** *(libretro)* — earn achievements while you play via RetroArch
 - **Cheats** *(libretro)* — GameShark and Game Genie codes via RetroArch's built-in cheat system
-
-## Test Suites
-
-The emulator is machine-cycle accurate. All blargg and mooneye test ROM suites pass:
-
-| Suite   | Tests                                                                                                      |
-|---------|------------------------------------------------------------------------------------------------------------|
-| blargg  | `cpu_instrs`, `instr_timing`, `mem_timing`, `dmg_sound`, `halt_bug`, `interrupt_time`, `oam_bug`           |
-| mooneye | `bits`, `instr`, `instr_timing`, `interrupts`, `mbc1`, `mbc2`, `mbc5`, `oam_dma`, `ppu`, `serial`, `timer` |
 
 ## Building / Running
 
@@ -71,7 +66,8 @@ RetroAchievements, and more.
 
 **1. Get the core**
 
-Download the pre-built `libgameman_libretro.so` and `gameman_libretro.info` from the [latest release](https://github.com/outsbart/gameman/releases/latest).
+Download the pre-built `libgameman_libretro.so` and `gameman_libretro.info` from
+the [latest release](https://github.com/outsbart/gameman/releases/latest).
 
 <details>
 <summary>Or build from source</summary>
@@ -101,10 +97,19 @@ cp gameman_libretro.info ~/.config/retroarch/cores/
 
 **3. Load a game**
 
-Open RetroArch → *Load Content* → select your `.gb` or `.gbc` ROM. Gameman will be offered automatically as a matching
-core.
+Open RetroArch → *Load Content* → select your `.gb` or `.gbc` ROM (both DMG and GBC games are supported). Gameman will
+be offered automatically as a matching core.
 
 </details>
+
+## Accuracy
+
+The emulator is machine-cycle accurate. All blargg and mooneye test ROM suites pass:
+
+| Suite   | Tests                                                                                                      |
+|---------|------------------------------------------------------------------------------------------------------------|
+| blargg  | `cpu_instrs`, `instr_timing`, `mem_timing`, `dmg_sound`, `halt_bug`, `interrupt_time`, `oam_bug`           |
+| mooneye | `bits`, `instr`, `instr_timing`, `interrupts`, `mbc1`, `mbc2`, `mbc5`, `oam_dma`, `ppu`, `serial`, `timer` |
 
 ## Resources
 

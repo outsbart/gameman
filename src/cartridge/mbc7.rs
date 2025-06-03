@@ -110,11 +110,17 @@ impl CartridgeMBC7 {
         }
     }
 
+    /// Set the accelerometer axes. Call each frame before `Gameboy::step()`.
+    /// Values are centered at 0x8000; usable range ≈ 0x6000–0xA000 (±0x2000).
+    pub fn set_accel(&mut self, x: u16, y: u16) {
+        self.accel_x = x;
+        self.accel_y = y;
+    }
+
     pub fn write_ram(&mut self, addr: u16, byte: u8) {
         match addr & 0x00FF {
             0x00 => {
                 self.accel_latched = true;
-                // Stub: axes remain at 0x8000 (center / no tilt)
             }
             0x80 => {
                 self.eeprom_write(byte);

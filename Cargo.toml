@@ -100,3 +100,4 @@ path = "tests/mooneye/test_mooneye_mbc5_roms.rs"
 [features]
 default = ["sdl"]
 sdl = ["dep:sdl3"]
+color-correction = []

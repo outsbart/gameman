@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
 const TILES_IN_A_TILEMAP_ROW: usize = 32;
+const COLOR_CORRECTION: bool = cfg!(feature = "color-correction");
 
 fn arr_u8_160() -> [u8; 160] {
     [0u8; 160]
@@ -661,11 +662,19 @@ impl GPU {
     }
 
     fn color15_to_xrgb(c: u16) -> u32 {
-        let expand = |v: u8| (v << 3) | (v >> 2);
-        let r = expand((c & 0x1F) as u8);
-        let g = expand(((c >> 5) & 0x1F) as u8);
-        let b = expand(((c >> 10) & 0x1F) as u8);
-        ((r as u32) << 16) | ((g as u32) << 8) | b as u32
+        let r = (c & 0x1F) as u32;
+        let g = ((c >> 5) & 0x1F) as u32;
+        let b = ((c >> 10) & 0x1F) as u32;
+        if COLOR_CORRECTION {
+            // SameBoy-style correction: GBC LCD cross-channel mixing, normalised to 8-bit
+            let r_out = (r * 26 + g * 4 + b * 2) * 255 / (32 * 31);
+            let g_out = (g * 24 + b * 8) * 255 / (32 * 31);
+            let b_out = (r * 6 + g * 4 + b * 22) * 255 / (32 * 31);
+            (r_out << 16) | (g_out << 8) | b_out
+        } else {
+            let expand = |v: u32| (v << 3) | (v >> 2);
+            (expand(r) << 16) | (expand(g) << 8) | expand(b)
+        }
     }
 
     fn recompute_cgb_color(palette_data: &[u8; 64], colors: &mut [[u32; 4]; 8], index: u8) {

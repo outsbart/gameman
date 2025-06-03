@@ -263,7 +263,16 @@ impl CartridgeKind {
     pub fn rtc_base_secs_mut(&mut self) -> Option<&mut u64> {
         match self {
             CartridgeKind::MBC3(c) => c.rtc.as_mut().map(|r| &mut r.base_unix_secs),
+            CartridgeKind::HuC3(c) => Some(&mut c.rtc_base_unix_secs),
             _ => None,
+        }
+    }
+
+    /// Set MBC7 accelerometer axes (no-op for all other cart types).
+    /// x/y are centered at 0x8000; usable range ≈ 0x6000–0xA000.
+    pub fn set_accel(&mut self, x: u16, y: u16) {
+        if let CartridgeKind::MBC7(c) = self {
+            c.set_accel(x, y);
         }
     }
 }

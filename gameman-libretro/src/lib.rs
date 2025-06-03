@@ -39,6 +39,18 @@ struct GameboyCore {
     prev_buttons: JoypadState,
     pending_audio: Vec<i16>,
     palette: [u32; 4],
+    // Sensor interface for MBC7 accelerometer input (None if frontend doesn't support it).
+    sensor: Option<retro_sensor_interface>,
+}
+
+/// Convert a libretro accelerometer value (m/s²) to an MBC7 axis value.
+/// MBC7 is centered at 0x8000; the hardware tilt range is roughly ±1 g ≈ ±9.8 m/s²,
+/// mapped here to ±0x2000 (i.e. the range 0x6000–0xA000).
+fn accel_to_mbc7(g: f32) -> u16 {
+    const G_MAX: f32 = 9.8;
+    const HALF_RANGE: f32 = 0x2000 as f32;
+    let clamped = g.clamp(-G_MAX, G_MAX);
+    (0x8000_i32 + (clamped / G_MAX * HALF_RANGE) as i32).clamp(0, 0xFFFF) as u16
 }
 
 retro_core!(GameboyCore {
@@ -47,6 +59,7 @@ retro_core!(GameboyCore {
     prev_buttons: JoypadState::empty(),
     pending_audio: Vec::new(),
     palette: PALETTE_CLASSIC,
+    sensor: None,
 });
 
 impl Core for GameboyCore {
@@ -109,6 +122,29 @@ impl Core for GameboyCore {
         ctx: &mut LoadGameContext,
     ) -> Result<(), Box<dyn std::error::Error>> {
         ctx.set_pixel_format(PixelFormat::XRGB8888);
+
+        // Try to acquire the sensor interface for MBC7 accelerometer input.
+        // Optional — silently ignored if the frontend doesn't support it.
+        let sensor_ok = unsafe { ctx.enable_sensor_interface() }.is_ok(); // safe: only reads env callback
+        if sensor_ok {
+            let gctx: GenericContext = ctx.into();
+            let ifaces = unsafe { gctx.interfaces() };
+            if let Ok(lock) = ifaces.read() {
+                if let Some(si) = lock.sensor_interface {
+                    // Enable X and Y accelerometer axes at 60 Hz.
+                    if let Some(set) = si.set_sensor_state {
+                        unsafe {
+                            set(
+                                0,
+                                retro_sensor_action::RETRO_SENSOR_ACCELEROMETER_ENABLE,
+                                60,
+                            );
+                        }
+                    }
+                    self.sensor = Some(si);
+                }
+            }
+        }
 
         let info = game.ok_or("no game info")?;
         let path = unsafe {
@@ -215,6 +251,16 @@ impl Core for GameboyCore {
             }
         }
         self.prev_buttons = new_buttons;
+
+        // Feed MBC7 accelerometer from the frontend's sensor interface (e.g. device gyro on
+        // Android/Switch).  Values are in m/s²; ±9.8 maps to ±0x2000 around center 0x8000.
+        if let Some(si) = self.sensor {
+            if let Some(get) = si.get_sensor_input {
+                let x = unsafe { get(0, RETRO_SENSOR_ACCELEROMETER_X) };
+                let y = unsafe { get(0, RETRO_SENSOR_ACCELEROMETER_Y) };
+                gb.set_accelerometer(accel_to_mbc7(x), accel_to_mbc7(y));
+            }
+        }
 
         gb.step();
 

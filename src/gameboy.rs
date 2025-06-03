@@ -97,6 +97,13 @@ impl Gameboy {
         self.cpu.mmu.key.release(button);
     }
 
+    /// Update MBC7 accelerometer axes. Call each frame before `step()`.
+    /// x/y are centered at 0x8000; usable range ≈ 0x6000–0xA000 (±0x2000).
+    /// No-op for non-MBC7 cartridges.
+    pub fn set_accelerometer(&mut self, x: u16, y: u16) {
+        self.cpu.mmu.cartridge.set_accel(x, y);
+    }
+
     pub fn read_byte(&mut self, addr: u16) -> u8 {
         self.cpu.mmu.read_byte(addr)
     }

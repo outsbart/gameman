@@ -7,9 +7,11 @@ use gameman::sound::SAMPLE_RATE;
 
 use sdl3::audio::{AudioFormat, AudioSpec};
 use sdl3::event::Event;
+use sdl3::gamepad::{Axis, Gamepad};
 use sdl3::keyboard::Keycode;
 use sdl3::pixels::PixelFormat;
 use sdl3::render::{FRect, ScaleMode};
+use sdl3::sys::joystick::SDL_JoystickID;
 
 use std::{thread, time};
 
@@ -33,6 +35,7 @@ fn main() {
     let sdl = sdl3::init().unwrap();
     let video_subsystem = sdl.video().unwrap();
     let audio_subsystem = sdl.audio().unwrap();
+    let gamepad_subsystem = sdl.gamepad().unwrap();
 
     let spec = AudioSpec::new(
         Some(SAMPLE_RATE as i32),
@@ -61,6 +64,13 @@ fn main() {
         .create_texture_streaming(PixelFormat::RGB24, 160, 144)
         .unwrap();
     texture.set_scale_mode(ScaleMode::Nearest);
+
+    // Open the first connected gamepad (if any) for MBC7 accelerometer input.
+    let mut gamepad: Option<Gamepad> = gamepad_subsystem
+        .gamepads()
+        .ok()
+        .and_then(|ids| ids.into_iter().next())
+        .and_then(|id| gamepad_subsystem.open(id).ok());
 
     let mut pending_audio: Vec<i16> = Vec::new();
     let mut next_frame = time::Instant::now();
@@ -204,12 +214,34 @@ fn main() {
                 } => {
                     gameboy.release_button(Button::RIGHT);
                 }
+                Event::ControllerDeviceAdded { which, .. } if gamepad.is_none() => {
+                    gamepad = gamepad_subsystem.open(SDL_JoystickID(which)).ok();
+                }
+                Event::ControllerDeviceRemoved { which, .. }
+                    if gamepad.as_ref().and_then(|g| g.id().ok()).map(|id| id.0) == Some(which) =>
+                {
+                    gamepad = None;
+                }
                 _ => {}
             }
         }
 
         if pause {
             continue;
+        }
+
+        // Feed MBC7 accelerometer from left analog stick.
+        // Axis values are i16 [-32768, 32767]; map to MBC7's u16 range centered at
+        // 0x8000 with ±0x2000 travel (matches the real hardware tilt range).
+        if let Some(ref gp) = gamepad {
+            // Map the analog stick's i16 range [-32768, 32767] to MBC7's u16 range
+            // centered at 0x8000 with ±0x2000 travel (≈ hardware tilt range).
+            const SCALE: f32 = 8192.0_f32 / 32767.0_f32;
+            let ax =
+                (0x8000_i32 + (gp.axis(Axis::LeftX) as f32 * SCALE) as i32).clamp(0, 0xFFFF) as u16;
+            let ay =
+                (0x8000_i32 + (gp.axis(Axis::LeftY) as f32 * SCALE) as i32).clamp(0, 0xFFFF) as u16;
+            gameboy.set_accelerometer(ax, ay);
         }
 
         gameboy.step();
