@@ -1243,9 +1243,6 @@ mod tests {
         fn new() -> DummyMMU {
             DummyMMU { values: [0; 65536] }
         }
-        fn with(values: [u8; 65536]) -> DummyMMU {
-            DummyMMU { values }
-        }
     }
 
     impl Memory for DummyMMU {

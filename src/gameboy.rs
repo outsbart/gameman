@@ -27,10 +27,6 @@ impl Gameboy {
         Gameboy { cpu }
     }
 
-    pub fn is_cgb(&self) -> bool {
-        self.cpu.mmu.gpu.cgb_mode
-    }
-
     pub fn load_bios(&mut self, path: &str) {
         let bytes = std::fs::read(path).expect("couldn't open boot rom");
         assert!(

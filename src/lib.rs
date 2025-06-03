@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 extern crate csv;
 extern crate lazy_static;
 extern crate log;

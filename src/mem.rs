@@ -422,12 +422,6 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
     }
 }
 
-impl<M: GPUMemoriesAccess> MMU<M> {
-    pub fn gpu_line(&self) -> u8 {
-        self.gpu.get_line()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
