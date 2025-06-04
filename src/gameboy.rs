@@ -70,6 +70,17 @@ impl Gameboy {
                 break;
             }
         }
+
+        self.cpu.mmu.apply_gameshark_cheats();
+    }
+
+    /// Parse and store a single Game Genie / GameShark cheat code.
+    pub fn add_cheat(&mut self, code: &str) -> Result<(), crate::cheats::CheatError> {
+        self.cpu.mmu.add_cheat(code)
+    }
+
+    pub fn clear_cheats(&mut self) {
+        self.cpu.mmu.clear_cheats();
     }
 
     pub fn get_framebuffer(&self) -> &[u32; 160 * 144] {

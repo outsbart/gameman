@@ -3,6 +3,7 @@ extern crate lazy_static;
 extern crate log;
 
 pub mod cartridge;
+pub mod cheats;
 pub mod cpu;
 pub mod gameboy;
 pub mod gpu;

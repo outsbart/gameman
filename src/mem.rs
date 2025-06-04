@@ -47,6 +47,10 @@ pub struct MMU<M: GPUMemoriesAccess> {
     ir_port: u8,
     ff6c: u8,
     cgb_undoc: [u8; 4],
+
+    // Game Genie / GameShark cheats — configured by the frontend, not part of save state.
+    #[serde(skip)]
+    cheats: crate::cheats::Cheats,
 }
 
 impl<M: GPUMemoriesAccess> MMU<M> {
@@ -80,6 +84,7 @@ impl<M: GPUMemoriesAccess> MMU<M> {
             ir_port: 0,
             ff6c: 0,
             cgb_undoc: [0; 4],
+            cheats: crate::cheats::Cheats::default(),
         };
         mmu.post_boot_init();
         mmu
@@ -97,6 +102,25 @@ impl<M: GPUMemoriesAccess> MMU<M> {
 
     pub fn request_interrupt(&mut self, interrupt: Interrupt) {
         self.interrupt_flags |= 1 << interrupt as u8;
+    }
+
+    /// Parse and store a single Game Genie / GameShark cheat code.
+    pub fn add_cheat(&mut self, code: &str) -> Result<(), crate::cheats::CheatError> {
+        self.cheats.add(code)
+    }
+
+    pub fn clear_cheats(&mut self) {
+        self.cheats.clear();
+    }
+
+    /// Force all active GameShark values into RAM. Call once per frame.
+    pub fn apply_gameshark_cheats(&mut self) {
+        // Index by position to avoid holding an immutable borrow of `cheats` across the write.
+        for i in 0..self.cheats.shark().len() {
+            let code = &self.cheats.shark()[i];
+            let (addr, value) = (code.addr, code.value);
+            self.write_byte(addr, value);
+        }
     }
 }
 
@@ -146,10 +170,10 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                 if self.still_bios && self.gpu.cgb_mode() && (0x0200..0x0900).contains(&addr) {
                     return self.bios[addr as usize];
                 }
-                self.cartridge.read_rom(addr)
+                self.cheats.apply_rom(addr, self.cartridge.read_rom(addr))
             }
 
-            0x1000..=0x7000 => self.cartridge.read_rom(addr),
+            0x1000..=0x7000 => self.cheats.apply_rom(addr, self.cartridge.read_rom(addr)),
             0x8000 | 0x9000 => self.gpu.read_vram(addr & 0x1FFF), // VRAM
             0xA000 | 0xB000 => self.cartridge.read_ram(addr & 0x1FFF), // External RAM
             0xC000 | 0xE000 => self.wram[(addr & 0x0FFF) as usize], // Working RAM bank 0 fixed
@@ -498,6 +522,18 @@ mod tests {
 
         mmu.write_byte(0xC000, 0x1);
         assert_eq!(0x1, mmu.read_byte(0xC000))
+    }
+
+    /// GameShark code 011556C0 forces value 0x15 into WRAM at 0xC056 each frame.
+    /// Exercises the full wiring: add_cheat -> apply_gameshark_cheats -> write_byte.
+    #[test]
+    fn gameshark_cheat_forces_wram() {
+        let mut mmu = MMU::new(DummyGPU::new(), dummy_cartridge());
+
+        mmu.write_byte(0xC056, 0x00);
+        mmu.add_cheat("011556C0").unwrap();
+        mmu.apply_gameshark_cheats();
+        assert_eq!(0x15, mmu.read_byte(0xC056));
     }
 
     /// after instruction 0x0100 is reached,

@@ -248,6 +248,36 @@ impl Core for GameboyCore {
         self.gameboy = None;
     }
 
+    fn on_cheat_reset(&mut self, _ctx: &mut CheatResetContext) {
+        if let Some(gb) = self.gameboy.as_mut() {
+            gb.clear_cheats();
+        }
+    }
+
+    fn on_cheat_set(
+        &mut self,
+        _index: std::os::raw::c_uint,
+        enabled: bool,
+        code: &CStr,
+        _ctx: &mut CheatSetContext,
+    ) {
+        if !enabled {
+            return;
+        }
+        let Some(gb) = self.gameboy.as_mut() else {
+            return;
+        };
+        // RetroArch usually sends one code per index; split defensively on common separators.
+        let s = code.to_string_lossy();
+        for part in s.split(['+', ';', ' ', '\n']) {
+            let part = part.trim();
+            if !part.is_empty() {
+                // Ignore malformed codes — never panic the frontend.
+                let _ = gb.add_cheat(part);
+            }
+        }
+    }
+
     fn on_reset(&mut self, _ctx: &mut ResetContext) {
         if !self.rom_path.is_empty() {
             let mut gb = Gameboy::new(&self.rom_path);
