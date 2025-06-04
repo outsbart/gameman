@@ -27,6 +27,7 @@ cargo nextest run --test test_mooneye_instr_timing_roms
 ## Architecture
 
 The project is a Cargo workspace with two members:
+
 - **`gameman`** — the core library + SDL3 binary (`src/bin/gameman.rs`)
 - **`gameman-libretro`** — a `cdylib` libretro core wrapping the library
 
@@ -45,7 +46,8 @@ Gameboy
         ├── Timers         // DIV/TIMA/TMA/TAC
         ├── OamDma         // OAM DMA controller
         ├── Key            // Joypad input
-        └── Link           // Serial link (used by test ROMs for output)
+        ├── Link           // Serial link (used by test ROMs for output)
+        └── Cheats         // Game Genie / GameShark (not serialized)
 ```
 
 The CPU is generic over any type implementing the `Memory` trait (`src/mem.rs`). `MMU<M>` is the concrete implementation
@@ -63,13 +65,17 @@ synchronized at M-cycle granularity. The outer loop in `Gameboy::step()` accumul
 Cartridge loading (`src/cartridge/mod.rs`) inspects the ROM header and returns a `Box<dyn CartridgeAccess>`. Supported
 MBCs:
 
-| MBC | File | Notes |
-|-----|------|-------|
-| ROM only | `nombc.rs` | — |
-| MBC1 | `mbc1.rs` | Multicart (MBC1M) auto-detected via Nintendo logo heuristic |
-| MBC2 | `mbc2.rs` | Built-in 512×4-bit RAM; upper nibble always 0xF on read |
-| MBC3 | `mbc3.rs` | RTC on cart types 0x0F/0x10; `Rtc::base_unix_secs` stores unix epoch at which RTC=0 |
-| MBC5 | `mbc5.rs` | 9-bit ROM bank split across two writes; rumble silently ignored |
+| MBC      | File       | Notes                                                                               |
+|----------|------------|-------------------------------------------------------------------------------------|
+| ROM only | `nombc.rs` | —                                                                                   |
+| MBC1     | `mbc1.rs`  | Multicart (MBC1M) auto-detected via Nintendo logo heuristic                         |
+| MBC2     | `mbc2.rs`  | Built-in 512×4-bit RAM; upper nibble always 0xF on read                             |
+| MBC3     | `mbc3.rs`  | RTC on cart types 0x0F/0x10; `Rtc::base_unix_secs` stores unix epoch at which RTC=0 |
+| MBC5     | `mbc5.rs`  | 9-bit ROM bank split across two writes; rumble silently ignored                     |
+| MBC6     | `mbc6.rs`  | Dual independent 16 KB ROM windows; flash writes silently ignored                   |
+| MBC7     | `mbc7.rs`  | 93C56 EEPROM (128×16-bit) + accelerometer stub (reads 0x8000 center)                |
+| HuC1     | `huc1.rs`  | MBC1-compatible banking + IR LED/receiver stub                                      |
+| HuC3     | `huc3.rs`  | MBC1-style banking + RTC (nibble protocol) + IR stub                                |
 
 Save files are written as `.sav` next to the ROM; loaded automatically on `Gameboy::new()`.
 
@@ -104,7 +110,14 @@ Tests live in `tests/` and run actual Game Boy ROM files against the emulator:
 
 ROM files for integration tests are stored in `tests/`.
 
+### Cheats
+
+`src/cheats.rs` implements Game Genie (ROM patch) and GameShark (RAM force) cheat codes. The `Cheats` struct holds
+parsed codes; `Gameboy::add_cheat(code)` parses and stores a code, `Gameboy::clear_cheats()` removes all.
+Game Genie codes substitute a ROM byte at a given address (optionally only when the current value matches a compare
+byte). GameShark codes force-write a RAM address every frame via `apply_gameshark_cheats()` in `Gameboy::step()`.
+
 ### Validation step
 
 To validate your changes, run the tests with `cargo nextest run` with a timeout of 30 seconds per test.
-All 174 tests should pass (22 skipped — those require ROMs not included in the repo).
+All 214 tests should pass (21 skipped — those require ROMs not included in the repo).
