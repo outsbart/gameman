@@ -16,12 +16,15 @@ learning Rust and to have fun with the challenges of emulation.
     - for DMG games: automatic colorization + custom palettes available (Authentic green, Grayscale, DMG Pocket, DMG
       green)
 - **Save files** — written as `.sav` next to the ROM, loaded automatically on startup
-- **Save states** — press F5 to save, F7 to load (slot 0, stored as `.ss0` next to the ROM)
+- **Save states** — press F5 to save, F7 to load in standalone (slot 0, stored as `.ss0` next to the ROM)
 - **Stereo audio** — all four channels with correct left/right panning
 - **Real-Time Clock** — Pokémon Gold/Silver/Crystal in-game clocks work correctly and advance in real time
 - **Cartridge support** — all major types covered
-- **RetroAchievements** *(libretro)* — earn achievements while you play via RetroArch
-- **Cheats** *(libretro)* — GameShark and Game Genie codes via RetroArch's built-in cheat system
+- **Extra** — when run as a libretro core:
+    - **RetroAchievements** — earn achievements while you play
+    - **Cheats** — GameShark and Game Genie codes via RetroArch's built-in cheat system
+    - **Rewind** — Made a mistake? Go back in time
+    - **and more** — palette picker, fast-forward, shaders, controller remapping...
 
 ## Accuracy
 
