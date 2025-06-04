@@ -28,8 +28,12 @@ fn main() {
 
     let mut gameboy = Gameboy::new(rom_path.as_str());
 
-    if std::path::Path::new("boot/cgb_boot.bin").exists() {
-        gameboy.load_bios("boot/cgb_boot.bin");
+    // Optional boot ROM from the boot/ directory. Prefer the CGB boot ROM for every game
+    // (it colorizes DMG titles); fall back to the DMG boot ROM only for DMG games.
+    if std::path::Path::new("boot/gbc_bios.bin").exists() {
+        gameboy.load_bios("boot/gbc_bios.bin");
+    } else if !gameboy.cpu.mmu.gpu.cgb_mode && std::path::Path::new("boot/gb_bios.bin").exists() {
+        gameboy.load_bios("boot/gb_bios.bin");
     }
 
     let sdl = sdl3::init().unwrap();

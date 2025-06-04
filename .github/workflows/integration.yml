@@ -73,9 +73,40 @@ jobs:
         run: sudo apt-get install -y libclang-dev
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --release -p gameman-libretro
+      - name: Stage core with RetroArch-compatible filename
+        # Cargo emits `libgameman_libretro.so`, but RetroArch matches the
+        # `.info` file by exact basename, so the `lib` prefix must be dropped.
+        run: |
+          mkdir -p dist
+          cp target/release/libgameman_libretro.so dist/gameman_libretro.so
+          cp gameman-libretro/gameman_libretro.info dist/gameman_libretro.info
       - uses: actions/upload-artifact@v4
         with:
           name: gameman-libretro
           path: |
-            target/release/libgameman_libretro.so
-            gameman-libretro/gameman_libretro.info
+            dist/gameman_libretro.so
+            dist/gameman_libretro.info
+
+  release:
+    name: Release libretro core
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [check, test, fmt, clippy, build-libretro]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download libretro artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: gameman-libretro
+          path: dist
+      - name: Package release zip
+        # Bundle the core (.so → cores dir) and its info file (.info → info
+        # dir) so users get everything in one download.
+        run: |
+          cd dist
+          zip gameman_libretro-linux-x86_64.zip gameman_libretro.so gameman_libretro.info
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/gameman_libretro-linux-x86_64.zip

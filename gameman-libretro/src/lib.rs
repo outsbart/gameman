@@ -92,9 +92,9 @@ impl Core for GameboyCore {
 
     fn get_info(&self) -> SystemInfo {
         SystemInfo {
-            library_name: CString::new("gameman").unwrap(),
+            library_name: CString::new("Gameman").unwrap(),
             library_version: CString::new(env!("CARGO_PKG_VERSION")).unwrap(),
-            valid_extensions: CString::new("gb|gbc").unwrap(),
+            valid_extensions: CString::new("gb|gbc|dmg").unwrap(),
             need_fullpath: true,
             block_extract: false,
         }
@@ -156,6 +156,32 @@ impl Core for GameboyCore {
 
         let mut gb = Gameboy::new(&path);
         gb.set_dmg_palette(self.palette);
+
+        // Optional boot ROM from RetroArch's system directory. Prefer the CGB boot ROM for every game
+        // (it colorizes DMG titles); fall back to the DMG boot ROM only for DMG games when the CGB one
+        // is absent. Silently skipped if missing/wrong-size (load_bios panics otherwise, which would
+        // crash the frontend).
+        let gctx: GenericContext = ctx.into();
+        if let Some(sysdir) = unsafe {
+            rust_libretro::environment::get_system_directory(*gctx.environment_callback())
+        } {
+            let valid = |p: &std::path::Path, len: usize| {
+                std::fs::metadata(p).is_ok_and(|m| m.len() as usize == len)
+            };
+            let gbc = sysdir.join("gbc_bios.bin"); // 2304 bytes
+            let gb_dmg = sysdir.join("gb_bios.bin"); // 256 bytes
+            let chosen = if valid(&gbc, 0x0900) {
+                Some(gbc)
+            } else if !gb.cpu.mmu.gpu.cgb_mode && valid(&gb_dmg, 0x0100) {
+                Some(gb_dmg)
+            } else {
+                None
+            };
+            if let Some(p) = chosen.as_deref().and_then(|p| p.to_str()) {
+                gb.load_bios(p);
+            }
+        }
+
         self.gameboy = Some(gb);
         self.rom_path = path;
         self.prev_buttons = JoypadState::empty();
