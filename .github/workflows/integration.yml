@@ -94,26 +94,60 @@ jobs:
             dist/gameman_libretro.so
             dist/gameman_libretro.info
 
+  build-libretro-android:
+    name: Build libretro core (Android arm64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: sudo apt-get install -y libclang-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - name: Build for Android arm64
+        run: |
+          LINKER=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android35-clang
+          CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$LINKER \
+            cargo build --release -p gameman-libretro --target aarch64-linux-android
+      - name: Stage core with RetroArch-compatible filename
+        run: |
+          mkdir -p dist
+          cp target/aarch64-linux-android/release/libgameman_libretro.so dist/gameman_libretro.so
+          cp gameman-libretro/gameman_libretro.info dist/gameman_libretro.info
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gameman-libretro-android-arm64
+          path: |
+            dist/gameman_libretro.so
+            dist/gameman_libretro.info
+
   release:
     name: Release libretro core
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [check, test, fmt, clippy, build-libretro]
+    needs: [check, test, fmt, clippy, build-libretro, build-libretro-android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Download libretro artifact
+      - name: Download Linux artifact
         uses: actions/download-artifact@v4
         with:
           name: gameman-libretro
-          path: dist
-      - name: Package release zip
-        # Bundle the core (.so → cores dir) and its info file (.info → info
-        # dir) so users get everything in one download.
+          path: dist/linux
+      - name: Download Android artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: gameman-libretro-android-arm64
+          path: dist/android
+      - name: Package release zips
         run: |
-          cd dist
-          zip gameman_libretro-linux-x86_64.zip gameman_libretro.so gameman_libretro.info
+          cd dist/linux
+          zip ../gameman_libretro-linux-x86_64.zip gameman_libretro.so gameman_libretro.info
+          cd ../android
+          zip ../gameman_libretro-android-arm64.zip gameman_libretro.so gameman_libretro.info
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/gameman_libretro-linux-x86_64.zip
+          files: |
+            dist/gameman_libretro-linux-x86_64.zip
+            dist/gameman_libretro-android-arm64.zip
