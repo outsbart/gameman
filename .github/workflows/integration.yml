@@ -54,7 +54,7 @@ jobs:
       - name: Place test ROMs
         run: |
           BLARGG=$(find test-roms -maxdepth 2 -type d -name blargg)
-          MOONEYE=$(find test-roms -maxdepth 3 -type d -name acceptance)
+          MOONEYE=$(find test-roms -maxdepth 3 -type d -path "*/mooneye-test-suite/acceptance")
           mkdir -p tests/blargg/roms tests/mooneye/roms
           cp -r "$BLARGG"/. tests/blargg/roms/
           cp -r "$MOONEYE"/. tests/mooneye/roms/
