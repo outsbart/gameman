@@ -9,7 +9,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install system dependencies
-        run: sudo apt-get install -y libsdl3-dev libclang-dev
+        run: sudo apt-get install -y cmake libclang-dev
+      - name: Cache SDL3
+        id: cache-sdl3
+        uses: actions/cache@v4
+        with:
+          path: ~/sdl3-install
+          key: sdl3-3.2.10-${{ runner.os }}
+      - name: Build SDL3
+        if: steps.cache-sdl3.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch release-3.2.10 https://github.com/libsdl-org/SDL.git /tmp/SDL3
+          cmake -S /tmp/SDL3 -B /tmp/SDL3/build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=$HOME/sdl3-install \
+            -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF
+          cmake --build /tmp/SDL3/build -j$(nproc)
+          cmake --install /tmp/SDL3/build
+      - name: Configure SDL3 paths
+        run: |
+          echo "PKG_CONFIG_PATH=$HOME/sdl3-install/lib/pkgconfig" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$HOME/sdl3-install/lib" >> $GITHUB_ENV
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo check
 
@@ -18,8 +38,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install system dependencies
-        run: sudo apt-get install -y libsdl3-dev libclang-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@nextest
       - name: Cache test ROMs
@@ -40,7 +58,7 @@ jobs:
           mkdir -p tests/blargg/roms tests/mooneye/roms
           cp -r "$BLARGG"/. tests/blargg/roms/
           cp -r "$MOONEYE"/. tests/mooneye/roms/
-      - run: cargo nextest run
+      - run: cargo nextest run --no-default-features
 
   fmt:
     name: Rustfmt
@@ -58,7 +76,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install system dependencies
-        run: sudo apt-get install -y libsdl3-dev libclang-dev
+        run: sudo apt-get install -y cmake libclang-dev
+      - name: Cache SDL3
+        id: cache-sdl3
+        uses: actions/cache@v4
+        with:
+          path: ~/sdl3-install
+          key: sdl3-3.2.10-${{ runner.os }}
+      - name: Build SDL3
+        if: steps.cache-sdl3.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch release-3.2.10 https://github.com/libsdl-org/SDL.git /tmp/SDL3
+          cmake -S /tmp/SDL3 -B /tmp/SDL3/build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=$HOME/sdl3-install \
+            -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF
+          cmake --build /tmp/SDL3/build -j$(nproc)
+          cmake --install /tmp/SDL3/build
+      - name: Configure SDL3 paths
+        run: |
+          echo "PKG_CONFIG_PATH=$HOME/sdl3-install/lib/pkgconfig" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$HOME/sdl3-install/lib" >> $GITHUB_ENV
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
