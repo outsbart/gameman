@@ -22,19 +22,32 @@ jobs:
         id: cache-test-roms
         uses: actions/cache@v4
         with:
-          path: test-roms
-          key: game-boy-test-roms-v7.0
-      - name: Download test ROMs
+          path: |
+            tests/blargg/roms
+            tests/mooneye/roms
+          key: test-roms-lp-blargg-master-csp-mooneye-v7.0
+      - name: Download and place blargg ROMs
         if: steps.cache-test-roms.outputs.cache-hit != 'true'
         run: |
-          curl -fsSL https://github.com/c-sp/game-boy-test-roms/releases/download/v7.0/game-boy-test-roms-v7.0.zip -o test-roms.zip
-          unzip -q test-roms.zip -d test-roms
-      - name: Place test ROMs
+          curl -fsSL https://github.com/L-P/blargg-test-roms/archive/refs/heads/master.zip -o blargg.zip
+          unzip -q blargg.zip -d blargg-src
+          mkdir -p tests/blargg/roms
+          cp -r blargg-src/blargg-test-roms-master/. tests/blargg/roms/
+          # Flatten cpu_instrs/individual/ → cpu_instrs/
+          cp tests/blargg/roms/cpu_instrs/individual/*.gb tests/blargg/roms/cpu_instrs/
+          # Flatten mem_timing-2/rom_singles/ → mem_timing-2/
+          cp tests/blargg/roms/mem_timing-2/rom_singles/*.gb tests/blargg/roms/mem_timing-2/
+          # Copy combined dmg_sound.gb into rom_singles/
+          cp tests/blargg/roms/dmg_sound/dmg_sound.gb tests/blargg/roms/dmg_sound/rom_singles/
+          # Lift halt_bug.gb up one level
+          cp tests/blargg/roms/halt_bug/halt_bug.gb tests/blargg/roms/
+      - name: Download and place mooneye ROMs
+        if: steps.cache-test-roms.outputs.cache-hit != 'true'
         run: |
-          BLARGG=$(find test-roms -maxdepth 2 -type d -name blargg)
-          MOONEYE=$(find test-roms -maxdepth 3 -type d -path "*/mooneye-test-suite/acceptance")
-          mkdir -p tests/blargg/roms tests/mooneye/roms
-          cp -r "$BLARGG"/. tests/blargg/roms/
+          curl -fsSL https://github.com/c-sp/game-boy-test-roms/releases/download/v7.0/game-boy-test-roms-v7.0.zip -o csp.zip
+          unzip -q csp.zip -d csp-src
+          mkdir -p tests/mooneye/roms
+          MOONEYE=$(find csp-src -maxdepth 3 -type d -path "*/mooneye-test-suite/acceptance")
           cp -r "$MOONEYE"/. tests/mooneye/roms/
       - run: cargo nextest run --no-default-features
 
