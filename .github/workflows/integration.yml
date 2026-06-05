@@ -109,8 +109,9 @@ jobs:
       - name: Build for Android arm64
         run: |
           NDK_TOOLCHAIN=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64
-          CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$NDK_TOOLCHAIN/bin/aarch64-linux-android35-clang \
-          BINDGEN_EXTRA_CLANG_ARGS="--sysroot=$NDK_TOOLCHAIN/sysroot --target=aarch64-linux-android35" \
+          CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$NDK_TOOLCHAIN/bin/aarch64-linux-android21-clang \
+          BINDGEN_EXTRA_CLANG_ARGS="--sysroot=$NDK_TOOLCHAIN/sysroot --target=aarch64-linux-android21" \
+          RUSTFLAGS="-C link-arg=-Wl,-z,max-page-size=16384" \
             cargo build --release -p gameman-libretro --target aarch64-linux-android
       - name: Stage core with RetroArch-compatible filename
         run: |
