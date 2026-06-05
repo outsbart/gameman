@@ -7,7 +7,7 @@ jobs:
     name: Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo check --no-default-features
 
@@ -15,12 +15,12 @@ jobs:
     name: Test Suite
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@nextest
       - name: Cache test ROMs
         id: cache-test-roms
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             tests/blargg/roms
@@ -57,7 +57,7 @@ jobs:
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
@@ -67,7 +67,7 @@ jobs:
     name: Clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -77,7 +77,7 @@ jobs:
     name: Build libretro core
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install system dependencies
         run: sudo apt-get install -y libclang-dev
       - uses: dtolnay/rust-toolchain@stable
@@ -89,7 +89,7 @@ jobs:
           mkdir -p dist
           cp target/release/libgameman_libretro.so dist/gameman_libretro.so
           cp gameman-libretro/gameman_libretro.info dist/gameman_libretro.info
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: gameman-libretro
           path: |
@@ -100,7 +100,7 @@ jobs:
     name: Build libretro core (Android arm64)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install system dependencies
         run: sudo apt-get install -y libclang-dev
       - uses: dtolnay/rust-toolchain@stable
@@ -117,7 +117,7 @@ jobs:
           mkdir -p dist
           cp target/aarch64-linux-android/release/libgameman_libretro.so dist/gameman_libretro.so
           cp gameman-libretro/gameman_libretro.info dist/gameman_libretro.info
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: gameman-libretro-android-arm64
           path: |
@@ -133,12 +133,12 @@ jobs:
       contents: write
     steps:
       - name: Download Linux artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: gameman-libretro
           path: dist/linux
       - name: Download Android artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: gameman-libretro-android-arm64
           path: dist/android
@@ -149,7 +149,7 @@ jobs:
           cd ../android
           zip ../gameman_libretro-android-arm64.zip gameman_libretro.so gameman_libretro.info
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             dist/gameman_libretro-linux-x86_64.zip
