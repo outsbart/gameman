@@ -25,7 +25,7 @@ jobs:
           path: |
             tests/blargg/roms
             tests/mooneye/roms
-          key: test-roms-lp-blargg-master-csp-mooneye-v7.0
+          key: test-roms-lp-blargg-master-csp-mooneye-v7.0-v2
       - name: Download and place blargg ROMs
         if: steps.cache-test-roms.outputs.cache-hit != 'true'
         run: |
@@ -47,8 +47,10 @@ jobs:
           curl -fsSL https://github.com/c-sp/game-boy-test-roms/releases/download/v7.0/game-boy-test-roms-v7.0.zip -o csp.zip
           unzip -q csp.zip -d csp-src
           mkdir -p tests/mooneye/roms
-          MOONEYE=$(find csp-src -maxdepth 3 -type d -path "*/mooneye-test-suite/acceptance")
-          cp -r "$MOONEYE"/. tests/mooneye/roms/
+          ACCEPTANCE=$(find csp-src -maxdepth 3 -type d -path "*/mooneye-test-suite/acceptance")
+          EMULATOR_ONLY=$(find csp-src -maxdepth 3 -type d -path "*/mooneye-test-suite/emulator-only")
+          cp -r "$ACCEPTANCE"/. tests/mooneye/roms/
+          cp -r "$EMULATOR_ONLY"/. tests/mooneye/roms/
       - run: cargo nextest run --no-default-features
 
   fmt:
