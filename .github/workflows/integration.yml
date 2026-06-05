@@ -108,8 +108,9 @@ jobs:
           targets: aarch64-linux-android
       - name: Build for Android arm64
         run: |
-          LINKER=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android35-clang
-          CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$LINKER \
+          NDK_TOOLCHAIN=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64
+          CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$NDK_TOOLCHAIN/bin/aarch64-linux-android35-clang \
+          BINDGEN_EXTRA_CLANG_ARGS="--sysroot=$NDK_TOOLCHAIN/sysroot --target=aarch64-linux-android35" \
             cargo build --release -p gameman-libretro --target aarch64-linux-android
       - name: Stage core with RetroArch-compatible filename
         run: |
