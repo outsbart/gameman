@@ -1,9 +1,13 @@
 use gameman::gameboy::Gameboy;
 use gameman::keypad::Button;
+use gameman::sound::AudioBuffer;
 use rust_libretro::{
     contexts::*, core::Core, input_descriptors, proc::CoreOptions, retro_core, sys::*, types::*,
 };
 use std::ffi::{CStr, CString};
+
+// 1478 stereo i16 values = 739 pairs ≥ 44100/59.73 ≈ 738.4 minimum
+const MIN_STEREO_SAMPLES: usize = 1478;
 
 const PALETTE_CLASSIC: [u32; 4] = [0x00C4F0C2, 0x005AB9A8, 0x001E606E, 0x002D1B00];
 const PALETTE_GRAYSCALE: [u32; 4] = [0x00FFFFFF, 0x00AAAAAA, 0x00555555, 0x00000000];
@@ -37,7 +41,7 @@ struct GameboyCore {
     gameboy: Option<Gameboy>,
     rom_path: String,
     prev_buttons: JoypadState,
-    pending_audio: Vec<i16>,
+    audio_buf: AudioBuffer,
     palette: [u32; 4],
     // Sensor interface for MBC7 accelerometer input (None if frontend doesn't support it).
     sensor: Option<retro_sensor_interface>,
@@ -57,7 +61,7 @@ retro_core!(GameboyCore {
     gameboy: None,
     rom_path: String::new(),
     prev_buttons: JoypadState::empty(),
-    pending_audio: Vec::new(),
+    audio_buf: AudioBuffer::new(MIN_STEREO_SAMPLES),
     palette: PALETTE_CLASSIC,
     sensor: None,
 });
@@ -321,17 +325,12 @@ impl Core for GameboyCore {
         gb.step();
 
         // Audio: drain interleaved stereo samples
-        self.pending_audio.extend(gb.drain_audio());
-
-        // 1478 stereo i16 values = 739 pairs ≥ 44100/59.73 ≈ 738.4 minimum
-        const MIN_STEREO_SAMPLES: usize = 1478;
-        let chunk: Vec<i16> = if self.pending_audio.len() >= MIN_STEREO_SAMPLES {
-            self.pending_audio.drain(..MIN_STEREO_SAMPLES).collect()
-        } else {
-            let mut v: Vec<i16> = self.pending_audio.drain(..).collect();
+        self.audio_buf.push(gb.drain_audio());
+        let chunk: Vec<i16> = self.audio_buf.take_chunk().unwrap_or_else(|| {
+            let mut v = self.audio_buf.drain_all();
             v.resize(MIN_STEREO_SAMPLES, 0);
             v
-        };
+        });
         {
             let audio_ctx = AudioContext::from(&mut *ctx);
             audio_ctx.batch_audio_samples(&chunk);

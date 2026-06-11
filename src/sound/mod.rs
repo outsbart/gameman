@@ -19,6 +19,33 @@ pub mod wave;
 pub const AUDIO_BUFFER_SIZE: usize = 1024;
 pub const SAMPLE_RATE: usize = 44_100;
 
+pub struct AudioBuffer {
+    pending: Vec<i16>,
+    chunk_size: usize,
+}
+
+impl AudioBuffer {
+    pub fn new(chunk_size: usize) -> Self {
+        Self { pending: Vec::new(), chunk_size }
+    }
+
+    pub fn push(&mut self, samples: impl IntoIterator<Item = i16>) {
+        self.pending.extend(samples);
+    }
+
+    pub fn take_chunk(&mut self) -> Option<Vec<i16>> {
+        if self.pending.len() >= self.chunk_size {
+            Some(self.pending.drain(..self.chunk_size).collect())
+        } else {
+            None
+        }
+    }
+
+    pub fn drain_all(&mut self) -> Vec<i16> {
+        self.pending.drain(..).collect()
+    }
+}
+
 const WAVE_TABLE_START: u16 = 0xFF30;
 const DUTY_PATTERNS_LENGTH: u8 = 8;
 

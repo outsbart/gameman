@@ -2,6 +2,7 @@ extern crate sdl3;
 
 use gameman::gameboy::Gameboy;
 use gameman::keypad::Button;
+use gameman::sound::AudioBuffer;
 use gameman::sound::AUDIO_BUFFER_SIZE;
 use gameman::sound::SAMPLE_RATE;
 
@@ -76,7 +77,7 @@ fn main() {
         .and_then(|ids| ids.into_iter().next())
         .and_then(|id| gamepad_subsystem.open(id).ok());
 
-    let mut pending_audio: Vec<i16> = Vec::new();
+    let mut audio_buf = AudioBuffer::new(AUDIO_BUFFER_SIZE);
     let mut next_frame = time::Instant::now();
     let mut pause = false;
 
@@ -284,12 +285,9 @@ fn main() {
 
         canvas.present();
 
-        pending_audio.extend(gameboy.drain_audio());
-        while pending_audio.len() >= AUDIO_BUFFER_SIZE {
-            stream
-                .put_data_i16(&pending_audio[..AUDIO_BUFFER_SIZE])
-                .unwrap();
-            pending_audio.drain(..AUDIO_BUFFER_SIZE);
+        audio_buf.push(gameboy.drain_audio());
+        while let Some(chunk) = audio_buf.take_chunk() {
+            stream.put_data_i16(&chunk).unwrap();
         }
 
         next_frame += FRAME_DURATION;
