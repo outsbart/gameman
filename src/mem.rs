@@ -8,6 +8,43 @@ use crate::timers::Timers;
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
+mod io_reg {
+    pub const JOYPAD: u16     = 0xFF00;
+    pub const SB: u16         = 0xFF01;
+    pub const SC: u16         = 0xFF02;
+    pub const DIV: u16        = 0xFF04;
+    pub const TIMA: u16       = 0xFF05;
+    pub const TMA: u16        = 0xFF06;
+    pub const TAC: u16        = 0xFF07;
+    pub const IF: u16         = 0xFF0F;
+    pub const SOUND_START: u16 = 0xFF10;
+    pub const SOUND_END: u16   = 0xFF3F;
+    pub const GPU_START: u16   = 0xFF40;
+    pub const GPU_MID: u16     = 0xFF45;
+    pub const OAM_DMA: u16    = 0xFF46;
+    pub const GPU_MID2: u16    = 0xFF47;
+    pub const KEY1: u16       = 0xFF4D;
+    pub const BOOT: u16       = 0xFF50;
+    pub const HDMA1: u16      = 0xFF51;
+    pub const HDMA2: u16      = 0xFF52;
+    pub const HDMA3: u16      = 0xFF53;
+    pub const HDMA4: u16      = 0xFF54;
+    pub const HDMA5: u16      = 0xFF55;
+    pub const RP: u16         = 0xFF56;
+    pub const OPRI: u16       = 0xFF6C;
+    pub const GPU_END: u16     = 0xFF7F;
+    pub const SVBK: u16       = 0xFF70;
+    pub const UNDOC72: u16    = 0xFF72;
+    pub const UNDOC73: u16    = 0xFF73;
+    pub const UNDOC74: u16    = 0xFF74;
+    pub const UNDOC75: u16    = 0xFF75;
+    pub const PCM12: u16      = 0xFF76;
+    pub const PCM34: u16      = 0xFF77;
+    pub const HRAM_START: u16  = 0xFF80;
+    pub const HRAM_END: u16    = 0xFFFE;
+    pub const IE: u16          = 0xFFFF;
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(bound = "M: Serialize + for<'de2> serde::Deserialize<'de2>")]
 pub struct MMU<M: GPUMemoriesAccess> {
@@ -200,36 +237,36 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
 
                     // Zero page
                     0x0F00 => match addr {
-                        0xFF00 => self.key.read_byte(),
-                        0xFF01 => self.link.get_data(),
-                        0xFF02 => self.link.get_control(),
-                        0xFF04 => self.timers.read_divider(),
-                        0xFF05 => self.timers.read_tima(),
-                        0xFF06 => self.timers.read_tma(),
-                        0xFF07 => self.timers.read_tac(),
-                        0xFF0F => self.interrupt_flags | 0xE0,
-                        0xFF10..=0xFF3F => self.sound.read_byte(addr),
-                        0xFF46 => self.oam_dma.source,
-                        // HDMA: source/dest reads return current register values; 0xFF55 = 0xFF (no active transfer)
-                        0xFF51 if self.gpu.cgb_mode() => (self.hdma_src >> 8) as u8,
-                        0xFF52 if self.gpu.cgb_mode() => (self.hdma_src & 0xFF) as u8,
-                        0xFF53 if self.gpu.cgb_mode() => (self.hdma_dst >> 8) as u8,
-                        0xFF54 if self.gpu.cgb_mode() => (self.hdma_dst & 0xFF) as u8,
-                        0xFF55 if self.gpu.cgb_mode() && self.hbdma_active => {
+                        io_reg::JOYPAD => self.key.read_byte(),
+                        io_reg::SB => self.link.get_data(),
+                        io_reg::SC => self.link.get_control(),
+                        io_reg::DIV => self.timers.read_divider(),
+                        io_reg::TIMA => self.timers.read_tima(),
+                        io_reg::TMA => self.timers.read_tma(),
+                        io_reg::TAC => self.timers.read_tac(),
+                        io_reg::IF => self.interrupt_flags | 0xE0,
+                        io_reg::SOUND_START..=io_reg::SOUND_END => self.sound.read_byte(addr),
+                        io_reg::OAM_DMA => self.oam_dma.source,
+                        // HDMA: source/dest reads return current register values; HDMA5 = 0xFF (no active transfer)
+                        io_reg::HDMA1 if self.gpu.cgb_mode() => (self.hdma_src >> 8) as u8,
+                        io_reg::HDMA2 if self.gpu.cgb_mode() => (self.hdma_src & 0xFF) as u8,
+                        io_reg::HDMA3 if self.gpu.cgb_mode() => (self.hdma_dst >> 8) as u8,
+                        io_reg::HDMA4 if self.gpu.cgb_mode() => (self.hdma_dst & 0xFF) as u8,
+                        io_reg::HDMA5 if self.gpu.cgb_mode() && self.hbdma_active => {
                             self.hbdma_remaining.wrapping_sub(1) // bit 7 = 0 means active
                         }
-                        0xFF4D if self.gpu.cgb_mode() => (self.key1 & 0x81) | 0x7E,
-                        0xFF56 if self.gpu.cgb_mode() => (self.ir_port & 0x02) | 0xC1,
-                        0xFF6C if self.gpu.cgb_mode() => self.ff6c | 0xFE,
-                        0xFF70 if self.gpu.cgb_mode() => self.wram_bank | 0xF8,
-                        0xFF72 if self.gpu.cgb_mode() => self.cgb_undoc[0],
-                        0xFF73 if self.gpu.cgb_mode() => self.cgb_undoc[1],
-                        0xFF74 if self.gpu.cgb_mode() => self.cgb_undoc[2],
-                        0xFF75 if self.gpu.cgb_mode() => self.cgb_undoc[3] | 0x8F,
-                        0xFF76 | 0xFF77 if self.gpu.cgb_mode() => self.sound.read_byte(addr),
-                        0xFF40..=0xFF45 | 0xFF47..=0xFF7F => self.gpu.read_byte(addr),
-                        0xFF80..=0xFFFE => self.zram[(addr & 0x7F) as usize],
-                        0xFFFF => self.interrupt_enable,
+                        io_reg::KEY1 if self.gpu.cgb_mode() => (self.key1 & 0x81) | 0x7E,
+                        io_reg::RP if self.gpu.cgb_mode() => (self.ir_port & 0x02) | 0xC1,
+                        io_reg::OPRI if self.gpu.cgb_mode() => self.ff6c | 0xFE,
+                        io_reg::SVBK if self.gpu.cgb_mode() => self.wram_bank | 0xF8,
+                        io_reg::UNDOC72 if self.gpu.cgb_mode() => self.cgb_undoc[0],
+                        io_reg::UNDOC73 if self.gpu.cgb_mode() => self.cgb_undoc[1],
+                        io_reg::UNDOC74 if self.gpu.cgb_mode() => self.cgb_undoc[2],
+                        io_reg::UNDOC75 if self.gpu.cgb_mode() => self.cgb_undoc[3] | 0x8F,
+                        io_reg::PCM12 | io_reg::PCM34 if self.gpu.cgb_mode() => self.sound.read_byte(addr),
+                        io_reg::GPU_START..=io_reg::GPU_MID | io_reg::GPU_MID2..=io_reg::GPU_END => self.gpu.read_byte(addr),
+                        io_reg::HRAM_START..=io_reg::HRAM_END => self.zram[(addr & 0x7F) as usize],
+                        io_reg::IE => self.interrupt_enable,
                         _ => 0xFF,
                     },
 
@@ -283,35 +320,35 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
 
                     // Zero page
                     0x0F00 => match addr {
-                        0xFFFF => self.interrupt_enable = byte,
-                        0xFF0F => self.interrupt_flags = byte,
-                        0xFF00 => self.key.write_byte(byte),
-                        0xFF01 => self.link.set_data(byte),
-                        0xFF02 => self.link.set_control(byte),
-                        0xFF04 => self.timers.change_divider(byte),
-                        0xFF05 => self.timers.write_tima(byte),
-                        0xFF06 => self.timers.write_tma(byte),
-                        0xFF07 => self.timers.write_tac(byte),
-                        0xFF10..=0xFF3F => self.sound.write_byte(addr, byte),
-                        0xFF46 => self.oam_dma.trigger(byte),
+                        io_reg::IE => self.interrupt_enable = byte,
+                        io_reg::IF => self.interrupt_flags = byte,
+                        io_reg::JOYPAD => self.key.write_byte(byte),
+                        io_reg::SB => self.link.set_data(byte),
+                        io_reg::SC => self.link.set_control(byte),
+                        io_reg::DIV => self.timers.change_divider(byte),
+                        io_reg::TIMA => self.timers.write_tima(byte),
+                        io_reg::TMA => self.timers.write_tma(byte),
+                        io_reg::TAC => self.timers.write_tac(byte),
+                        io_reg::SOUND_START..=io_reg::SOUND_END => self.sound.write_byte(addr, byte),
+                        io_reg::OAM_DMA => self.oam_dma.trigger(byte),
                         // CGB HDMA registers — only active in CGB mode
-                        0xFF51..=0xFF55 if self.gpu.cgb_mode() => {
+                        io_reg::HDMA1..=io_reg::HDMA5 if self.gpu.cgb_mode() => {
                             match addr {
-                                0xFF51 => {
+                                io_reg::HDMA1 => {
                                     self.hdma_src = (self.hdma_src & 0x00FF) | ((byte as u16) << 8);
                                 }
-                                0xFF52 => {
+                                io_reg::HDMA2 => {
                                     self.hdma_src =
                                         (self.hdma_src & 0xFF00) | ((byte & 0xF0) as u16);
                                 }
-                                0xFF53 => {
+                                io_reg::HDMA3 => {
                                     self.hdma_dst = (self.hdma_dst & 0x00FF) | ((byte as u16) << 8);
                                 }
-                                0xFF54 => {
+                                io_reg::HDMA4 => {
                                     self.hdma_dst =
                                         (self.hdma_dst & 0xFF00) | ((byte & 0xF0) as u16);
                                 }
-                                0xFF55 => {
+                                io_reg::HDMA5 => {
                                     if self.hbdma_active && byte & 0x80 == 0 {
                                         // Cancel active HBDMA
                                         self.hbdma_active = false;
@@ -342,25 +379,25 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                                 _ => {}
                             }
                         }
-                        0xFF4D if self.gpu.cgb_mode() => {
+                        io_reg::KEY1 if self.gpu.cgb_mode() => {
                             self.key1 = (self.key1 & !0x01) | (byte & 0x01);
                         }
-                        0xFF56 if self.gpu.cgb_mode() => {
+                        io_reg::RP if self.gpu.cgb_mode() => {
                             self.ir_port = byte & 0x02;
                         }
-                        0xFF6C if self.gpu.cgb_mode() => {
+                        io_reg::OPRI if self.gpu.cgb_mode() => {
                             self.ff6c = byte & 0x01;
                         }
-                        0xFF70 if self.gpu.cgb_mode() => {
+                        io_reg::SVBK if self.gpu.cgb_mode() => {
                             self.wram_bank = (byte & 0x07).max(1);
                         }
-                        0xFF72 if self.gpu.cgb_mode() => self.cgb_undoc[0] = byte,
-                        0xFF73 if self.gpu.cgb_mode() => self.cgb_undoc[1] = byte,
-                        0xFF74 if self.gpu.cgb_mode() => self.cgb_undoc[2] = byte,
-                        0xFF75 if self.gpu.cgb_mode() => self.cgb_undoc[3] = byte & 0x70,
-                        0xFF50 => self.still_bios = false,
-                        0xFF40..=0xFF45 | 0xFF47..=0xFF7F => self.gpu.write_byte(addr, byte),
-                        0xFF80..=0xFFFE => self.zram[(addr & 0x007F) as usize] = byte,
+                        io_reg::UNDOC72 if self.gpu.cgb_mode() => self.cgb_undoc[0] = byte,
+                        io_reg::UNDOC73 if self.gpu.cgb_mode() => self.cgb_undoc[1] = byte,
+                        io_reg::UNDOC74 if self.gpu.cgb_mode() => self.cgb_undoc[2] = byte,
+                        io_reg::UNDOC75 if self.gpu.cgb_mode() => self.cgb_undoc[3] = byte & 0x70,
+                        io_reg::BOOT => self.still_bios = false,
+                        io_reg::GPU_START..=io_reg::GPU_MID | io_reg::GPU_MID2..=io_reg::GPU_END => self.gpu.write_byte(addr, byte),
+                        io_reg::HRAM_START..=io_reg::HRAM_END => self.zram[(addr & 0x007F) as usize] = byte,
                         _ => {}
                     },
 

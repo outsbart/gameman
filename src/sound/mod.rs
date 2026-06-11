@@ -450,6 +450,28 @@ impl Default for OutputBuffer {
     }
 }
 
+macro_rules! envelope_rw {
+    ($set:ident, $get:ident, $ch:ident) => {
+        pub fn $set(&mut self, value: u8) {
+            if !self.power { return; }
+            let mut env = Envelope::new();
+            env.write(value);
+            self.$ch.set_envelope(env);
+        }
+        pub fn $get(&self) -> u8 { self.$ch.get_envelope().read() }
+    };
+}
+
+macro_rules! freq_lsb_wo {
+    ($set:ident, $get:ident, $ch:ident) => {
+        pub fn $set(&mut self, value: u8) {
+            if !self.power { return; }
+            self.$ch.set_frequency_lsb(value);
+        }
+        pub fn $get(&self) -> u8 { 0xFF }
+    };
+}
+
 impl Sound {
     pub fn new(cgb_mode: bool) -> Self {
         Sound {
@@ -581,31 +603,10 @@ impl Sound {
 
     // Square channel 1 envelope
     // NR12 FF12 VVVV APPP Starting volume, Envelope add mode, period
-    pub fn set_nr12(&mut self, value: u8) {
-        if !self.power {
-            return;
-        }
-        let mut envelope = Envelope::new();
-        envelope.write(value);
-
-        self.square_1.set_envelope(envelope);
-    }
-
-    pub fn get_nr12(&self) -> u8 {
-        self.square_1.get_envelope().read()
-    }
+    envelope_rw!(set_nr12, get_nr12, square_1);
 
     // Square channel 1 frequency LSB
-    pub fn set_nr13(&mut self, value: u8) {
-        if !self.power {
-            return;
-        }
-        self.square_1.set_frequency_lsb(value);
-    }
-
-    pub fn get_nr13(&self) -> u8 {
-        0xFF
-    }
+    freq_lsb_wo!(set_nr13, get_nr13, square_1);
 
     // Square channel 1 trigger, frequency MSB and length
     pub fn set_nr14(&mut self, value: u8) {
@@ -636,33 +637,11 @@ impl Sound {
 
     // Square channel 2 envelope
     // NR22 FF17 VVVV APPP Starting volume, Envelope add mode, period
-    pub fn set_nr22(&mut self, value: u8) {
-        if !self.power {
-            return;
-        }
-        let mut envelope = Envelope::new();
-        envelope.write(value);
-
-        self.square_2.set_envelope(envelope);
-    }
-
-    pub fn get_nr22(&self) -> u8 {
-        self.square_2.get_envelope().read()
-    }
+    envelope_rw!(set_nr22, get_nr22, square_2);
 
     // Square channel 2 frequency lsb
     // NR23 FF18 FFFF FFFF Frequency LSB
-    pub fn set_nr23(&mut self, value: u8) {
-        if !self.power {
-            return;
-        }
-
-        self.square_2.set_frequency_lsb(value);
-    }
-
-    pub fn get_nr23(&self) -> u8 {
-        0xFF
-    }
+    freq_lsb_wo!(set_nr23, get_nr23, square_2);
 
     // Square channel 2 trigger, length and frequency msb
     // NR24 FF19 TL-- -FFF Trigger, Length enable, Frequency MSB
@@ -720,17 +699,7 @@ impl Sound {
 
     // Wave channel frequency lsb
     // NR33 FF1D FFFF FFFF Frequency LSB
-    pub fn set_nr33(&mut self, value: u8) {
-        if !self.power {
-            return;
-        }
-
-        self.wave.set_frequency_lsb(value);
-    }
-
-    pub fn get_nr33(&self) -> u8 {
-        0xFF
-    }
+    freq_lsb_wo!(set_nr33, get_nr33, wave);
 
     // Wave channel trigger, length, frequency MSB
     // NR34 FF1E TL-- -FFF Trigger, Length enable, Frequency MSB
@@ -758,20 +727,7 @@ impl Sound {
 
     // Noise channel envelope
     // NR42 FF21 VVVV APPP Starting volume, Envelope add mode, period
-    pub fn set_nr42(&mut self, value: u8) {
-        if !self.power {
-            return;
-        }
-
-        let mut envelope = Envelope::new();
-        envelope.write(value);
-
-        self.noise.set_envelope(envelope);
-    }
-
-    pub fn get_nr42(&self) -> u8 {
-        self.noise.get_envelope().read()
-    }
+    envelope_rw!(set_nr42, get_nr42, noise);
 
     // Noise channel clock shift, lsfr, divisor
     // NR43 FF22 SSSS WDDD Clock shift, Width mode of LFSR, Divisor code
