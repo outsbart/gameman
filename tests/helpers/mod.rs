@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code, unused_macros)]
 
 use gameman::cpu::Operand;
 use gameman::gameboy::Gameboy;
@@ -12,6 +12,25 @@ pub trait GameboyTestExt {
     fn blargg_ram_test_result(&mut self) -> Option<u8>;
     fn passes_mooneye_test_rom(&mut self) -> bool;
     fn mooneye_step(&mut self) -> u8;
+}
+
+macro_rules! test_rom {
+    ($(#[$attr:meta])* $name:ident, $path:literal, $method:ident) => {
+        $(#[$attr])*
+        #[test]
+        fn $name() {
+            let mut emulator = Gameboy::new($path);
+            assert!(emulator.$method());
+        }
+    };
+    ($(#[$attr:meta])* $name:ident, $path:literal, $method:ident, new_clean) => {
+        $(#[$attr])*
+        #[test]
+        fn $name() {
+            let mut emulator = Gameboy::new_clean($path);
+            assert!(emulator.$method());
+        }
+    };
 }
 
 impl GameboyTestExt for Gameboy {

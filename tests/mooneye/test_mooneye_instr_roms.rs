@@ -1,11 +1,8 @@
 #[path = "../helpers/mod.rs"]
+#[macro_use]
 mod helpers;
 use helpers::GameboyTestExt;
 
 use gameman::gameboy::Gameboy;
 
-#[test]
-fn daa() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/instr/daa.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
+test_rom!(daa, "tests/mooneye/roms/instr/daa.gb", passes_mooneye_test_rom);

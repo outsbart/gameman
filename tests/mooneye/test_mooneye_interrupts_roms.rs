@@ -1,11 +1,8 @@
 #[path = "../helpers/mod.rs"]
+#[macro_use]
 mod helpers;
 use helpers::GameboyTestExt;
 
 use gameman::gameboy::Gameboy;
 
-#[test]
-fn ie_push() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/interrupts/ie_push.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
+test_rom!(ie_push, "tests/mooneye/roms/interrupts/ie_push.gb", passes_mooneye_test_rom);

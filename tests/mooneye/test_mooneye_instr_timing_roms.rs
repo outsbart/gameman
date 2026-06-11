@@ -1,179 +1,36 @@
 #[path = "../helpers/mod.rs"]
+#[macro_use]
 mod helpers;
 use helpers::GameboyTestExt;
 
 use gameman::gameboy::Gameboy;
 
-#[test]
-fn pop_timing() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/pop_timing.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
-
-#[test]
-fn div_timing() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/div_timing.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
-
-#[test]
-fn ei_timing() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/ei_timing.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
-
-#[test]
-fn di_timing() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/di_timing-GS.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
-
-#[test]
-fn halt_ime0_ei() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/halt_ime0_ei.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
-
-#[test]
-fn halt_ime0_nointr_timing() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/halt_ime0_nointr_timing.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
-
-#[test]
-fn halt_ime1_timing() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/halt_ime1_timing.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
-
-#[test]
-fn halt_ime1_timing2() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/halt_ime1_timing2-GS.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
-
-#[test]
-fn if_ie_registers() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/if_ie_registers.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
-
-#[test]
-fn ei_sequence() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/ei_sequence.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
-
-#[test]
-fn rapid_di_ei() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/rapid_di_ei.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
-
-#[test]
-fn intr_timing() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/intr_timing.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
-
-#[test]
-fn reti_intr_timing() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/reti_intr_timing.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
-
-#[test]
-fn oam_dma_start() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/oam_dma_start.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
-
-#[test]
-fn oam_dma_timing() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/oam_dma_timing.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
-
-#[test]
-fn oam_dma_restart() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/oam_dma_restart.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
-
-#[test]
-fn call_timing() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/call_timing.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
-
-#[test]
-fn call_timing2() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/call_timing2.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
-
-#[test]
-fn call_cc_timing() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/call_cc_timing.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
-
-#[test]
-fn call_cc_timing2() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/call_cc_timing2.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
-
-#[test]
-fn ret_timing() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/ret_timing.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
-
-#[test]
-fn ret_cc_timing() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/ret_cc_timing.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
-
-#[test]
-fn reti_timing() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/reti_timing.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
-
-#[test]
-fn jp_timing() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/jp_timing.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
-
-#[test]
-fn jp_cc_timing() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/jp_cc_timing.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
-
-#[test]
-fn push_timing() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/push_timing.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
-
-#[test]
-fn rst_timing() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/rst_timing.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
-
-#[test]
-fn add_sp_e_timing() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/add_sp_e_timing.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
-
-#[test]
-fn ld_hl_sp_e_timing() {
-    let mut emulator = Gameboy::new("tests/mooneye/roms/ld_hl_sp_e_timing.gb");
-    assert!(emulator.passes_mooneye_test_rom());
-}
+test_rom!(pop_timing, "tests/mooneye/roms/pop_timing.gb", passes_mooneye_test_rom);
+test_rom!(div_timing, "tests/mooneye/roms/div_timing.gb", passes_mooneye_test_rom);
+test_rom!(ei_timing, "tests/mooneye/roms/ei_timing.gb", passes_mooneye_test_rom);
+test_rom!(di_timing, "tests/mooneye/roms/di_timing-GS.gb", passes_mooneye_test_rom);
+test_rom!(halt_ime0_ei, "tests/mooneye/roms/halt_ime0_ei.gb", passes_mooneye_test_rom);
+test_rom!(halt_ime0_nointr_timing, "tests/mooneye/roms/halt_ime0_nointr_timing.gb", passes_mooneye_test_rom);
+test_rom!(halt_ime1_timing, "tests/mooneye/roms/halt_ime1_timing.gb", passes_mooneye_test_rom);
+test_rom!(halt_ime1_timing2, "tests/mooneye/roms/halt_ime1_timing2-GS.gb", passes_mooneye_test_rom);
+test_rom!(if_ie_registers, "tests/mooneye/roms/if_ie_registers.gb", passes_mooneye_test_rom);
+test_rom!(ei_sequence, "tests/mooneye/roms/ei_sequence.gb", passes_mooneye_test_rom);
+test_rom!(rapid_di_ei, "tests/mooneye/roms/rapid_di_ei.gb", passes_mooneye_test_rom);
+test_rom!(intr_timing, "tests/mooneye/roms/intr_timing.gb", passes_mooneye_test_rom);
+test_rom!(reti_intr_timing, "tests/mooneye/roms/reti_intr_timing.gb", passes_mooneye_test_rom);
+test_rom!(oam_dma_start, "tests/mooneye/roms/oam_dma_start.gb", passes_mooneye_test_rom);
+test_rom!(oam_dma_timing, "tests/mooneye/roms/oam_dma_timing.gb", passes_mooneye_test_rom);
+test_rom!(oam_dma_restart, "tests/mooneye/roms/oam_dma_restart.gb", passes_mooneye_test_rom);
+test_rom!(call_timing, "tests/mooneye/roms/call_timing.gb", passes_mooneye_test_rom);
+test_rom!(call_timing2, "tests/mooneye/roms/call_timing2.gb", passes_mooneye_test_rom);
+test_rom!(call_cc_timing, "tests/mooneye/roms/call_cc_timing.gb", passes_mooneye_test_rom);
+test_rom!(call_cc_timing2, "tests/mooneye/roms/call_cc_timing2.gb", passes_mooneye_test_rom);
+test_rom!(ret_timing, "tests/mooneye/roms/ret_timing.gb", passes_mooneye_test_rom);
+test_rom!(ret_cc_timing, "tests/mooneye/roms/ret_cc_timing.gb", passes_mooneye_test_rom);
+test_rom!(reti_timing, "tests/mooneye/roms/reti_timing.gb", passes_mooneye_test_rom);
+test_rom!(jp_timing, "tests/mooneye/roms/jp_timing.gb", passes_mooneye_test_rom);
+test_rom!(jp_cc_timing, "tests/mooneye/roms/jp_cc_timing.gb", passes_mooneye_test_rom);
+test_rom!(push_timing, "tests/mooneye/roms/push_timing.gb", passes_mooneye_test_rom);
+test_rom!(rst_timing, "tests/mooneye/roms/rst_timing.gb", passes_mooneye_test_rom);
+test_rom!(add_sp_e_timing, "tests/mooneye/roms/add_sp_e_timing.gb", passes_mooneye_test_rom);
+test_rom!(ld_hl_sp_e_timing, "tests/mooneye/roms/ld_hl_sp_e_timing.gb", passes_mooneye_test_rom);
