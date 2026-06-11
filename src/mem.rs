@@ -319,26 +319,19 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                                         // GDMA: copy all bytes now; CPU is stalled.
                                         let length = ((byte & 0x7F) as u16 + 1) * 16;
                                         let src = self.hdma_src;
-                                        let dst = self.hdma_dst;
                                         // Source must be ROM or WRAM/SRAM
                                         if !(src < 0x8000 || (0xA000..=0xDFFF).contains(&src)) {
                                             return;
                                         }
-                                        for i in 0..length {
-                                            let b = self.read_byte(src.wrapping_add(i));
-                                            self.gpu.write_vram((dst.wrapping_add(i)) & 0x1FFF, b);
-                                            // Advance 32 T-cycles per 16-byte block — 8 M-cycles
-                                            // at normal speed, 16 at double speed; both equal 32
-                                            // GPU T-cycles (Pan Docs: ~8 µs per block, both modes).
-                                            if (i + 1) % 16 == 0 {
-                                                for _ in 0..32u16 {
-                                                    self.tick_t();
-                                                }
+                                        // 32 T-cycles per 16-byte block — 8 M-cycles at normal
+                                        // speed, 16 at double speed; both equal 32 GPU T-cycles
+                                        // (Pan Docs: ~8 µs per block, both modes).
+                                        for _ in 0..length / 16 {
+                                            self.copy_hdma_block();
+                                            for _ in 0..32u16 {
+                                                self.tick_t();
                                             }
                                         }
-                                        self.hdma_src = src.wrapping_add(length);
-                                        self.hdma_dst =
-                                            (dst.wrapping_add(length) & 0x1FFF) | 0x8000;
                                     } else {
                                         // HBDMA: arm the transfer; one 16-byte chunk fires
                                         // per HBlank in tick_t.
@@ -413,14 +406,7 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
         // and cause a spurious extra fire on the next ARM.
         let hblank = self.gpu.take_hblank();
         if self.hbdma_active && hblank {
-            let src = self.hdma_src;
-            let dst = self.hdma_dst;
-            for i in 0..16u16 {
-                let b = self.read_byte(src.wrapping_add(i));
-                self.gpu.write_vram((dst.wrapping_add(i)) & 0x1FFF, b);
-            }
-            self.hdma_src = src.wrapping_add(16);
-            self.hdma_dst = (dst.wrapping_add(16) & 0x1FFF) | 0x8000;
+            self.copy_hdma_block();
             self.hbdma_remaining -= 1;
             if self.hbdma_remaining == 0 {
                 self.hbdma_active = false;
@@ -443,6 +429,19 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
     }
     fn is_double_speed(&self) -> bool {
         self.key1 & 0x80 != 0
+    }
+}
+
+impl<M: GPUMemoriesAccess> MMU<M> {
+    fn copy_hdma_block(&mut self) {
+        let src = self.hdma_src;
+        let dst = self.hdma_dst;
+        for i in 0..16u16 {
+            let b = self.read_byte(src.wrapping_add(i));
+            self.gpu.write_vram((dst.wrapping_add(i)) & 0x1FFF, b);
+        }
+        self.hdma_src = src.wrapping_add(16);
+        self.hdma_dst = (dst.wrapping_add(16) & 0x1FFF) | 0x8000;
     }
 }
 
