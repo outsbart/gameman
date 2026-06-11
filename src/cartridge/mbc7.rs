@@ -1,6 +1,5 @@
 use crate::cartridge::Cartridge;
 use serde::{Deserialize, Serialize};
-use std::io;
 
 /// MBC7 (cart type 0x22) — ROM banking + 93C56 EEPROM (128×16-bit) + accelerometer stub.
 ///
@@ -267,9 +266,6 @@ impl CartridgeMBC7 {
         }
     }
 
-    pub fn save(&mut self) -> io::Result<()> {
-        self.cart.save()
-    }
 }
 
 #[cfg(test)]

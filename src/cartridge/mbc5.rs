@@ -1,6 +1,5 @@
 use crate::cartridge::Cartridge;
 use serde::{Deserialize, Serialize};
-use std::io;
 
 #[derive(Serialize, Deserialize)]
 pub struct CartridgeMBC5 {
@@ -23,7 +22,7 @@ impl CartridgeMBC5 {
             0x0000 | 0x1000 => {
                 // enable eram
                 if let Err(e) = cartridge.update_ram_enabled(byte == 0x0A) {
-                    println!("Error saving: {}", e);
+                    log::warn!("Error saving: {}", e);
                 }
             }
             0x2000 => {
@@ -51,7 +50,4 @@ impl CartridgeMBC5 {
         self.cart.write_ram(addr, byte)
     }
 
-    pub fn save(&mut self) -> io::Result<()> {
-        self.cart.save()
-    }
 }

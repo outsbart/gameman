@@ -1,6 +1,5 @@
-use crate::cartridge::{Cartridge, RAM_BANK_SIZE, ROM_BANK_SIZE};
+use crate::cartridge::{Cartridge, ROM_BANK_SIZE};
 use serde::{Deserialize, Serialize};
-use std::io;
 
 #[derive(Serialize, Deserialize)]
 pub struct CartridgeMBC1Multicart {
@@ -42,7 +41,7 @@ impl CartridgeMBC1Multicart {
         match addr & 0xF000 {
             0x0000 | 0x1000 => {
                 if let Err(e) = cartridge.update_ram_enabled(byte & 0x0F == 0x0A) {
-                    println!("Error saving: {}", e);
+                    log::warn!("Error saving: {}", e);
                 }
             }
             0x2000 | 0x3000 => {
@@ -71,9 +70,6 @@ impl CartridgeMBC1Multicart {
     pub fn write_ram(&mut self, addr: u16, byte: u8) {
         self.cart.write_ram(addr, byte)
     }
-    pub fn save(&mut self) -> io::Result<()> {
-        self.cart.save()
-    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -84,15 +80,6 @@ pub struct CartridgeMBC1 {
 impl CartridgeMBC1 {
     pub fn new(cart: Cartridge) -> Self {
         Self { cart }
-    }
-
-    fn ram_offset(&self) -> usize {
-        let cart = &self.cart;
-        if cart.mode == 0 || cart.ram.is_empty() {
-            return 0;
-        }
-        let num_ram_banks = cart.ram.len() / RAM_BANK_SIZE;
-        (cart.ram_bank as usize & (num_ram_banks - 1)) * RAM_BANK_SIZE
     }
 
     pub fn read_rom(&self, addr: u16) -> u8 {
@@ -121,7 +108,7 @@ impl CartridgeMBC1 {
             0x0000 | 0x1000 => {
                 // enable eram
                 if let Err(e) = cartridge.update_ram_enabled(byte & 0x0F == 0x0A) {
-                    println!("Error saving: {}", e);
+                    log::warn!("Error saving: {}", e);
                 }
             }
             0x2000 | 0x3000 => {
@@ -152,20 +139,16 @@ impl CartridgeMBC1 {
         if cart.ram.is_empty() || !cart.ram_enabled {
             return 0xFF;
         }
-        cart.ram[self.ram_offset() + addr as usize]
+        cart.ram[cart.ram_offset() + addr as usize]
     }
 
     pub fn write_ram(&mut self, addr: u16, byte: u8) {
-        let offset = self.ram_offset();
+        let offset = self.cart.ram_offset();
         let cart = &mut self.cart;
         if cart.ram.is_empty() || !cart.ram_enabled {
             return;
         }
         cart.ram[offset + addr as usize] = byte;
         cart.ram_dirty = true;
-    }
-
-    pub fn save(&mut self) -> io::Result<()> {
-        self.cart.save()
     }
 }

@@ -1,6 +1,5 @@
 use crate::cartridge::Cartridge;
 use serde::{Deserialize, Serialize};
-use std::io;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn now_unix_secs() -> u64 {
@@ -91,7 +90,7 @@ impl CartridgeMBC3 {
                     && !self.ram_and_timer_enabled
                     && let Err(e) = self.cart.save()
                 {
-                    println!("Error saving: {}", e);
+                    log::warn!("Error saving: {}", e);
                 }
             }
             0x2000 | 0x3000 => {
@@ -162,9 +161,6 @@ impl CartridgeMBC3 {
         cartridge.ram_dirty = true;
     }
 
-    pub fn save(&mut self) -> io::Result<()> {
-        self.cart.save()
-    }
 }
 
 #[cfg(test)]

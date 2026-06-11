@@ -1,6 +1,5 @@
 use crate::cartridge::{Cartridge, ROM_BANK_SIZE};
 use serde::{Deserialize, Serialize};
-use std::io;
 
 // MBC6 (cart type 0x20) — Net de Get: Mini-Game @ 100.
 //
@@ -61,7 +60,7 @@ impl CartridgeMBC6 {
         match addr & 0xF800 {
             0x0000 => {
                 if let Err(e) = self.cart.update_ram_enabled(byte == 0x0A) {
-                    println!("Error saving: {}", e);
+                    log::warn!("Error saving: {}", e);
                 }
             }
             0x1000 => self.sram_bank_a = byte & 0x01,
@@ -122,7 +121,4 @@ impl CartridgeMBC6 {
         }
     }
 
-    pub fn save(&mut self) -> io::Result<()> {
-        self.cart.save()
-    }
 }

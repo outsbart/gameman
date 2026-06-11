@@ -1,7 +1,6 @@
 use crate::cartridge::Cartridge;
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
-use std::io;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn now_unix_secs() -> u64 {
@@ -74,7 +73,7 @@ impl CartridgeHuC3 {
             0x0000 | 0x1000 => {
                 self.mode = byte & 0x0F;
                 if let Err(e) = self.cart.update_ram_enabled(self.mode == 0x0A) {
-                    println!("Error saving: {}", e);
+                    log::warn!("Error saving: {}", e);
                 }
             }
             0x2000 | 0x3000 => {
@@ -112,10 +111,6 @@ impl CartridgeHuC3 {
             self.nibble_in(byte & 0x0F);
         }
         // mode 0x0C and IR (0x0D) writes are ignored
-    }
-
-    pub fn save(&mut self) -> io::Result<()> {
-        self.cart.save()
     }
 
     // ---- RTC command state machine ----

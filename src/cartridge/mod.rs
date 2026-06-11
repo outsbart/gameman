@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize};
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::io::{Read, Seek, SeekFrom, Write};
+use log::{info, warn};
 use std::path::PathBuf;
 
 pub const ROM_BANK_SIZE: usize = 0x4000;
@@ -63,9 +64,7 @@ impl Cartridge {
         if ram_size > 0 {
             match cart.try_load_save_file() {
                 Ok(file) => cart.save_file = Some(file),
-                Err(e) => {
-                    println!("Unable to load/create save file: {}", e)
-                }
+                Err(e) => warn!("Unable to load/create save file: {}", e),
             }
         }
 
@@ -96,7 +95,7 @@ impl Cartridge {
         } else if file_size != expected_file_size {
             panic!("Save file has unexpected size");
         } else {
-            println!("Loading save file");
+            info!("Loading save file");
             file.read_to_end(&mut self.ram)?;
         };
 
@@ -176,6 +175,15 @@ impl Cartridge {
         self.ram[offset + addr as usize] = byte;
         self.ram_dirty = true;
     }
+
+    // MBC1/HuC1 banked RAM offset: mode 0 always reads bank 0.
+    pub fn ram_offset(&self) -> usize {
+        if self.mode == 0 || self.ram.is_empty() {
+            return 0;
+        }
+        let num_ram_banks = self.ram.len() / RAM_BANK_SIZE;
+        (self.ram_bank as usize & (num_ram_banks - 1)) * RAM_BANK_SIZE
+    }
 }
 
 macro_rules! dispatch_cartridge {
@@ -223,7 +231,7 @@ impl CartridgeKind {
         dispatch_cartridge!(self, write_ram(addr, byte))
     }
     pub fn save(&mut self) -> io::Result<()> {
-        dispatch_cartridge!(self, save())
+        self.inner_cart_mut().save()
     }
 
     pub fn inner_cart(&self) -> &Cartridge {
@@ -292,17 +300,8 @@ fn is_mbc1_multicart(rom: &[u8]) -> bool {
 }
 
 pub fn load_rom(path: &str) -> (CartridgeKind, bool) {
-    let mut rom: Vec<u8> = Vec::new();
-
-    match File::open(path) {
-        Ok(mut file) => {
-            match file.read_to_end(&mut rom) {
-                Ok(_) => {}
-                Err(_) => panic!("couldnt read the rom into the buffer!"),
-            };
-        }
-        Err(_) => panic!("couldnt open the rom file"),
-    }
+    let rom = std::fs::read(path)
+        .unwrap_or_else(|e| panic!("Failed to load ROM '{}': {}", path, e));
 
     let cgb_mode = (rom[0x143] & 0x80) != 0;
     let cart_type = rom[0x147] as usize;
@@ -347,9 +346,9 @@ pub fn load_rom(path: &str) -> (CartridgeKind, bool) {
         }
     };
 
-    println!("rom size = 0x{:x}", rom.len());
-    println!("rom type = 0x{:x}", cart_type);
-    println!("ram size = 0x{:x}", ram_size);
+    info!("rom size = 0x{:x}", rom.len());
+    info!("rom type = 0x{:x}", cart_type);
+    info!("ram size = 0x{:x}", ram_size);
 
     let multicart = (1..=3).contains(&cart_type) && is_mbc1_multicart(&rom);
     let cart = Cartridge::new(PathBuf::from(path), rom, ram_size);

@@ -1,6 +1,5 @@
 use crate::cartridge::Cartridge;
 use serde::{Deserialize, Serialize};
-use std::io;
 
 #[derive(Serialize, Deserialize)]
 pub struct CartridgeMBC2 {
@@ -25,7 +24,7 @@ impl CartridgeMBC2 {
 
         if addr & 0x0100 == 0 {
             if let Err(e) = cartridge.update_ram_enabled(byte & 0x0F == 0x0A) {
-                println!("Error saving: {}", e);
+                log::warn!("Error saving: {}", e);
             }
         } else {
             let mut bank = byte & 0x0F;
@@ -55,10 +54,6 @@ impl CartridgeMBC2 {
 
         cartridge.ram[(addr & 0x01FF) as usize] = byte & 0x0F;
         cartridge.ram_dirty = true;
-    }
-
-    pub fn save(&mut self) -> io::Result<()> {
-        self.cart.save()
     }
 }
 
