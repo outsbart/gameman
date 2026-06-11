@@ -97,6 +97,29 @@ impl From<Sample> for Voltage {
     }
 }
 
+trait SoundChannel {
+    fn tick_length(&mut self);
+    fn half_tick_length(&mut self);
+    fn tick_envelope(&mut self) {}
+}
+
+impl SoundChannel for SquareChannel {
+    fn tick_length(&mut self) { self.tick_length(); }
+    fn half_tick_length(&mut self) { self.half_tick_length(); }
+    fn tick_envelope(&mut self) { self.tick_envelope(); }
+}
+
+impl SoundChannel for WaveChannel {
+    fn tick_length(&mut self) { self.tick_length(); }
+    fn half_tick_length(&mut self) { self.half_tick_length(); }
+}
+
+impl SoundChannel for NoiseChannel {
+    fn tick_length(&mut self) { self.tick_length(); }
+    fn half_tick_length(&mut self) { self.half_tick_length(); }
+    fn tick_envelope(&mut self) { self.tick_envelope(); }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct Sound {
     square_1: SquareChannel,
@@ -446,33 +469,27 @@ impl Sound {
     }
 
     fn tick_frame_sequencer(&mut self) {
-        // if sequence timer has not finished/reached zero yet, return
         if !self.frame_sequencer.tick() {
             return;
         }
-
-        // every 2 steps we tick the channel length counters
-        if self.frame_sequencer.step.is_multiple_of(2) {
-            self.square_1.tick_length();
-            self.square_2.tick_length();
-            self.wave.tick_length();
-            self.noise.tick_length();
-        } else {
-            self.square_1.half_tick_length();
-            self.square_2.half_tick_length();
-            self.wave.half_tick_length();
-            self.noise.half_tick_length();
+        let step = self.frame_sequencer.step;
+        {
+            let mut channels: [&mut dyn SoundChannel; 4] = [
+                &mut self.square_1,
+                &mut self.square_2,
+                &mut self.wave,
+                &mut self.noise,
+            ];
+            if step.is_multiple_of(2) {
+                for ch in channels.iter_mut() { ch.tick_length(); }
+            } else {
+                for ch in channels.iter_mut() { ch.half_tick_length(); }
+            }
+            if step == 7 {
+                for ch in channels.iter_mut() { ch.tick_envelope(); }
+            }
         }
-
-        // at step 7, tick the channel envelopes
-        if self.frame_sequencer.step == 7 {
-            self.square_1.tick_envelope();
-            self.square_2.tick_envelope();
-            self.noise.tick_envelope();
-        }
-
-        // at step 2 and 6 tick the sweep
-        if self.frame_sequencer.step == 2 || self.frame_sequencer.step == 6 {
+        if step == 2 || step == 6 {
             self.square_1.tick_sweep();
         }
     }
