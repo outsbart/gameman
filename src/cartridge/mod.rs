@@ -18,11 +18,11 @@ use crate::cartridge::mbc6::CartridgeMBC6;
 use crate::cartridge::mbc7::CartridgeMBC7;
 use crate::cartridge::nombc::CartridgeNoMBC;
 
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::io::{Read, Seek, SeekFrom, Write};
-use log::{info, warn};
 use std::path::PathBuf;
 
 pub const ROM_BANK_SIZE: usize = 0x4000;
@@ -300,8 +300,8 @@ fn is_mbc1_multicart(rom: &[u8]) -> bool {
 }
 
 pub fn load_rom(path: &str) -> (CartridgeKind, bool) {
-    let rom = std::fs::read(path)
-        .unwrap_or_else(|e| panic!("Failed to load ROM '{}': {}", path, e));
+    let rom =
+        std::fs::read(path).unwrap_or_else(|e| panic!("Failed to load ROM '{}': {}", path, e));
 
     let cgb_mode = (rom[0x143] & 0x80) != 0;
     let cart_type = rom[0x147] as usize;

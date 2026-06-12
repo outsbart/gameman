@@ -119,5 +119,24 @@ byte). GameShark codes force-write a RAM address every frame via `apply_gameshar
 
 ### Validation step
 
-To validate your changes, run the tests with `cargo nextest run` with a timeout of 30 seconds per test.
+After any code change, run `/check` to format, lint, and verify the full test suite passes.
 All 214 tests should pass (21 skipped — those require ROMs not included in the repo).
+
+## Conventions
+
+- Crate names must be lowercase. Never suppress lint warnings to work around a convention violation — fix the underlying
+  issue instead.
+- Run `/check` after edits. A pre-commit hook enforces fmt and clippy; fix all warnings before considering a task done.
+
+## Refactoring Workflow
+
+Multi-step refactors follow a tiered plan (T1-A, T1-B, T2-A, …). Each tier must end with `/check` before moving on.
+When completing a multi-step refactor, finish with a handoff document summarizing completed tiers and remaining work.
+
+For large refactors, use dedicated subagents for planning, implementation, and review: spawn a reviewer subagent after
+each tier to audit the diff for unintended behavior changes, apply fixes, then proceed to the next tier.
+
+## Libretro Development
+
+Before debugging any RetroArch behavior, run `/libretro-verify` to rebuild the `.so` core and confirm RetroArch is
+loading the fresh build.

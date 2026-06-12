@@ -5,32 +5,148 @@ use helpers::GameboyTestExt;
 
 use gameman::gameboy::Gameboy;
 
-test_rom!(pop_timing, "tests/mooneye/roms/pop_timing.gb", passes_mooneye_test_rom);
-test_rom!(div_timing, "tests/mooneye/roms/div_timing.gb", passes_mooneye_test_rom);
-test_rom!(ei_timing, "tests/mooneye/roms/ei_timing.gb", passes_mooneye_test_rom);
-test_rom!(di_timing, "tests/mooneye/roms/di_timing-GS.gb", passes_mooneye_test_rom);
-test_rom!(halt_ime0_ei, "tests/mooneye/roms/halt_ime0_ei.gb", passes_mooneye_test_rom);
-test_rom!(halt_ime0_nointr_timing, "tests/mooneye/roms/halt_ime0_nointr_timing.gb", passes_mooneye_test_rom);
-test_rom!(halt_ime1_timing, "tests/mooneye/roms/halt_ime1_timing.gb", passes_mooneye_test_rom);
-test_rom!(halt_ime1_timing2, "tests/mooneye/roms/halt_ime1_timing2-GS.gb", passes_mooneye_test_rom);
-test_rom!(if_ie_registers, "tests/mooneye/roms/if_ie_registers.gb", passes_mooneye_test_rom);
-test_rom!(ei_sequence, "tests/mooneye/roms/ei_sequence.gb", passes_mooneye_test_rom);
-test_rom!(rapid_di_ei, "tests/mooneye/roms/rapid_di_ei.gb", passes_mooneye_test_rom);
-test_rom!(intr_timing, "tests/mooneye/roms/intr_timing.gb", passes_mooneye_test_rom);
-test_rom!(reti_intr_timing, "tests/mooneye/roms/reti_intr_timing.gb", passes_mooneye_test_rom);
-test_rom!(oam_dma_start, "tests/mooneye/roms/oam_dma_start.gb", passes_mooneye_test_rom);
-test_rom!(oam_dma_timing, "tests/mooneye/roms/oam_dma_timing.gb", passes_mooneye_test_rom);
-test_rom!(oam_dma_restart, "tests/mooneye/roms/oam_dma_restart.gb", passes_mooneye_test_rom);
-test_rom!(call_timing, "tests/mooneye/roms/call_timing.gb", passes_mooneye_test_rom);
-test_rom!(call_timing2, "tests/mooneye/roms/call_timing2.gb", passes_mooneye_test_rom);
-test_rom!(call_cc_timing, "tests/mooneye/roms/call_cc_timing.gb", passes_mooneye_test_rom);
-test_rom!(call_cc_timing2, "tests/mooneye/roms/call_cc_timing2.gb", passes_mooneye_test_rom);
-test_rom!(ret_timing, "tests/mooneye/roms/ret_timing.gb", passes_mooneye_test_rom);
-test_rom!(ret_cc_timing, "tests/mooneye/roms/ret_cc_timing.gb", passes_mooneye_test_rom);
-test_rom!(reti_timing, "tests/mooneye/roms/reti_timing.gb", passes_mooneye_test_rom);
-test_rom!(jp_timing, "tests/mooneye/roms/jp_timing.gb", passes_mooneye_test_rom);
-test_rom!(jp_cc_timing, "tests/mooneye/roms/jp_cc_timing.gb", passes_mooneye_test_rom);
-test_rom!(push_timing, "tests/mooneye/roms/push_timing.gb", passes_mooneye_test_rom);
-test_rom!(rst_timing, "tests/mooneye/roms/rst_timing.gb", passes_mooneye_test_rom);
-test_rom!(add_sp_e_timing, "tests/mooneye/roms/add_sp_e_timing.gb", passes_mooneye_test_rom);
-test_rom!(ld_hl_sp_e_timing, "tests/mooneye/roms/ld_hl_sp_e_timing.gb", passes_mooneye_test_rom);
+test_rom!(
+    pop_timing,
+    "tests/mooneye/roms/pop_timing.gb",
+    passes_mooneye_test_rom
+);
+test_rom!(
+    div_timing,
+    "tests/mooneye/roms/div_timing.gb",
+    passes_mooneye_test_rom
+);
+test_rom!(
+    ei_timing,
+    "tests/mooneye/roms/ei_timing.gb",
+    passes_mooneye_test_rom
+);
+test_rom!(
+    di_timing,
+    "tests/mooneye/roms/di_timing-GS.gb",
+    passes_mooneye_test_rom
+);
+test_rom!(
+    halt_ime0_ei,
+    "tests/mooneye/roms/halt_ime0_ei.gb",
+    passes_mooneye_test_rom
+);
+test_rom!(
+    halt_ime0_nointr_timing,
+    "tests/mooneye/roms/halt_ime0_nointr_timing.gb",
+    passes_mooneye_test_rom
+);
+test_rom!(
+    halt_ime1_timing,
+    "tests/mooneye/roms/halt_ime1_timing.gb",
+    passes_mooneye_test_rom
+);
+test_rom!(
+    halt_ime1_timing2,
+    "tests/mooneye/roms/halt_ime1_timing2-GS.gb",
+    passes_mooneye_test_rom
+);
+test_rom!(
+    if_ie_registers,
+    "tests/mooneye/roms/if_ie_registers.gb",
+    passes_mooneye_test_rom
+);
+test_rom!(
+    ei_sequence,
+    "tests/mooneye/roms/ei_sequence.gb",
+    passes_mooneye_test_rom
+);
+test_rom!(
+    rapid_di_ei,
+    "tests/mooneye/roms/rapid_di_ei.gb",
+    passes_mooneye_test_rom
+);
+test_rom!(
+    intr_timing,
+    "tests/mooneye/roms/intr_timing.gb",
+    passes_mooneye_test_rom
+);
+test_rom!(
+    reti_intr_timing,
+    "tests/mooneye/roms/reti_intr_timing.gb",
+    passes_mooneye_test_rom
+);
+test_rom!(
+    oam_dma_start,
+    "tests/mooneye/roms/oam_dma_start.gb",
+    passes_mooneye_test_rom
+);
+test_rom!(
+    oam_dma_timing,
+    "tests/mooneye/roms/oam_dma_timing.gb",
+    passes_mooneye_test_rom
+);
+test_rom!(
+    oam_dma_restart,
+    "tests/mooneye/roms/oam_dma_restart.gb",
+    passes_mooneye_test_rom
+);
+test_rom!(
+    call_timing,
+    "tests/mooneye/roms/call_timing.gb",
+    passes_mooneye_test_rom
+);
+test_rom!(
+    call_timing2,
+    "tests/mooneye/roms/call_timing2.gb",
+    passes_mooneye_test_rom
+);
+test_rom!(
+    call_cc_timing,
+    "tests/mooneye/roms/call_cc_timing.gb",
+    passes_mooneye_test_rom
+);
+test_rom!(
+    call_cc_timing2,
+    "tests/mooneye/roms/call_cc_timing2.gb",
+    passes_mooneye_test_rom
+);
+test_rom!(
+    ret_timing,
+    "tests/mooneye/roms/ret_timing.gb",
+    passes_mooneye_test_rom
+);
+test_rom!(
+    ret_cc_timing,
+    "tests/mooneye/roms/ret_cc_timing.gb",
+    passes_mooneye_test_rom
+);
+test_rom!(
+    reti_timing,
+    "tests/mooneye/roms/reti_timing.gb",
+    passes_mooneye_test_rom
+);
+test_rom!(
+    jp_timing,
+    "tests/mooneye/roms/jp_timing.gb",
+    passes_mooneye_test_rom
+);
+test_rom!(
+    jp_cc_timing,
+    "tests/mooneye/roms/jp_cc_timing.gb",
+    passes_mooneye_test_rom
+);
+test_rom!(
+    push_timing,
+    "tests/mooneye/roms/push_timing.gb",
+    passes_mooneye_test_rom
+);
+test_rom!(
+    rst_timing,
+    "tests/mooneye/roms/rst_timing.gb",
+    passes_mooneye_test_rom
+);
+test_rom!(
+    add_sp_e_timing,
+    "tests/mooneye/roms/add_sp_e_timing.gb",
+    passes_mooneye_test_rom
+);
+test_rom!(
+    ld_hl_sp_e_timing,
+    "tests/mooneye/roms/ld_hl_sp_e_timing.gb",
+    passes_mooneye_test_rom
+);

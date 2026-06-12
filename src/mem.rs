@@ -9,40 +9,40 @@ use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
 mod io_reg {
-    pub const JOYPAD: u16     = 0xFF00;
-    pub const SB: u16         = 0xFF01;
-    pub const SC: u16         = 0xFF02;
-    pub const DIV: u16        = 0xFF04;
-    pub const TIMA: u16       = 0xFF05;
-    pub const TMA: u16        = 0xFF06;
-    pub const TAC: u16        = 0xFF07;
-    pub const IF: u16         = 0xFF0F;
+    pub const JOYPAD: u16 = 0xFF00;
+    pub const SB: u16 = 0xFF01;
+    pub const SC: u16 = 0xFF02;
+    pub const DIV: u16 = 0xFF04;
+    pub const TIMA: u16 = 0xFF05;
+    pub const TMA: u16 = 0xFF06;
+    pub const TAC: u16 = 0xFF07;
+    pub const IF: u16 = 0xFF0F;
     pub const SOUND_START: u16 = 0xFF10;
-    pub const SOUND_END: u16   = 0xFF3F;
-    pub const GPU_START: u16   = 0xFF40;
-    pub const GPU_MID: u16     = 0xFF45;
-    pub const OAM_DMA: u16    = 0xFF46;
-    pub const GPU_MID2: u16    = 0xFF47;
-    pub const KEY1: u16       = 0xFF4D;
-    pub const BOOT: u16       = 0xFF50;
-    pub const HDMA1: u16      = 0xFF51;
-    pub const HDMA2: u16      = 0xFF52;
-    pub const HDMA3: u16      = 0xFF53;
-    pub const HDMA4: u16      = 0xFF54;
-    pub const HDMA5: u16      = 0xFF55;
-    pub const RP: u16         = 0xFF56;
-    pub const OPRI: u16       = 0xFF6C;
-    pub const GPU_END: u16     = 0xFF7F;
-    pub const SVBK: u16       = 0xFF70;
-    pub const UNDOC72: u16    = 0xFF72;
-    pub const UNDOC73: u16    = 0xFF73;
-    pub const UNDOC74: u16    = 0xFF74;
-    pub const UNDOC75: u16    = 0xFF75;
-    pub const PCM12: u16      = 0xFF76;
-    pub const PCM34: u16      = 0xFF77;
-    pub const HRAM_START: u16  = 0xFF80;
-    pub const HRAM_END: u16    = 0xFFFE;
-    pub const IE: u16          = 0xFFFF;
+    pub const SOUND_END: u16 = 0xFF3F;
+    pub const GPU_START: u16 = 0xFF40;
+    pub const GPU_MID: u16 = 0xFF45;
+    pub const OAM_DMA: u16 = 0xFF46;
+    pub const GPU_MID2: u16 = 0xFF47;
+    pub const KEY1: u16 = 0xFF4D;
+    pub const BOOT: u16 = 0xFF50;
+    pub const HDMA1: u16 = 0xFF51;
+    pub const HDMA2: u16 = 0xFF52;
+    pub const HDMA3: u16 = 0xFF53;
+    pub const HDMA4: u16 = 0xFF54;
+    pub const HDMA5: u16 = 0xFF55;
+    pub const RP: u16 = 0xFF56;
+    pub const OPRI: u16 = 0xFF6C;
+    pub const GPU_END: u16 = 0xFF7F;
+    pub const SVBK: u16 = 0xFF70;
+    pub const UNDOC72: u16 = 0xFF72;
+    pub const UNDOC73: u16 = 0xFF73;
+    pub const UNDOC74: u16 = 0xFF74;
+    pub const UNDOC75: u16 = 0xFF75;
+    pub const PCM12: u16 = 0xFF76;
+    pub const PCM34: u16 = 0xFF77;
+    pub const HRAM_START: u16 = 0xFF80;
+    pub const HRAM_END: u16 = 0xFFFE;
+    pub const IE: u16 = 0xFFFF;
 }
 
 #[derive(Serialize, Deserialize)]
@@ -263,8 +263,11 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                         io_reg::UNDOC73 if self.gpu.cgb_mode() => self.cgb_undoc[1],
                         io_reg::UNDOC74 if self.gpu.cgb_mode() => self.cgb_undoc[2],
                         io_reg::UNDOC75 if self.gpu.cgb_mode() => self.cgb_undoc[3] | 0x8F,
-                        io_reg::PCM12 | io_reg::PCM34 if self.gpu.cgb_mode() => self.sound.read_byte(addr),
-                        io_reg::GPU_START..=io_reg::GPU_MID | io_reg::GPU_MID2..=io_reg::GPU_END => self.gpu.read_byte(addr),
+                        io_reg::PCM12 | io_reg::PCM34 if self.gpu.cgb_mode() => {
+                            self.sound.read_byte(addr)
+                        }
+                        io_reg::GPU_START..=io_reg::GPU_MID
+                        | io_reg::GPU_MID2..=io_reg::GPU_END => self.gpu.read_byte(addr),
                         io_reg::HRAM_START..=io_reg::HRAM_END => self.zram[(addr & 0x7F) as usize],
                         io_reg::IE => self.interrupt_enable,
                         _ => 0xFF,
@@ -329,7 +332,9 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                         io_reg::TIMA => self.timers.write_tima(byte),
                         io_reg::TMA => self.timers.write_tma(byte),
                         io_reg::TAC => self.timers.write_tac(byte),
-                        io_reg::SOUND_START..=io_reg::SOUND_END => self.sound.write_byte(addr, byte),
+                        io_reg::SOUND_START..=io_reg::SOUND_END => {
+                            self.sound.write_byte(addr, byte)
+                        }
                         io_reg::OAM_DMA => self.oam_dma.trigger(byte),
                         // CGB HDMA registers — only active in CGB mode
                         io_reg::HDMA1..=io_reg::HDMA5 if self.gpu.cgb_mode() => {
@@ -396,8 +401,11 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                         io_reg::UNDOC74 if self.gpu.cgb_mode() => self.cgb_undoc[2] = byte,
                         io_reg::UNDOC75 if self.gpu.cgb_mode() => self.cgb_undoc[3] = byte & 0x70,
                         io_reg::BOOT => self.still_bios = false,
-                        io_reg::GPU_START..=io_reg::GPU_MID | io_reg::GPU_MID2..=io_reg::GPU_END => self.gpu.write_byte(addr, byte),
-                        io_reg::HRAM_START..=io_reg::HRAM_END => self.zram[(addr & 0x007F) as usize] = byte,
+                        io_reg::GPU_START..=io_reg::GPU_MID
+                        | io_reg::GPU_MID2..=io_reg::GPU_END => self.gpu.write_byte(addr, byte),
+                        io_reg::HRAM_START..=io_reg::HRAM_END => {
+                            self.zram[(addr & 0x007F) as usize] = byte
+                        }
                         _ => {}
                     },
 

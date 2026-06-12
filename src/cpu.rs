@@ -1129,11 +1129,17 @@ impl<M: Memory> CPU<M> {
     // === Helpers ===
 
     #[inline(always)]
-    fn op_reg8_dst(op: u8) -> u8 { (op >> 3) & 0x07 }
+    fn op_reg8_dst(op: u8) -> u8 {
+        (op >> 3) & 0x07
+    }
     #[inline(always)]
-    fn op_reg8_src(op: u8) -> u8 { op & 0x07 }
+    fn op_reg8_src(op: u8) -> u8 {
+        op & 0x07
+    }
     #[inline(always)]
-    fn op_reg16(op: u8) -> u8 { (op >> 4) & 0x03 }
+    fn op_reg16(op: u8) -> u8 {
+        (op >> 4) & 0x03
+    }
 
     fn cb_reg(reg_idx: u8) -> Operand {
         match reg_idx {

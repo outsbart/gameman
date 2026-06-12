@@ -160,7 +160,6 @@ impl CartridgeMBC3 {
         cartridge.ram[offset + addr as usize] = byte;
         cartridge.ram_dirty = true;
     }
-
 }
 
 #[cfg(test)]

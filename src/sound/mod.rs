@@ -26,7 +26,10 @@ pub struct AudioBuffer {
 
 impl AudioBuffer {
     pub fn new(chunk_size: usize) -> Self {
-        Self { pending: Vec::new(), chunk_size }
+        Self {
+            pending: Vec::new(),
+            chunk_size,
+        }
     }
 
     pub fn push(&mut self, samples: impl IntoIterator<Item = i16>) {
@@ -131,20 +134,36 @@ trait SoundChannel {
 }
 
 impl SoundChannel for SquareChannel {
-    fn tick_length(&mut self) { self.tick_length(); }
-    fn half_tick_length(&mut self) { self.half_tick_length(); }
-    fn tick_envelope(&mut self) { self.tick_envelope(); }
+    fn tick_length(&mut self) {
+        self.tick_length();
+    }
+    fn half_tick_length(&mut self) {
+        self.half_tick_length();
+    }
+    fn tick_envelope(&mut self) {
+        self.tick_envelope();
+    }
 }
 
 impl SoundChannel for WaveChannel {
-    fn tick_length(&mut self) { self.tick_length(); }
-    fn half_tick_length(&mut self) { self.half_tick_length(); }
+    fn tick_length(&mut self) {
+        self.tick_length();
+    }
+    fn half_tick_length(&mut self) {
+        self.half_tick_length();
+    }
 }
 
 impl SoundChannel for NoiseChannel {
-    fn tick_length(&mut self) { self.tick_length(); }
-    fn half_tick_length(&mut self) { self.half_tick_length(); }
-    fn tick_envelope(&mut self) { self.tick_envelope(); }
+    fn tick_length(&mut self) {
+        self.tick_length();
+    }
+    fn half_tick_length(&mut self) {
+        self.half_tick_length();
+    }
+    fn tick_envelope(&mut self) {
+        self.tick_envelope();
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -453,22 +472,30 @@ impl Default for OutputBuffer {
 macro_rules! envelope_rw {
     ($set:ident, $get:ident, $ch:ident) => {
         pub fn $set(&mut self, value: u8) {
-            if !self.power { return; }
+            if !self.power {
+                return;
+            }
             let mut env = Envelope::new();
             env.write(value);
             self.$ch.set_envelope(env);
         }
-        pub fn $get(&self) -> u8 { self.$ch.get_envelope().read() }
+        pub fn $get(&self) -> u8 {
+            self.$ch.get_envelope().read()
+        }
     };
 }
 
 macro_rules! freq_lsb_wo {
     ($set:ident, $get:ident, $ch:ident) => {
         pub fn $set(&mut self, value: u8) {
-            if !self.power { return; }
+            if !self.power {
+                return;
+            }
             self.$ch.set_frequency_lsb(value);
         }
-        pub fn $get(&self) -> u8 { 0xFF }
+        pub fn $get(&self) -> u8 {
+            0xFF
+        }
     };
 }
 
@@ -530,12 +557,18 @@ impl Sound {
                 &mut self.noise,
             ];
             if step.is_multiple_of(2) {
-                for ch in channels.iter_mut() { ch.tick_length(); }
+                for ch in channels.iter_mut() {
+                    ch.tick_length();
+                }
             } else {
-                for ch in channels.iter_mut() { ch.half_tick_length(); }
+                for ch in channels.iter_mut() {
+                    ch.half_tick_length();
+                }
             }
             if step == 7 {
-                for ch in channels.iter_mut() { ch.tick_envelope(); }
+                for ch in channels.iter_mut() {
+                    ch.tick_envelope();
+                }
             }
         }
         if step == 2 || step == 6 {

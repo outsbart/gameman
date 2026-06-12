@@ -5,16 +5,81 @@ use helpers::GameboyTestExt;
 
 use gameman::gameboy::Gameboy;
 
-test_rom!(bits_bank1, "tests/mooneye/roms/mbc1/bits_bank1.gb", passes_mooneye_test_rom, new_clean);
-test_rom!(bits_bank2, "tests/mooneye/roms/mbc1/bits_bank2.gb", passes_mooneye_test_rom, new_clean);
-test_rom!(bits_mode, "tests/mooneye/roms/mbc1/bits_mode.gb", passes_mooneye_test_rom, new_clean);
-test_rom!(bits_ramg, "tests/mooneye/roms/mbc1/bits_ramg.gb", passes_mooneye_test_rom, new_clean);
-test_rom!(multicart_rom_8mb, "tests/mooneye/roms/mbc1/multicart_rom_8Mb.gb", passes_mooneye_test_rom, new_clean);
-test_rom!(ram_64kb, "tests/mooneye/roms/mbc1/ram_64kb.gb", passes_mooneye_test_rom, new_clean);
-test_rom!(ram_256kb, "tests/mooneye/roms/mbc1/ram_256kb.gb", passes_mooneye_test_rom, new_clean);
-test_rom!(rom_512kb, "tests/mooneye/roms/mbc1/rom_512kb.gb", passes_mooneye_test_rom, new_clean);
-test_rom!(rom_1mb, "tests/mooneye/roms/mbc1/rom_1Mb.gb", passes_mooneye_test_rom, new_clean);
-test_rom!(rom_2mb, "tests/mooneye/roms/mbc1/rom_2Mb.gb", passes_mooneye_test_rom, new_clean);
-test_rom!(rom_4mb, "tests/mooneye/roms/mbc1/rom_4Mb.gb", passes_mooneye_test_rom, new_clean);
-test_rom!(rom_8mb, "tests/mooneye/roms/mbc1/rom_8Mb.gb", passes_mooneye_test_rom, new_clean);
-test_rom!(rom_16mb, "tests/mooneye/roms/mbc1/rom_16Mb.gb", passes_mooneye_test_rom, new_clean);
+test_rom!(
+    bits_bank1,
+    "tests/mooneye/roms/mbc1/bits_bank1.gb",
+    passes_mooneye_test_rom,
+    new_clean
+);
+test_rom!(
+    bits_bank2,
+    "tests/mooneye/roms/mbc1/bits_bank2.gb",
+    passes_mooneye_test_rom,
+    new_clean
+);
+test_rom!(
+    bits_mode,
+    "tests/mooneye/roms/mbc1/bits_mode.gb",
+    passes_mooneye_test_rom,
+    new_clean
+);
+test_rom!(
+    bits_ramg,
+    "tests/mooneye/roms/mbc1/bits_ramg.gb",
+    passes_mooneye_test_rom,
+    new_clean
+);
+test_rom!(
+    multicart_rom_8mb,
+    "tests/mooneye/roms/mbc1/multicart_rom_8Mb.gb",
+    passes_mooneye_test_rom,
+    new_clean
+);
+test_rom!(
+    ram_64kb,
+    "tests/mooneye/roms/mbc1/ram_64kb.gb",
+    passes_mooneye_test_rom,
+    new_clean
+);
+test_rom!(
+    ram_256kb,
+    "tests/mooneye/roms/mbc1/ram_256kb.gb",
+    passes_mooneye_test_rom,
+    new_clean
+);
+test_rom!(
+    rom_512kb,
+    "tests/mooneye/roms/mbc1/rom_512kb.gb",
+    passes_mooneye_test_rom,
+    new_clean
+);
+test_rom!(
+    rom_1mb,
+    "tests/mooneye/roms/mbc1/rom_1Mb.gb",
+    passes_mooneye_test_rom,
+    new_clean
+);
+test_rom!(
+    rom_2mb,
+    "tests/mooneye/roms/mbc1/rom_2Mb.gb",
+    passes_mooneye_test_rom,
+    new_clean
+);
+test_rom!(
+    rom_4mb,
+    "tests/mooneye/roms/mbc1/rom_4Mb.gb",
+    passes_mooneye_test_rom,
+    new_clean
+);
+test_rom!(
+    rom_8mb,
+    "tests/mooneye/roms/mbc1/rom_8Mb.gb",
+    passes_mooneye_test_rom,
+    new_clean
+);
+test_rom!(
+    rom_16mb,
+    "tests/mooneye/roms/mbc1/rom_16Mb.gb",
+    passes_mooneye_test_rom,
+    new_clean
+);

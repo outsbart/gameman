@@ -265,7 +265,6 @@ impl CartridgeMBC7 {
             }
         }
     }
-
 }
 
 #[cfg(test)]

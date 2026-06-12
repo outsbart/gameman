@@ -2,8 +2,8 @@ extern crate sdl3;
 
 use gameman::gameboy::Gameboy;
 use gameman::keypad::Button;
-use gameman::sound::AudioBuffer;
 use gameman::sound::AUDIO_BUFFER_SIZE;
+use gameman::sound::AudioBuffer;
 use gameman::sound::SAMPLE_RATE;
 
 use sdl3::audio::{AudioFormat, AudioSpec};

@@ -120,5 +120,4 @@ impl CartridgeMBC6 {
             self.cart.ram_dirty = true;
         }
     }
-
 }

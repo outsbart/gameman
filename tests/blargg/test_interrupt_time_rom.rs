@@ -5,4 +5,8 @@ use helpers::GameboyTestExt;
 
 use gameman::gameboy::Gameboy;
 
-test_rom!(interrupt_time, "tests/blargg/roms/interrupt_time/interrupt_time.gb", passes_blargg_ram_test_rom);
+test_rom!(
+    interrupt_time,
+    "tests/blargg/roms/interrupt_time/interrupt_time.gb",
+    passes_blargg_ram_test_rom
+);

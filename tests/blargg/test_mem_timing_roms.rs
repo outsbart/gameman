@@ -17,6 +17,18 @@ test_rom!(
     "tests/blargg/roms/mem_timing-2/mem_timing.gb",
     passes_blargg_ram_test_rom
 );
-test_rom!(mem_timing_2_01_read_timing, "tests/blargg/roms/mem_timing-2/01-read_timing.gb", passes_blargg_ram_test_rom);
-test_rom!(mem_timing_2_02_write_timing, "tests/blargg/roms/mem_timing-2/02-write_timing.gb", passes_blargg_ram_test_rom);
-test_rom!(mem_timing_2_03_modify_timing, "tests/blargg/roms/mem_timing-2/03-modify_timing.gb", passes_blargg_ram_test_rom);
+test_rom!(
+    mem_timing_2_01_read_timing,
+    "tests/blargg/roms/mem_timing-2/01-read_timing.gb",
+    passes_blargg_ram_test_rom
+);
+test_rom!(
+    mem_timing_2_02_write_timing,
+    "tests/blargg/roms/mem_timing-2/02-write_timing.gb",
+    passes_blargg_ram_test_rom
+);
+test_rom!(
+    mem_timing_2_03_modify_timing,
+    "tests/blargg/roms/mem_timing-2/03-modify_timing.gb",
+    passes_blargg_ram_test_rom
+);

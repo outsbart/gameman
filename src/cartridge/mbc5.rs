@@ -49,5 +49,4 @@ impl CartridgeMBC5 {
     pub fn write_ram(&mut self, addr: u16, byte: u8) {
         self.cart.write_ram(addr, byte)
     }
-
 }
