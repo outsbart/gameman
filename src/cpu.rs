@@ -1165,9 +1165,9 @@ impl<M: Memory> CPU<M> {
         let is_hl = reg_idx == 6;
         let reg = Self::cb_reg(reg_idx);
 
-        match op_class {
+        let op = self.read_operand8(reg);
+        let hl_cycles: u8 = match op_class {
             0 => {
-                let op = self.read_operand8(reg);
                 let (_, _, _, prev_c) = self.regs.get_flags();
                 let (result, new_carry) = match sub_op {
                     0 => cb_rlc(op),
@@ -1182,32 +1182,30 @@ impl<M: Memory> CPU<M> {
                 };
                 self.write_operand8(reg, result);
                 self.regs.set_flags(result == 0, false, false, new_carry);
-                if is_hl { 16 } else { 8 }
+                16
             }
             1 => {
                 // BIT n, r
-                let op = self.read_operand8(reg);
                 let (_, _, _, old_c) = self.regs.get_flags();
                 let bit_set = bit(op, sub_op);
                 self.regs.set_flags(!bit_set, false, true, old_c);
-                if is_hl { 12 } else { 8 }
+                12
             }
             2 => {
                 // RES n, r
-                let op = self.read_operand8(reg);
                 let result = reset_bit(op, sub_op);
                 self.write_operand8(reg, result);
-                if is_hl { 16 } else { 8 }
+                16
             }
             3 => {
                 // SET n, r
-                let op = self.read_operand8(reg);
                 let result = set_bit(op, sub_op);
                 self.write_operand8(reg, result);
-                if is_hl { 16 } else { 8 }
+                16
             }
             _ => unreachable!(),
-        }
+        };
+        if is_hl { hl_cycles } else { 8 }
     }
 }
 
