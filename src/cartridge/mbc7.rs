@@ -1,4 +1,5 @@
 use crate::cartridge::Cartridge;
+use crate::utils::{hi, lo, word};
 use serde::{Deserialize, Serialize};
 
 /// MBC7 (cart type 0x22) — ROM banking + 93C56 EEPROM (128×16-bit) + accelerometer stub.
@@ -77,7 +78,7 @@ impl CartridgeMBC7 {
                 }
             }
             0x2000 | 0x3000 => {
-                self.cart.rom_bank = ((byte & 0x7F) as u16).max(1);
+                self.cart.rom_bank = u16::from(byte & 0x7F).max(1);
             }
             0x4000 | 0x5000 => {
                 if byte == 0x40 {
@@ -98,13 +99,13 @@ impl CartridgeMBC7 {
         }
         match addr & 0x00FF {
             0x00 if self.accel_latched => 0x00,
-            0x02 if self.accel_latched => (self.accel_x & 0xFF) as u8,
-            0x03 if self.accel_latched => (self.accel_x >> 8) as u8,
-            0x04 if self.accel_latched => (self.accel_y & 0xFF) as u8,
-            0x05 if self.accel_latched => (self.accel_y >> 8) as u8,
-            0x06 if self.accel_latched => (self.accel_x >> 8) as u8,
-            0x07 if self.accel_latched => (self.accel_y >> 8) as u8,
-            0x80 => (self.do_out as u8) << 1,
+            0x02 if self.accel_latched => lo(self.accel_x),
+            0x03 if self.accel_latched => hi(self.accel_x),
+            0x04 if self.accel_latched => lo(self.accel_y),
+            0x05 if self.accel_latched => hi(self.accel_y),
+            0x06 if self.accel_latched => hi(self.accel_x),
+            0x07 if self.accel_latched => hi(self.accel_y),
+            0x80 => u8::from(self.do_out) << 1,
             _ => 0xFF,
         }
     }
@@ -159,7 +160,7 @@ impl CartridgeMBC7 {
             1 => {
                 // Receiving command: shift in until we have 10 bits
                 // Layout: [9]=start [8:7]=opcode [6:0]=addr (7-bit for 128-word EEPROM)
-                self.shift_reg = (self.shift_reg << 1) | di as u16;
+                self.shift_reg = (self.shift_reg << 1) | u16::from(di);
                 self.shift_cnt += 1;
                 if self.shift_cnt == 10 {
                     self.decode_command();
@@ -176,7 +177,7 @@ impl CartridgeMBC7 {
             }
             3 => {
                 // Writing: clock in 16 data bits
-                self.in_reg = (self.in_reg << 1) | di as u16;
+                self.in_reg = (self.in_reg << 1) | u16::from(di);
                 self.in_cnt += 1;
                 if self.in_cnt == 16 {
                     self.finish_write();
@@ -208,7 +209,7 @@ impl CartridgeMBC7 {
                     .get(addr as usize * 2 + 1)
                     .copied()
                     .unwrap_or(0xFF);
-                self.out_reg = (hi as u16) << 8 | lo as u16;
+                self.out_reg = word(hi, lo);
                 self.out_cnt = 16;
                 self.do_out = false; // DO low before first data bit
                 self.phase = 2;
@@ -259,8 +260,8 @@ impl CartridgeMBC7 {
         if self.write_enabled {
             let a = self.eeprom_addr as usize;
             if a * 2 + 1 < self.cart.ram.len() {
-                self.cart.ram[a * 2] = (self.in_reg & 0xFF) as u8;
-                self.cart.ram[a * 2 + 1] = (self.in_reg >> 8) as u8;
+                self.cart.ram[a * 2] = lo(self.in_reg);
+                self.cart.ram[a * 2 + 1] = hi(self.in_reg);
                 self.cart.ram_dirty = true;
             }
         }
@@ -317,7 +318,7 @@ mod tests {
         for _ in 0..16 {
             c.write_ram(0x0080, 0x80); // CS=1, CLK=0
             c.write_ram(0x0080, 0x80 | 0x40); // CS=1, CLK=1 → updates do_out
-            word = (word << 1) | ((c.read_ram(0x0080) >> 1) & 1) as u16;
+            word = (word << 1) | u16::from((c.read_ram(0x0080) >> 1) & 1);
         }
         word
     }

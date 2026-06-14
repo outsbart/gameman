@@ -1,3 +1,4 @@
+use crate::utils::{bit, bit_if, field, hi_nibble, lo_nibble};
 use serde::{Deserialize, Serialize};
 use std::ops::{Add, AddAssign};
 
@@ -123,7 +124,7 @@ impl From<Sample> for Voltage {
     // generates -1.0 and an input of 15 generates +1.0, using arbitrary
     // voltage units.
     fn from(sample: Sample) -> Self {
-        Voltage(u8::from(SAMPLE_MAX) as i16 - (u8::from(sample) as i16 * 2))
+        Voltage(i16::from(u8::from(SAMPLE_MAX)) - (i16::from(u8::from(sample)) * 2))
     }
 }
 
@@ -308,7 +309,7 @@ impl SoundOutput {
         // Without this, switching a DAC on/off injects a DC step → audible click.
         //   out       = in − capacitor
         //   capacitor = in − out × α        (α ≈ 0.999958, see field comment)
-        let sample = scaled.0 as f32;
+        let sample = f32::from(scaled.0);
         let out = sample - self.capacitor;
         self.capacitor = sample - out * 0.999958;
 
@@ -331,7 +332,7 @@ impl VolumeMaster {
     }
 
     pub fn apply(&self, voltage: Voltage) -> Voltage {
-        Voltage(voltage.0 * (self.volume + 1) as i16)
+        Voltage(voltage.0 * i16::from(self.volume + 1))
     }
 
     pub fn new() -> Self {
@@ -375,17 +376,17 @@ impl Mixer {
     }
 
     pub fn write(&mut self, byte: u8) {
-        self.noise = (byte & 0b1000) >> 3 != 0;
-        self.wave = (byte & 0b100) >> 2 != 0;
-        self.square_2 = (byte & 0b10) >> 1 != 0;
-        self.square_1 = byte & 0b1 != 0;
+        self.noise = bit(byte, 3);
+        self.wave = bit(byte, 2);
+        self.square_2 = bit(byte, 1);
+        self.square_1 = bit(byte, 0);
     }
 
     pub fn read(&self) -> u8 {
-        (if self.noise { 0b1000 } else { 0 })
-            | (if self.wave { 0b100 } else { 0 })
-            | (if self.square_2 { 0b10 } else { 0 })
-            | (if self.square_1 { 1 } else { 0 })
+        bit_if(self.noise, 3)
+            | bit_if(self.wave, 2)
+            | bit_if(self.square_2, 1)
+            | bit_if(self.square_1, 0)
     }
 
     pub fn mix(&self, voltages: ChannelsOutput) -> Voltage {
@@ -441,7 +442,7 @@ impl OutputBuffer {
             self.audio_available = true;
 
             for i in 0..AUDIO_BUFFER_SIZE {
-                self.buffer_2[i] = self.buffer[i] * VOLUME_BOOST as i16;
+                self.buffer_2[i] = self.buffer[i] * i16::from(VOLUME_BOOST);
             }
 
             self.buffer_index = 0;
@@ -456,7 +457,7 @@ impl OutputBuffer {
             self.audio_available = false;
         }
         for i in 0..self.buffer_index {
-            out.push(self.buffer[i] * VOLUME_BOOST as i16);
+            out.push(self.buffer[i] * i16::from(VOLUME_BOOST));
         }
         self.buffer_index = 0;
         out
@@ -796,32 +797,21 @@ impl Sound {
             return;
         }
 
-        self.left_sound_output
-            .mixer
-            .set_vin_enable((byte & 0b1000_0000) >> 7 != 0);
-        self.right_sound_output
-            .mixer
-            .set_vin_enable((byte & 0b1000) >> 3 != 0);
+        self.left_sound_output.mixer.set_vin_enable(bit(byte, 7));
+        self.right_sound_output.mixer.set_vin_enable(bit(byte, 3));
         self.left_sound_output
             .volume_master
-            .set_volume((byte & 0b0111_0000) >> 4);
+            .set_volume(field(byte, 4, 3));
         self.right_sound_output
             .volume_master
-            .set_volume(byte & 0b111);
+            .set_volume(field(byte, 0, 3));
     }
 
     pub fn get_nr50(&self) -> u8 {
-        (if self.left_sound_output.mixer.get_vin_enable() {
-            0b1000_0000
-        } else {
-            0
-        }) | (self.left_sound_output.volume_master.get_volume() << 4)
-            | (if self.right_sound_output.mixer.get_vin_enable() {
-                0b1000
-            } else {
-                0
-            })
-            | (self.right_sound_output.volume_master.get_volume())
+        bit_if(self.left_sound_output.mixer.get_vin_enable(), 7)
+            | (self.left_sound_output.volume_master.get_volume() << 4)
+            | bit_if(self.right_sound_output.mixer.get_vin_enable(), 3)
+            | self.right_sound_output.volume_master.get_volume()
     }
 
     // NR51 FF25 NW21 NW21 Left enables, Right enables
@@ -830,8 +820,8 @@ impl Sound {
             return;
         }
 
-        self.left_sound_output.mixer.write((byte & 0xF0) >> 4);
-        self.right_sound_output.mixer.write(byte & 0xF);
+        self.left_sound_output.mixer.write(hi_nibble(byte));
+        self.right_sound_output.mixer.write(lo_nibble(byte));
     }
 
     pub fn get_nr51(&self) -> u8 {
@@ -840,7 +830,7 @@ impl Sound {
 
     // NR52 FF26 P--- NW21 Power control/status, Channel length statuses
     pub fn set_nr52(&mut self, byte: u8) {
-        let new_power = byte & 0b1000_0000 != 0;
+        let new_power = bit(byte, 7);
 
         // power didn't change
         if new_power == self.power {
@@ -869,11 +859,11 @@ impl Sound {
 
     pub fn get_nr52(&self) -> u8 {
         0b0111_0000
-            | (if self.power { 0b1000_0000 } else { 0 })
-            | (if self.noise.is_running() { 0b_1000 } else { 0 })
-            | (if self.wave.is_running() { 0b_0100 } else { 0 })
-            | (if self.square_2.is_running() { 0b_10 } else { 0 })
-            | (if self.square_1.is_running() { 1 } else { 0 })
+            | bit_if(self.power, 7)
+            | bit_if(self.noise.is_running(), 3)
+            | bit_if(self.wave.is_running(), 2)
+            | bit_if(self.square_2.is_running(), 1)
+            | bit_if(self.square_1.is_running(), 0)
     }
 
     pub fn get_pcm12(&self) -> u8 {

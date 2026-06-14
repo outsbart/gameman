@@ -67,7 +67,7 @@ impl GameboyTestExt for Gameboy {
         let mut clocks = 0u32;
         loop {
             let (_line, _opcode, t) = self.cpu_step();
-            clocks += t as u32;
+            clocks += u32::from(t);
             let val = self.read_byte(0xA000);
             match val {
                 0x80 | 0xFF => {}
@@ -109,7 +109,7 @@ impl GameboyTestExt for Gameboy {
                 ld_b_b += 1;
             }
 
-            clocks_this_frame += t as u32;
+            clocks_this_frame += u32::from(t);
 
             if clocks_this_frame >= CLOCKS_IN_A_FRAME {
                 break;

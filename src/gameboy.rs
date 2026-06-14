@@ -64,7 +64,7 @@ impl Gameboy {
         loop {
             let (_line, _opcode, t) = self.cpu_step();
 
-            clocks_this_frame += t as u32;
+            clocks_this_frame += u32::from(t);
 
             if clocks_this_frame >= CLOCKS_IN_A_FRAME {
                 break;

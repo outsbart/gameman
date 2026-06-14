@@ -44,7 +44,7 @@ impl OamDma {
             self.startup -= 1;
             if self.startup == 0 {
                 self.remaining = 0;
-                return Some((self.source as u16) << 8);
+                return Some(u16::from(self.source) << 8);
             }
         } else if self.remaining > 0 {
             self.remaining -= 1;
@@ -118,12 +118,11 @@ pub(crate) fn apply_oam_corruption(oam: &mut [u8; 160], lcd_enabled: bool, r: u8
     if !(8..=152).contains(&r) {
         return;
     }
-    let a = oam[r] as u16 | ((oam[r + 1] as u16) << 8);
-    let b = oam[r - 8] as u16 | ((oam[r - 7] as u16) << 8);
-    let c = oam[r - 4] as u16 | ((oam[r - 3] as u16) << 8);
+    let a = u16::from_le_bytes([oam[r], oam[r + 1]]);
+    let b = u16::from_le_bytes([oam[r - 8], oam[r - 7]]);
+    let c = u16::from_le_bytes([oam[r - 4], oam[r - 3]]);
     let result = ((a ^ c) & (b ^ c)) ^ c;
-    oam[r] = result as u8;
-    oam[r + 1] = (result >> 8) as u8;
+    [oam[r], oam[r + 1]] = result.to_le_bytes();
     for i in 2..8usize {
         oam[r + i] = oam[r - 8 + i];
     }

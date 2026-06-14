@@ -1,4 +1,4 @@
-use crate::cpu::is_bit_set;
+use crate::utils::{bit, bit_if, field};
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
@@ -580,9 +580,9 @@ impl GPU {
     }
 
     fn color15_to_xrgb(c: u16) -> u32 {
-        let r = (c & 0x1F) as u32;
-        let g = ((c >> 5) & 0x1F) as u32;
-        let b = ((c >> 10) & 0x1F) as u32;
+        let r = u32::from(c & 0x1F);
+        let g = u32::from((c >> 5) & 0x1F);
+        let b = u32::from((c >> 10) & 0x1F);
         if COLOR_CORRECTION {
             // SameBoy-style correction: GBC LCD cross-channel mixing, normalised to 8-bit
             let r_out = (r * 26 + g * 4 + b * 2) * 255 / (32 * 31);
@@ -620,8 +620,8 @@ impl GPU {
 
     /// Combine the two bit-planes of a tile row into a 2-bit colour number for `bit_pos`.
     fn decode_pixel(byte_low: u8, byte_high: u8, bit_pos: u8) -> u8 {
-        let high_bit = is_bit_set(bit_pos, byte_high as u16) as u8;
-        let low_bit = is_bit_set(bit_pos, byte_low as u16) as u8;
+        let high_bit = u8::from(bit(byte_high, bit_pos));
+        let low_bit = u8::from(bit(byte_low, bit_pos));
         (high_bit << 1) | low_bit
     }
 
@@ -638,11 +638,11 @@ impl GPU {
         } else {
             self.vram[VRAM_BANK_SIZE + tilemap_index]
         };
-        let palette_idx = (attr & 0x07) as usize;
-        let tile_bank = ((attr >> 3) & 0x01) as usize;
-        let flip_h = (attr >> 5) & 0x01 != 0;
-        let flip_v = (attr >> 6) & 0x01 != 0;
-        let bg_priority = (attr >> 7) & 0x01 != 0;
+        let palette_idx = field(attr, 0, 3) as usize;
+        let tile_bank = usize::from(bit(attr, 3));
+        let flip_h = bit(attr, 5);
+        let flip_v = bit(attr, 6);
+        let bg_priority = bit(attr, 7);
 
         let effective_cell_y = if flip_v { 7 - cell_y } else { cell_y };
         let bit_pos = if flip_h {
@@ -711,7 +711,7 @@ impl GPU {
             (0, self.cgb_palettes.bg_colors[0][0], false)
         };
 
-        self.scanline.bg_row[px] = colour_number | ((bg_priority as u8) << 2);
+        self.scanline.bg_row[px] = colour_number | (u8::from(bg_priority) << 2);
         self.buffer[fb_index] = color;
 
         // --- Sprite compositing ---
@@ -722,7 +722,7 @@ impl GPU {
             for i in 0..count {
                 let spr = self.scanline.scan_sprites[i];
                 // spr.x is the raw OAM X byte; screen left edge = spr.x - 8
-                let spr_screen_left = spr.x as i16 - 8;
+                let spr_screen_left = i16::from(spr.x) - 8;
                 let spr_col = px as i16 - spr_screen_left; // column within sprite (0 = leftmost)
                 if !(0..8).contains(&spr_col) {
                     continue;
@@ -733,16 +733,16 @@ impl GPU {
                     break;
                 }
 
-                let flip_x = (spr.attr & 0x20) != 0;
-                let flip_y = (spr.attr & 0x40) != 0;
-                let z = (spr.attr & 0x80) != 0;
+                let flip_x = bit(spr.attr, 5);
+                let flip_y = bit(spr.attr, 6);
+                let z = bit(spr.attr, 7);
                 let cgb_palette = if self.cgb_mode && !self.dmg_compat {
-                    (spr.attr & 0x07) as usize
+                    field(spr.attr, 0, 3) as usize
                 } else {
-                    ((spr.attr >> 4) & 0x01) as usize
+                    usize::from(bit(spr.attr, 4))
                 };
                 let tile_vbank = if self.cgb_mode && !self.dmg_compat {
-                    ((spr.attr >> 3) & 0x01) as usize
+                    usize::from(bit(spr.attr, 3))
                 } else {
                     0
                 };
@@ -808,14 +808,14 @@ impl GPU {
         } else {
             self.lcdc.bg_enabled
         };
-        (bit0 as u8)
-            | ((self.lcdc.obj_enabled as u8) << 1)
-            | ((self.lcdc.obj_size as u8) << 2)
-            | ((self.lcdc.bg_map as u8) << 3)
-            | ((self.lcdc.bg_tile as u8) << 4)
-            | ((self.lcdc.window_enabled as u8) << 5)
-            | ((self.lcdc.window_map as u8) << 6)
-            | ((self.lcdc.lcd_enabled as u8) << 7)
+        bit_if(bit0, 0)
+            | bit_if(self.lcdc.obj_enabled, 1)
+            | bit_if(self.lcdc.obj_size, 2)
+            | bit_if(self.lcdc.bg_map, 3)
+            | bit_if(self.lcdc.bg_tile, 4)
+            | bit_if(self.lcdc.window_enabled, 5)
+            | bit_if(self.lcdc.window_map, 6)
+            | bit_if(self.lcdc.lcd_enabled, 7)
     }
 
     /// Unpack a write to the LCDC register (0xFF40), including the LCD enable/disable
@@ -823,18 +823,18 @@ impl GPU {
     fn write_lcdc(&mut self, byte: u8) {
         // bit 0: DMG = bg_enable; CGB = BG/window master priority (BG always drawn)
         if self.cgb_mode {
-            self.lcdc.bg_master_priority = (byte & 0x01) != 0;
+            self.lcdc.bg_master_priority = bit(byte, 0);
         } else {
-            self.lcdc.bg_enabled = (byte & 0x01) != 0;
+            self.lcdc.bg_enabled = bit(byte, 0);
         }
-        self.lcdc.obj_enabled = (byte & 0x02) != 0;
-        self.lcdc.obj_size = (byte & 0x04) != 0;
-        self.lcdc.bg_map = (byte & 0x08) != 0;
-        self.lcdc.bg_tile = (byte & 0x10) != 0;
-        self.lcdc.window_enabled = (byte & 0x20) != 0;
-        self.lcdc.window_map = (byte & 0x40) != 0;
+        self.lcdc.obj_enabled = bit(byte, 1);
+        self.lcdc.obj_size = bit(byte, 2);
+        self.lcdc.bg_map = bit(byte, 3);
+        self.lcdc.bg_tile = bit(byte, 4);
+        self.lcdc.window_enabled = bit(byte, 5);
+        self.lcdc.window_map = bit(byte, 6);
         let was_enabled = self.lcdc.lcd_enabled;
-        self.lcdc.lcd_enabled = (byte & 0x80) != 0;
+        self.lcdc.lcd_enabled = bit(byte, 7);
         if !was_enabled && self.lcdc.lcd_enabled {
             self.mode = 2;
             self.line = 0;
@@ -870,20 +870,20 @@ impl GPU {
             self.mode & 0x03
         };
         0x80 | mode_bits
-            | ((self.stat.compare_enabled as u8) << 6)
-            | ((self.stat.mode2_int_enabled as u8) << 5)
-            | ((self.stat.mode1_int_enabled as u8) << 4)
-            | ((self.stat.mode0_int_enabled as u8) << 3)
-            | ((self.stat.lyc_flag as u8) << 2)
+            | bit_if(self.stat.compare_enabled, 6)
+            | bit_if(self.stat.mode2_int_enabled, 5)
+            | bit_if(self.stat.mode1_int_enabled, 4)
+            | bit_if(self.stat.mode0_int_enabled, 3)
+            | bit_if(self.stat.lyc_flag, 2)
     }
 
     /// Unpack a write to the STAT register (0xFF41), re-evaluating the STAT interrupt line.
     fn write_stat(&mut self, byte: u8) {
         let old_stat = self.stat.stat_line;
-        self.stat.compare_enabled = (byte & 0x40) != 0;
-        self.stat.mode2_int_enabled = (byte & 0x20) != 0;
-        self.stat.mode1_int_enabled = (byte & 0x10) != 0;
-        self.stat.mode0_int_enabled = (byte & 0x08) != 0;
+        self.stat.compare_enabled = bit(byte, 6);
+        self.stat.mode2_int_enabled = bit(byte, 5);
+        self.stat.mode1_int_enabled = bit(byte, 4);
+        self.stat.mode0_int_enabled = bit(byte, 3);
         self.stat.stat_line = self.compute_stat_line();
         if !old_stat && self.stat.stat_line {
             self.stat.pending_stat = true;
@@ -940,7 +940,7 @@ impl GPU {
                 continue;
             }
             let bucket = (x >> 3) as usize;
-            let alignment_penalty = 5i16 - (x & 7) as i16;
+            let alignment_penalty = 5i16 - i16::from(x & 7);
             if alignment_penalty > buckets[bucket] {
                 buckets[bucket] = alignment_penalty;
             }
@@ -962,7 +962,7 @@ impl GPU {
             return (false, false);
         }
         self.stat.lcd_startup_ticks = self.stat.lcd_startup_ticks.saturating_sub(t);
-        self.modeclock += t as u16;
+        self.modeclock += u16::from(t);
 
         let mut vblank_interrupt = false;
         let mut stat_interrupt = false;
@@ -986,7 +986,7 @@ impl GPU {
                     let (mut sprites, scount) = self.collect_sprites_full();
                     let xs: [u8; 10] = std::array::from_fn(|i| sprites[i].x);
                     self.mode3_extra = Self::compute_mode3_sprite_penalty(&xs[..scount]);
-                    self.mode3_extra += (self.scroll_x & 7) as u16;
+                    self.mode3_extra += u16::from(self.scroll_x & 7);
                     // DMG/compat: lower X wins; CGB: OAM-index order (already collected that way)
                     if !self.cgb_mode || self.dmg_compat {
                         sprites[..scount].sort_by_key(|s| s.x);

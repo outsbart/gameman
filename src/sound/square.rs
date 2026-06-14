@@ -1,8 +1,8 @@
-use crate::cpu::is_bit_set;
 use crate::sound::envelope::Envelope;
 use crate::sound::length::MaxLength;
 use crate::sound::sweep::Sweep;
 use crate::sound::{DUTY_PATTERNS_LENGTH, Length, Sample, Timer, Voltage};
+use crate::utils::{bit, field, hi, lo};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -149,7 +149,7 @@ impl SquareChannel {
 
         let duty_pattern = self.get_duty_pattern();
 
-        if is_bit_set((7 - self.duty_index) as u8, duty_pattern as u16) {
+        if bit(duty_pattern, (7 - self.duty_index) as u8) {
             return self.envelope.get_volume();
         }
 
@@ -222,24 +222,24 @@ impl SquareChannel {
 
     // sets frequency least significate bits
     pub fn set_frequency_lsb(&mut self, byte: u8) {
-        self.frequency = (self.frequency & 0xF00) | byte as u16;
+        self.frequency = (self.frequency & 0xF00) | u16::from(byte);
     }
 
     pub fn get_frequency_lsb(&self) -> u8 {
-        (self.frequency & 0xFF) as u8
+        lo(self.frequency)
     }
 
     // sets frequency most significate bits
     pub fn set_frequency_msb(&mut self, byte: u8) {
-        self.frequency = (self.frequency & 0xFF) | ((byte as u16 & 0b111) << 8);
+        self.frequency = (self.frequency & 0xFF) | ((u16::from(byte) & 0b111) << 8);
     }
 
     pub fn get_frequency_msb(&self) -> u8 {
-        (self.frequency >> 8) as u8
+        hi(self.frequency)
     }
 
     pub fn write_register_1(&mut self, byte: u8) {
-        self.duty = (byte & 0b1100_0000) >> 6;
+        self.duty = field(byte, 6, 2);
     }
 
     pub fn read_register_1(&self) -> u8 {
@@ -249,14 +249,14 @@ impl SquareChannel {
     pub fn write_register_4(&mut self, byte: u8) {
         self.set_frequency_msb(byte);
 
-        let trigger = byte & 0b1000_0000 != 0;
+        let trigger = bit(byte, 7);
 
         if trigger {
             self.trigger()
         }
 
         // enabling the length in some cases makes the length timer go down, which might reach zero
-        if self.length.set_enable(byte & 0b0100_0000 != 0, trigger) {
+        if self.length.set_enable(bit(byte, 6), trigger) {
             self.running = false;
         }
     }

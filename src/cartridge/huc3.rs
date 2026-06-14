@@ -77,7 +77,7 @@ impl CartridgeHuC3 {
                 }
             }
             0x2000 | 0x3000 => {
-                self.cart.rom_bank = ((byte & 0x7F) as u16).max(1);
+                self.cart.rom_bank = u16::from(byte & 0x7F).max(1);
             }
             0x4000 | 0x5000 => {
                 self.cart.ram_bank = byte & 0x0F;
@@ -160,9 +160,9 @@ impl CartridgeHuC3 {
 
     // Reconstruct elapsed seconds from 7 data nibbles and update the RTC base.
     fn apply_write_time(&mut self, d: &[u8; 7]) {
-        let mins = d[0] as u64 + d[1] as u64 * 10;
-        let hours = d[2] as u64 + d[3] as u64 * 10;
-        let days = d[4] as u64 | (d[5] as u64) << 4 | (d[6] as u64) << 8;
+        let mins = u64::from(d[0]) + u64::from(d[1]) * 10;
+        let hours = u64::from(d[2]) + u64::from(d[3]) * 10;
+        let days = u64::from(d[4]) | u64::from(d[5]) << 4 | u64::from(d[6]) << 8;
         let elapsed = days * 86400 + hours * 3600 + mins * 60;
         self.rtc_base_unix_secs = now_unix_secs().saturating_sub(elapsed);
     }

@@ -50,11 +50,11 @@ impl Rtc {
     fn write(&mut self, reg: u8, val: u8) {
         self.latch();
         self.latched[reg as usize] = val;
-        let s = self.latched[0] as u64;
-        let m = self.latched[1] as u64;
-        let h = self.latched[2] as u64;
-        let dl = self.latched[3] as u64;
-        let dh = self.latched[4] as u64;
+        let s = u64::from(self.latched[0]);
+        let m = u64::from(self.latched[1]);
+        let h = u64::from(self.latched[2]);
+        let dl = u64::from(self.latched[3]);
+        let dh = u64::from(self.latched[4]);
         let days = dl | ((dh & 0x01) << 8);
         let total = days * 86400 + h * 3600 + m * 60 + s;
         self.base_unix_secs = now_unix_secs().saturating_sub(total);

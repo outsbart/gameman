@@ -49,10 +49,10 @@ impl CartridgeMBC1Multicart {
                 if val == 0 {
                     val = 1;
                 }
-                cartridge.rom_bank = (cartridge.rom_bank & 0x60) + val as u16;
+                cartridge.rom_bank = (cartridge.rom_bank & 0x60) + u16::from(val);
             }
             0x4000 | 0x5000 => {
-                cartridge.rom_bank = (cartridge.rom_bank & 0x1F) | ((byte as u16 & 3) << 5);
+                cartridge.rom_bank = (cartridge.rom_bank & 0x1F) | ((u16::from(byte) & 3) << 5);
                 if cartridge.mode == 1 {
                     cartridge.ram_bank = byte & 3;
                 }
@@ -118,11 +118,11 @@ impl CartridgeMBC1 {
                     val = 1
                 };
 
-                cartridge.rom_bank = (cartridge.rom_bank & 0x60) + val as u16;
+                cartridge.rom_bank = (cartridge.rom_bank & 0x60) + u16::from(val);
             }
             0x4000 | 0x5000 => {
                 // secondary register: always update rom_bank bits 5-6; in mode 1 also sets ram_bank
-                cartridge.rom_bank = (cartridge.rom_bank & 0x1F) | ((byte as u16 & 3) << 5);
+                cartridge.rom_bank = (cartridge.rom_bank & 0x1F) | ((u16::from(byte) & 3) << 5);
                 if cartridge.mode == 1 {
                     cartridge.ram_bank = byte & 3;
                 }

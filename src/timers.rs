@@ -1,3 +1,4 @@
+use crate::utils::hi;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
@@ -213,7 +214,7 @@ impl Timers {
 
     // when reading from 0xFF04
     pub fn read_divider(&self) -> u8 {
-        (self.divider >> 8) as u8
+        hi(self.divider)
     }
 
     // when writing to 0xFF05

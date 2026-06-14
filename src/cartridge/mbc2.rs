@@ -31,7 +31,7 @@ impl CartridgeMBC2 {
             if bank == 0 {
                 bank = 1;
             }
-            cartridge.rom_bank = bank as u16;
+            cartridge.rom_bank = u16::from(bank);
         }
     }
 

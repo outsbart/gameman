@@ -1,4 +1,5 @@
 use crate::sound::TimerDefaultPeriod;
+use crate::utils::{bit, bit_if, field};
 use serde::{Deserialize, Serialize};
 use std::ops::{Add, Sub};
 
@@ -26,9 +27,9 @@ impl Sweep {
 
     // returns true if channel should be disabled
     pub fn write(&mut self, value: u8) -> bool {
-        self.shift = value & 0b0000_0111;
-        self.negate = value & 0b1000 != 0;
-        self.timer.set_period(((value & 0b0111_0000) >> 4) as usize);
+        self.shift = field(value, 0, 3);
+        self.negate = bit(value, 3);
+        self.timer.set_period(field(value, 4, 3) as usize);
 
         // Clearing the sweep negate mode bit in NR10 after at least one sweep
         // calculation has been made using the negate mode since the last trigger
@@ -39,10 +40,7 @@ impl Sweep {
     }
 
     pub fn read(&self) -> u8 {
-        0b1000_0000
-            | ((self.timer.period as u8) << 4)
-            | (if self.negate { 0b1000 } else { 0 })
-            | self.shift
+        0b1000_0000 | ((self.timer.period as u8) << 4) | bit_if(self.negate, 3) | self.shift
     }
 
     // return true if frequency calculations should be performed immediately
@@ -75,7 +73,7 @@ impl Sweep {
         // - the shadow frequency shifted right by self.shift
         let result = operation(
             self.shadow_frequency,
-            self.shadow_frequency >> self.shift as u16,
+            self.shadow_frequency >> u16::from(self.shift),
         );
 
         // if we used negate mode, remember it

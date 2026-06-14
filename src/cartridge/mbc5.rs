@@ -27,11 +27,11 @@ impl CartridgeMBC5 {
             }
             0x2000 => {
                 // receive low bits of rom bank number
-                cartridge.rom_bank = (cartridge.rom_bank & 0x100) | byte as u16;
+                cartridge.rom_bank = (cartridge.rom_bank & 0x100) | u16::from(byte);
             }
             0x3000 => {
                 // receive high bit of rom bank number
-                cartridge.rom_bank = ((byte as u16 & 0x1) << 8) | (cartridge.rom_bank & 0xFF);
+                cartridge.rom_bank = ((u16::from(byte) & 0x1) << 8) | (cartridge.rom_bank & 0xFF);
             }
             0x4000 | 0x5000 => {
                 // change ram bank

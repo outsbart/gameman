@@ -5,6 +5,7 @@ use crate::link::Link;
 use crate::oam_dma::OamDma;
 use crate::sound::Sound;
 use crate::timers::Timers;
+use crate::utils::{hi, lo, word};
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
@@ -174,12 +175,14 @@ pub trait Memory {
     fn write_byte(&mut self, addr: u16, byte: u8);
 
     fn read_word(&mut self, addr: u16) -> u16 {
-        (self.read_byte(addr) as u16) | ((self.read_byte(addr + 1) as u16) << 8)
+        let lo_byte = self.read_byte(addr);
+        let hi_byte = self.read_byte(addr + 1);
+        word(hi_byte, lo_byte)
     }
 
-    fn write_word(&mut self, addr: u16, word: u16) {
-        self.write_byte(addr, (word & 0x00FF) as u8);
-        self.write_byte(addr + 1, ((word & 0xFF00) >> 8) as u8);
+    fn write_word(&mut self, addr: u16, val: u16) {
+        self.write_byte(addr, lo(val));
+        self.write_byte(addr + 1, hi(val));
     }
     fn tick_t(&mut self) {}
     fn before_fetch(&mut self) {}
@@ -248,10 +251,10 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                         io_reg::SOUND_START..=io_reg::SOUND_END => self.sound.read_byte(addr),
                         io_reg::OAM_DMA => self.oam_dma.source,
                         // HDMA: source/dest reads return current register values; HDMA5 = 0xFF (no active transfer)
-                        io_reg::HDMA1 if self.gpu.cgb_mode() => (self.hdma_src >> 8) as u8,
-                        io_reg::HDMA2 if self.gpu.cgb_mode() => (self.hdma_src & 0xFF) as u8,
-                        io_reg::HDMA3 if self.gpu.cgb_mode() => (self.hdma_dst >> 8) as u8,
-                        io_reg::HDMA4 if self.gpu.cgb_mode() => (self.hdma_dst & 0xFF) as u8,
+                        io_reg::HDMA1 if self.gpu.cgb_mode() => hi(self.hdma_src),
+                        io_reg::HDMA2 if self.gpu.cgb_mode() => lo(self.hdma_src),
+                        io_reg::HDMA3 if self.gpu.cgb_mode() => hi(self.hdma_dst),
+                        io_reg::HDMA4 if self.gpu.cgb_mode() => lo(self.hdma_dst),
                         io_reg::HDMA5 if self.gpu.cgb_mode() && self.hbdma_active => {
                             self.hbdma_remaining.wrapping_sub(1) // bit 7 = 0 means active
                         }
@@ -340,18 +343,18 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                         io_reg::HDMA1..=io_reg::HDMA5 if self.gpu.cgb_mode() => {
                             match addr {
                                 io_reg::HDMA1 => {
-                                    self.hdma_src = (self.hdma_src & 0x00FF) | ((byte as u16) << 8);
+                                    self.hdma_src = word(byte, lo(self.hdma_src));
                                 }
                                 io_reg::HDMA2 => {
                                     self.hdma_src =
-                                        (self.hdma_src & 0xFF00) | ((byte & 0xF0) as u16);
+                                        (self.hdma_src & 0xFF00) | u16::from(byte & 0xF0);
                                 }
                                 io_reg::HDMA3 => {
-                                    self.hdma_dst = (self.hdma_dst & 0x00FF) | ((byte as u16) << 8);
+                                    self.hdma_dst = word(byte, lo(self.hdma_dst));
                                 }
                                 io_reg::HDMA4 => {
                                     self.hdma_dst =
-                                        (self.hdma_dst & 0xFF00) | ((byte & 0xF0) as u16);
+                                        (self.hdma_dst & 0xFF00) | u16::from(byte & 0xF0);
                                 }
                                 io_reg::HDMA5 => {
                                     if self.hbdma_active && byte & 0x80 == 0 {
@@ -359,7 +362,7 @@ impl<M: GPUMemoriesAccess> Memory for MMU<M> {
                                         self.hbdma_active = false;
                                     } else if byte & 0x80 == 0 {
                                         // GDMA: copy all bytes now; CPU is stalled.
-                                        let length = ((byte & 0x7F) as u16 + 1) * 16;
+                                        let length = (u16::from(byte & 0x7F) + 1) * 16;
                                         let src = self.hdma_src;
                                         // Source must be ROM or WRAM/SRAM
                                         if !(src < 0x8000 || (0xA000..=0xDFFF).contains(&src)) {

@@ -4,10 +4,15 @@ use crate::mem::Memory;
 use crate::utils::add_bytes;
 use crate::utils::add_word_with_signed;
 use crate::utils::add_words;
+use crate::utils::bit;
+use crate::utils::bit_if;
+use crate::utils::hi;
+use crate::utils::lo;
 use crate::utils::reset_bit;
 use crate::utils::set_bit;
 use crate::utils::sub_bytes;
 use crate::utils::swap_nibbles;
+use crate::utils::word;
 use serde::{Deserialize, Serialize};
 
 pub const CPU_FREQ: usize = 4194304; // cpu frequency, in hz
@@ -74,26 +79,22 @@ impl Regs {
     }
 
     pub fn get_flags(&mut self) -> (bool, bool, bool, bool) {
-        let f = u16::from(self.read_byte(REG_F));
+        let f = self.read_byte(REG_F);
         (
-            is_bit_set(ZERO_FLAG, f),
-            is_bit_set(OPERATION_FLAG, f),
-            is_bit_set(HALF_CARRY_FLAG, f),
-            is_bit_set(CARRY_FLAG, f),
+            bit(f, ZERO_FLAG),
+            bit(f, OPERATION_FLAG),
+            bit(f, HALF_CARRY_FLAG),
+            bit(f, CARRY_FLAG),
         )
     }
 
     pub fn set_flags(&mut self, z: bool, n: bool, h: bool, c: bool) {
-        let value = ((z as u8) << ZERO_FLAG)
-            | ((n as u8) << OPERATION_FLAG)
-            | ((h as u8) << HALF_CARRY_FLAG)
-            | ((c as u8) << CARRY_FLAG);
+        let value = bit_if(z, ZERO_FLAG)
+            | bit_if(n, OPERATION_FLAG)
+            | bit_if(h, HALF_CARRY_FLAG)
+            | bit_if(c, CARRY_FLAG);
         self.write_byte(REG_F, value)
     }
-}
-
-pub fn is_bit_set(pos: u8, value: u16) -> bool {
-    value & (1u16 << pos) != 0
 }
 
 fn cb_rlc(val: u16) -> (u16, bool) {
@@ -104,24 +105,24 @@ fn cb_rrc(val: u16) -> (u16, bool) {
 }
 fn cb_rl(val: u16, carry: bool) -> (u16, bool) {
     (
-        ((val as u8) << 1 | u8::from(carry)) as u16,
+        u16::from((val as u8) << 1 | u8::from(carry)),
         (val & 0x80) != 0,
     )
 }
 fn cb_rr(val: u16, carry: bool) -> (u16, bool) {
     (
-        ((val as u8) >> 1 | (u8::from(carry) << 7)) as u16,
+        u16::from((val as u8) >> 1 | (u8::from(carry) << 7)),
         (val & 1) != 0,
     )
 }
 fn cb_sla(val: u16) -> (u16, bool) {
-    (((val as u8) << 1) as u16, (val & 0x80) != 0)
+    (u16::from((val as u8) << 1), (val & 0x80) != 0)
 }
 fn cb_sra(val: u16) -> (u16, bool) {
     ((val >> 1) | (val & 0x80), (val & 1) != 0)
 }
 fn cb_swap(val: u16) -> (u16, bool) {
-    (swap_nibbles(val as u8), false)
+    (u16::from(swap_nibbles(val as u8)), false)
 }
 fn cb_srl(val: u16) -> (u16, bool) {
     (val >> 1, (val & 1) != 0)
@@ -141,11 +142,11 @@ impl Memory for Regs {
         self.regs[addr as usize] = if addr != REG_F { byte } else { byte & 0xF0 };
     }
     fn read_word(&mut self, addr: u16) -> u16 {
-        (self.read_byte(addr + 1) as u16) | ((self.read_byte(addr) as u16) << 8)
+        word(self.read_byte(addr), self.read_byte(addr + 1))
     }
-    fn write_word(&mut self, addr: u16, word: u16) {
-        self.write_byte(addr + 1, (word & 0x00FF) as u8);
-        self.write_byte(addr, ((word & 0xFF00) >> 8) as u8);
+    fn write_word(&mut self, addr: u16, val: u16) {
+        self.write_byte(addr + 1, lo(val));
+        self.write_byte(addr, hi(val));
     }
 }
 
@@ -218,21 +219,21 @@ impl<M: Memory> CPU<M> {
 
     // fetches the next word from the ram (two M-cycles)
     fn fetch_next_word(&mut self) -> u16 {
-        let low = self.fetch_next_byte() as u16;
-        let high = self.fetch_next_byte() as u16;
+        let low = u16::from(self.fetch_next_byte());
+        let high = u16::from(self.fetch_next_byte());
         low | (high << 8)
     }
 
     pub fn read_reg(&mut self, r: Operand) -> u16 {
         match r {
-            Operand::A => self.regs.read_byte(REG_A) as u16,
-            Operand::F => self.regs.read_byte(REG_F) as u16,
-            Operand::B => self.regs.read_byte(REG_B) as u16,
-            Operand::C => self.regs.read_byte(REG_C) as u16,
-            Operand::D => self.regs.read_byte(REG_D) as u16,
-            Operand::E => self.regs.read_byte(REG_E) as u16,
-            Operand::H => self.regs.read_byte(REG_H) as u16,
-            Operand::L => self.regs.read_byte(REG_L) as u16,
+            Operand::A => u16::from(self.regs.read_byte(REG_A)),
+            Operand::F => u16::from(self.regs.read_byte(REG_F)),
+            Operand::B => u16::from(self.regs.read_byte(REG_B)),
+            Operand::C => u16::from(self.regs.read_byte(REG_C)),
+            Operand::D => u16::from(self.regs.read_byte(REG_D)),
+            Operand::E => u16::from(self.regs.read_byte(REG_E)),
+            Operand::H => u16::from(self.regs.read_byte(REG_H)),
+            Operand::L => u16::from(self.regs.read_byte(REG_L)),
             Operand::AF => self.regs.read_word(REG_A),
             Operand::BC => self.regs.read_word(REG_B),
             Operand::DE => self.regs.read_word(REG_D),
@@ -280,41 +281,41 @@ impl<M: Memory> CPU<M> {
             | Operand::PC => self.read_reg(op),
             Operand::IndBC => {
                 let addr = self.read_reg(Operand::BC);
-                let val = self.mmu.read_byte(addr) as u16;
+                let val = u16::from(self.mmu.read_byte(addr));
                 self.tick_m();
                 val
             }
             Operand::IndDE => {
                 let addr = self.read_reg(Operand::DE);
-                let val = self.mmu.read_byte(addr) as u16;
+                let val = u16::from(self.mmu.read_byte(addr));
                 self.tick_m();
                 val
             }
             Operand::IndHL => {
                 let addr = self.read_reg(Operand::HL);
-                let val = self.mmu.read_byte(addr) as u16;
+                let val = u16::from(self.mmu.read_byte(addr));
                 self.tick_m();
                 val
             }
             Operand::IndC => {
                 let addr = 0xFF00 + self.read_reg(Operand::C);
-                let val = self.mmu.read_byte(addr) as u16;
+                let val = u16::from(self.mmu.read_byte(addr));
                 self.tick_m();
                 val
             }
             Operand::IndA8 => {
                 let addr = 0xFF00 + u16::from(self.fetch_next_byte());
-                let val = self.mmu.read_byte(addr) as u16;
+                let val = u16::from(self.mmu.read_byte(addr));
                 self.tick_m();
                 val
             }
             Operand::IndA16 => {
                 let addr = self.fetch_next_word();
-                let val = self.mmu.read_byte(addr) as u16;
+                let val = u16::from(self.mmu.read_byte(addr));
                 self.tick_m();
                 val
             }
-            Operand::D8 => self.fetch_next_byte() as u16,
+            Operand::D8 => u16::from(self.fetch_next_byte()),
             Operand::D16 => self.fetch_next_word(),
             Operand::F => unreachable!(),
         }
@@ -352,23 +353,21 @@ impl<M: Memory> CPU<M> {
 
     pub fn push(&mut self, value: u16) {
         let sp = self.read_reg(Operand::SP);
-        self.mmu
-            .write_byte(sp.wrapping_sub(1), ((value >> 8) & 0xFF) as u8);
+        self.mmu.write_byte(sp.wrapping_sub(1), hi(value));
         self.tick_m();
-        self.mmu
-            .write_byte(sp.wrapping_sub(2), (value & 0xFF) as u8);
+        self.mmu.write_byte(sp.wrapping_sub(2), lo(value));
         self.tick_m();
         self.write_reg(Operand::SP, sp.wrapping_sub(2));
     }
 
     pub fn pop(&mut self) -> u16 {
         let sp = self.read_reg(Operand::SP);
-        let low = self.mmu.read_byte(sp) as u16;
+        let lo_byte = self.mmu.read_byte(sp);
         self.tick_m();
-        let high = self.mmu.read_byte(sp.wrapping_add(1)) as u16;
+        let hi_byte = self.mmu.read_byte(sp.wrapping_add(1));
         self.tick_m();
         self.write_reg(Operand::SP, sp.wrapping_add(2));
-        low | (high << 8)
+        word(hi_byte, lo_byte)
     }
 
     // executes the next instruction
@@ -391,11 +390,11 @@ impl<M: Memory> CPU<M> {
 
             if byte == 0xcb {
                 byte = self.read_byte();
-                instr = 0xcb00 | (byte as u16);
+                instr = 0xcb00 | u16::from(byte);
 
                 prefixed = true;
             } else {
-                instr = byte as u16;
+                instr = u16::from(byte);
             }
             // Capture register value pre-execute: INC/DEC changes the register,
             // so we need the bus address as it was at M1, not after the instruction.
@@ -474,8 +473,7 @@ impl<M: Memory> CPU<M> {
             // M3: push PC high byte
             let pc = self.read_reg(Operand::PC);
             let sp = self.read_reg(Operand::SP);
-            self.mmu
-                .write_byte(sp.wrapping_sub(1), ((pc >> 8) & 0xFF) as u8);
+            self.mmu.write_byte(sp.wrapping_sub(1), hi(pc));
             self.tick_m();
 
             // Hardware re-reads IE & IF after M3 to determine the vector.
@@ -484,7 +482,7 @@ impl<M: Memory> CPU<M> {
             let pending = self.interrupts_to_handle();
 
             // M4: push PC low byte
-            self.mmu.write_byte(sp.wrapping_sub(2), (pc & 0xFF) as u8);
+            self.mmu.write_byte(sp.wrapping_sub(2), lo(pc));
             self.tick_m();
             self.write_reg(Operand::SP, sp.wrapping_sub(2));
 
@@ -494,24 +492,19 @@ impl<M: Memory> CPU<M> {
             let interrupt_flags = self.mmu.read_byte(0xFF0F);
 
             if (pending & 0x01) != 0 {
-                self.mmu
-                    .write_byte(0xFF0F, reset_bit(0, interrupt_flags) as u8);
+                self.mmu.write_byte(0xFF0F, reset_bit(interrupt_flags, 0));
                 self.write_reg(Operand::PC, 0x0040);
             } else if (pending & 0x02) != 0 {
-                self.mmu
-                    .write_byte(0xFF0F, reset_bit(1, interrupt_flags) as u8);
+                self.mmu.write_byte(0xFF0F, reset_bit(interrupt_flags, 1));
                 self.write_reg(Operand::PC, 0x0048);
             } else if (pending & 0x04) != 0 {
-                self.mmu
-                    .write_byte(0xFF0F, reset_bit(2, interrupt_flags) as u8);
+                self.mmu.write_byte(0xFF0F, reset_bit(interrupt_flags, 2));
                 self.write_reg(Operand::PC, 0x0050);
             } else if (pending & 0x08) != 0 {
-                self.mmu
-                    .write_byte(0xFF0F, reset_bit(3, interrupt_flags) as u8);
+                self.mmu.write_byte(0xFF0F, reset_bit(interrupt_flags, 3));
                 self.write_reg(Operand::PC, 0x0058);
             } else if (pending & 0x10) != 0 {
-                self.mmu
-                    .write_byte(0xFF0F, reset_bit(4, interrupt_flags) as u8);
+                self.mmu.write_byte(0xFF0F, reset_bit(interrupt_flags, 4));
                 self.write_reg(Operand::PC, 0x0060);
             } else {
                 // All bits cleared before vector load — PC becomes $0000
@@ -740,10 +733,9 @@ impl<M: Memory> CPU<M> {
     fn ld_ind_a16_sp(&mut self) -> u8 {
         let addr = self.fetch_next_word();
         let sp = self.read_reg(Operand::SP);
-        self.mmu.write_byte(addr, (sp & 0xFF) as u8);
+        self.mmu.write_byte(addr, lo(sp));
         self.tick_m();
-        self.mmu
-            .write_byte(addr.wrapping_add(1), ((sp >> 8) & 0xFF) as u8);
+        self.mmu.write_byte(addr.wrapping_add(1), hi(sp));
         self.tick_m();
         20
     }
@@ -976,22 +968,22 @@ impl<M: Memory> CPU<M> {
             0 => {
                 // RLCA
                 let c = (op & 0x80) != 0;
-                (((op as u8) << 1 | u8::from(c)) as u16, c)
+                (u16::from((op as u8) << 1 | u8::from(c)), c)
             }
             1 => {
                 // RRCA
                 let c = (op & 1) != 0;
-                (((op as u8) >> 1 | (u8::from(c) << 7)) as u16, c)
+                (u16::from((op as u8) >> 1 | (u8::from(c) << 7)), c)
             }
             2 => {
                 // RLA
                 let c = (op & 0x80) != 0;
-                (((op as u8) << 1 | u8::from(prev_c)) as u16, c)
+                (u16::from((op as u8) << 1 | u8::from(prev_c)), c)
             }
             3 => {
                 // RRA
                 let c = (op & 1) != 0;
-                (((op as u8) >> 1 | (u8::from(prev_c) << 7)) as u16, c)
+                (u16::from((op as u8) >> 1 | (u8::from(prev_c) << 7)), c)
             }
             _ => unreachable!(),
         };
@@ -1105,7 +1097,7 @@ impl<M: Memory> CPU<M> {
         let pc = self.read_reg(Operand::PC);
         self.tick_m();
         self.push(pc);
-        self.write_reg(Operand::PC, (opcode & 0x38) as u16);
+        self.write_reg(Operand::PC, u16::from(opcode & 0x38));
         16
     }
 
@@ -1221,21 +1213,21 @@ impl<M: Memory> CPU<M> {
                 // BIT n, r
                 let op = self.read_operand(reg);
                 let (_, _, _, old_c) = self.regs.get_flags();
-                let bit_set = is_bit_set(sub_op, op);
+                let bit_set = bit(op as u8, sub_op);
                 self.regs.set_flags(!bit_set, false, true, old_c);
                 if is_hl { 12 } else { 8 }
             }
             2 => {
                 // RES n, r
                 let op = self.read_operand(reg);
-                let result = reset_bit(sub_op, op as u8);
+                let result = u16::from(reset_bit(op as u8, sub_op));
                 self.write_operand(reg, result);
                 if is_hl { 16 } else { 8 }
             }
             3 => {
                 // SET n, r
                 let op = self.read_operand(reg);
-                let result = set_bit(sub_op, op as u8);
+                let result = u16::from(set_bit(op as u8, sub_op));
                 self.write_operand(reg, result);
                 if is_hl { 16 } else { 8 }
             }

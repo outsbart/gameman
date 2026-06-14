@@ -4,6 +4,7 @@
 //! Game Genie  — `libgambatte/src/mem/cartridge.cpp`  (`applyGameGenie`)
 //! GameShark   — `libgambatte/src/interrupter.cpp`    (`setGameShark`)
 
+use crate::utils::word;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -110,7 +111,7 @@ fn decode_gameshark(n: &[u8]) -> Result<GameSharkCode, CheatError> {
         return Err(CheatError);
     }
     let value = (n[2] << 4) | n[3];
-    let addr = ((n[6] as u16) << 12) | ((n[7] as u16) << 8) | ((n[4] as u16) << 4) | (n[5] as u16);
+    let addr = word((n[6] << 4) | n[7], (n[4] << 4) | n[5]);
     Ok(GameSharkCode { addr, value })
 }
 
@@ -120,9 +121,7 @@ fn decode_game_genie(n: &[u8]) -> Result<GameGenieCode, CheatError> {
         return Err(CheatError);
     }
     let value = (n[0] << 4) | n[1];
-    let addr =
-        (((n[5] ^ 0xF) as u16) << 12 | (n[2] as u16) << 8 | (n[3] as u16) << 4 | n[4] as u16)
-            & 0x7FFF;
+    let addr = word(((n[5] ^ 0xF) << 4) | n[2], (n[3] << 4) | n[4]) & 0x7FFF;
     let compare = if n.len() == 9 {
         let raw = ((n[6] << 4) | n[8]) ^ 0xFF; // note: n[7] is intentionally unused
         Some(raw.rotate_right(2) ^ 0x45)

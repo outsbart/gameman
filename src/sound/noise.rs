@@ -1,6 +1,7 @@
 use crate::sound::envelope::Envelope;
 use crate::sound::length::{Length, MaxLength};
 use crate::sound::{Sample, Timer, Voltage};
+use crate::utils::{bit, field, hi_nibble};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -53,7 +54,7 @@ impl NoiseChannel {
             }
         }
 
-        self.timer.period = ((self.get_divisor() as u16) << (self.clock_shift as u16)) as usize;
+        self.timer.period = (u16::from(self.get_divisor()) << u16::from(self.clock_shift)) as usize;
         self.timer.restart();
     }
 
@@ -101,7 +102,7 @@ impl NoiseChannel {
     pub fn trigger(&mut self) {
         self.running = true;
 
-        self.timer.period = ((self.get_divisor() as u16) << (self.clock_shift as u16)) as usize;
+        self.timer.period = (u16::from(self.get_divisor()) << u16::from(self.clock_shift)) as usize;
         self.timer.restart();
 
         self.envelope.trigger();
@@ -152,9 +153,9 @@ impl NoiseChannel {
     }
 
     pub fn write_register_3(&mut self, byte: u8) {
-        self.clock_shift = (byte & 0xF0) >> 4;
-        self.lfsr_width_mode = (byte & 0x08) >> 3;
-        self.divisor_code = byte & 0b111;
+        self.clock_shift = hi_nibble(byte);
+        self.lfsr_width_mode = u8::from(bit(byte, 3));
+        self.divisor_code = field(byte, 0, 3);
     }
 
     pub fn read_register_3(&self) -> u8 {
@@ -166,14 +167,14 @@ impl NoiseChannel {
     }
 
     pub fn write_register_4(&mut self, byte: u8) {
-        let trigger = byte & 0b1000_0000 != 0;
+        let trigger = bit(byte, 7);
 
         if trigger {
             self.trigger()
         }
 
         // enabling the length in some cases makes the length timer go down, which might reach zero
-        if self.length.set_enable(byte & 0b0100_0000 != 0, trigger) {
+        if self.length.set_enable(bit(byte, 6), trigger) {
             self.running = false;
         }
     }

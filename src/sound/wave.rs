@@ -1,5 +1,6 @@
 use crate::sound::length::{Length, MaxLength};
 use crate::sound::{Sample, Timer, Voltage};
+use crate::utils::{bit, bit_if, field, hi, lo};
 use serde::{Deserialize, Serialize};
 
 const WAVE_RAM_SAMPLES: u8 = 32;
@@ -228,24 +229,24 @@ impl WaveChannel {
 
     // sets frequency least significate bits
     pub fn set_frequency_lsb(&mut self, byte: u8) {
-        self.frequency = (self.frequency & 0xF00) | byte as u16;
+        self.frequency = (self.frequency & 0xF00) | u16::from(byte);
     }
 
     pub fn get_frequency_lsb(&self) -> u8 {
-        (self.frequency & 0xFF) as u8
+        lo(self.frequency)
     }
 
     // sets frequency most significate bits
     pub fn set_frequency_msb(&mut self, byte: u8) {
-        self.frequency = (self.frequency & 0xFF) | ((byte as u16 & 0b111) << 8);
+        self.frequency = (self.frequency & 0xFF) | ((u16::from(byte) & 0b111) << 8);
     }
 
     pub fn get_frequency_msb(&self) -> u8 {
-        (self.frequency >> 8) as u8
+        hi(self.frequency)
     }
 
     pub fn write_register_0(&mut self, byte: u8) {
-        self.dac_power = (byte & 0b1000_0000) != 0;
+        self.dac_power = bit(byte, 7);
 
         if !self.dac_enabled() {
             self.running = false;
@@ -253,7 +254,7 @@ impl WaveChannel {
     }
 
     pub fn read_register_0(&self) -> u8 {
-        0b111_1111 | (if self.dac_power { 0b1000_0000 } else { 0 })
+        0b111_1111 | bit_if(self.dac_power, 7)
     }
 
     pub fn write_length_value(&mut self, byte: u8) {
@@ -265,7 +266,7 @@ impl WaveChannel {
     }
 
     pub fn write_volume(&mut self, byte: u8) {
-        self.volume = Volume::from_u8((byte & 0b0110_0000) >> 5);
+        self.volume = Volume::from_u8(field(byte, 5, 2));
     }
 
     pub fn read_volume(&self) -> u8 {
@@ -276,14 +277,14 @@ impl WaveChannel {
         // set frequency most significative bits
         self.set_frequency_msb(byte);
 
-        let trigger = byte & 0b1000_0000 != 0;
+        let trigger = bit(byte, 7);
 
         if trigger {
             self.trigger()
         }
 
         // enabling the length in some cases makes the length timer go down, which might reach zero
-        if self.length.set_enable(byte & 0b0100_0000 != 0, trigger) {
+        if self.length.set_enable(bit(byte, 6), trigger) {
             self.running = false;
         }
     }

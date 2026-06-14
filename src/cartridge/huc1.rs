@@ -47,10 +47,10 @@ impl CartridgeHuC1 {
             }
             0x2000 | 0x3000 => {
                 let val = (byte & 0x1F).max(1);
-                self.cart.rom_bank = (self.cart.rom_bank & 0x60) | val as u16;
+                self.cart.rom_bank = (self.cart.rom_bank & 0x60) | u16::from(val);
             }
             0x4000 | 0x5000 => {
-                self.cart.rom_bank = (self.cart.rom_bank & 0x1F) | ((byte as u16 & 0x03) << 5);
+                self.cart.rom_bank = (self.cart.rom_bank & 0x1F) | ((u16::from(byte) & 0x03) << 5);
                 if self.cart.mode == 1 {
                     self.cart.ram_bank = byte & 0x03;
                 }

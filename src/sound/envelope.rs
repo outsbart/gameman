@@ -1,4 +1,5 @@
 use crate::sound::{Sample, TimerDefaultPeriod};
+use crate::utils::{bit, bit_if, field, hi_nibble};
 use serde::{Deserialize, Serialize};
 
 // every tick, increases or decreases volume
@@ -33,16 +34,13 @@ impl Envelope {
     }
 
     pub fn write(&mut self, byte: u8) {
-        self.timer.period = (byte & 0b111) as usize;
-
-        self.add_mode = byte & 0b1000 != 0;
-        self.volume_initial = Sample(byte >> 4);
+        self.timer.period = field(byte, 0, 3) as usize;
+        self.add_mode = bit(byte, 3);
+        self.volume_initial = Sample(hi_nibble(byte));
     }
 
     pub fn read(&self) -> u8 {
-        self.timer.period as u8
-            | (if self.add_mode { 0b1000 } else { 0 })
-            | (u8::from(self.volume_initial) << 4)
+        self.timer.period as u8 | bit_if(self.add_mode, 3) | (u8::from(self.volume_initial) << 4)
     }
 
     pub fn tick(&mut self) {
