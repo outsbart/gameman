@@ -5,7 +5,6 @@ use crate::utils::add_bytes;
 use crate::utils::add_word_with_signed;
 use crate::utils::add_words;
 use crate::utils::bit;
-use crate::utils::bit_if;
 use crate::utils::hi;
 use crate::utils::lo;
 use crate::utils::reset_bit;
@@ -90,12 +89,29 @@ impl Regs {
         )
     }
 
-    pub fn set_flags(&mut self, z: bool, n: bool, h: bool, c: bool) {
-        let value = bit_if(z, ZERO_FLAG)
-            | bit_if(n, OPERATION_FLAG)
-            | bit_if(h, HALF_CARRY_FLAG)
-            | bit_if(c, CARRY_FLAG);
-        self.write_byte(REG_F, value)
+    pub fn update_flags(
+        &mut self,
+        z: Option<bool>,
+        n: Option<bool>,
+        h: Option<bool>,
+        c: Option<bool>,
+    ) {
+        let mut f = self.read_byte(REG_F);
+        for (flag, pos) in [
+            (z, ZERO_FLAG),
+            (n, OPERATION_FLAG),
+            (h, HALF_CARRY_FLAG),
+            (c, CARRY_FLAG),
+        ] {
+            if let Some(v) = flag {
+                f = if v {
+                    set_bit(f, pos)
+                } else {
+                    reset_bit(f, pos)
+                };
+            }
+        }
+        self.write_byte(REG_F, f);
     }
 }
 
@@ -757,7 +773,8 @@ impl<M: Memory> CPU<M> {
         let (result, c, h) = add_word_with_signed(op1, op2);
         self.write_reg16(Reg16::HL, result);
         self.tick_m();
-        self.regs.set_flags(false, false, h, c);
+        self.regs
+            .update_flags(Some(false), Some(false), Some(h), Some(c));
         12
     }
 
@@ -785,50 +802,58 @@ impl<M: Memory> CPU<M> {
                 // ADD
                 let (result, c, h) = add_bytes(a, operand, 0);
                 self.write_reg8(Reg8::A, result);
-                self.regs.set_flags(result == 0, false, h, c);
+                self.regs
+                    .update_flags(Some(result == 0), Some(false), Some(h), Some(c));
             }
             1 => {
                 // ADC
                 let (_, _, _, old_c) = self.regs.get_flags();
                 let (result, c, h) = add_bytes(a, operand, u8::from(old_c));
                 self.write_reg8(Reg8::A, result);
-                self.regs.set_flags(result == 0, false, h, c);
+                self.regs
+                    .update_flags(Some(result == 0), Some(false), Some(h), Some(c));
             }
             2 => {
                 // SUB
                 let (result, c, h) = sub_bytes(a, operand, 0);
                 self.write_reg8(Reg8::A, result);
-                self.regs.set_flags(result == 0, true, h, c);
+                self.regs
+                    .update_flags(Some(result == 0), Some(true), Some(h), Some(c));
             }
             3 => {
                 // SBC
                 let (_, _, _, old_c) = self.regs.get_flags();
                 let (result, c, h) = sub_bytes(a, operand, u8::from(old_c));
                 self.write_reg8(Reg8::A, result);
-                self.regs.set_flags(result == 0, true, h, c);
+                self.regs
+                    .update_flags(Some(result == 0), Some(true), Some(h), Some(c));
             }
             4 => {
                 // AND
                 let result = a & operand;
                 self.write_reg8(Reg8::A, result);
-                self.regs.set_flags(result == 0, false, true, false);
+                self.regs
+                    .update_flags(Some(result == 0), Some(false), Some(true), Some(false));
             }
             5 => {
                 // XOR
                 let result = a ^ operand;
                 self.write_reg8(Reg8::A, result);
-                self.regs.set_flags(result == 0, false, false, false);
+                self.regs
+                    .update_flags(Some(result == 0), Some(false), Some(false), Some(false));
             }
             6 => {
                 // OR
                 let result = a | operand;
                 self.write_reg8(Reg8::A, result);
-                self.regs.set_flags(result == 0, false, false, false);
+                self.regs
+                    .update_flags(Some(result == 0), Some(false), Some(false), Some(false));
             }
             7 => {
                 // CP
                 let (result, c, h) = sub_bytes(a, operand, 0);
-                self.regs.set_flags(result == 0, true, h, c);
+                self.regs
+                    .update_flags(Some(result == 0), Some(true), Some(h), Some(c));
             }
             _ => unreachable!(),
         }
@@ -837,22 +862,22 @@ impl<M: Memory> CPU<M> {
     fn inc_r8(&mut self, opcode: u8) -> u8 {
         let idx = Self::op_reg8_dst(opcode);
         let reg = Self::cb_reg(idx);
-        let (_, _, _, prev_c) = self.regs.get_flags();
         let op1 = self.read_operand8(reg);
         let (result, _, h) = add_bytes(op1, 1, 0);
         self.write_operand8(reg, result);
-        self.regs.set_flags(result == 0, false, h, prev_c);
+        self.regs
+            .update_flags(Some(result == 0), Some(false), Some(h), None);
         if idx == 6 { 12 } else { 4 }
     }
 
     fn dec_r8(&mut self, opcode: u8) -> u8 {
         let idx = Self::op_reg8_dst(opcode);
         let reg = Self::cb_reg(idx);
-        let (_, _, _, prev_c) = self.regs.get_flags();
         let op1 = self.read_operand8(reg);
         let (result, _, h) = sub_bytes(op1, 1, 0);
         self.write_operand8(reg, result);
-        self.regs.set_flags(result == 0, true, h, prev_c);
+        self.regs
+            .update_flags(Some(result == 0), Some(true), Some(h), None);
         if idx == 6 { 12 } else { 4 }
     }
 
@@ -884,27 +909,28 @@ impl<M: Memory> CPU<M> {
         };
 
         self.write_reg8(Reg8::A, result);
-        self.regs.set_flags(result == 0, prev_n, false, new_carry);
+        self.regs
+            .update_flags(Some(result == 0), None, Some(false), Some(new_carry));
         4
     }
 
     fn cpl(&mut self) -> u8 {
         let op1 = self.read_reg8(Reg8::A);
-        let (z, _, _, c) = self.regs.get_flags();
         self.write_reg8(Reg8::A, !op1);
-        self.regs.set_flags(z, true, true, c);
+        self.regs.update_flags(None, Some(true), Some(true), None);
         4
     }
 
     fn scf(&mut self) -> u8 {
-        let (z, _, _, _) = self.regs.get_flags();
-        self.regs.set_flags(z, false, false, true);
+        self.regs
+            .update_flags(None, Some(false), Some(false), Some(true));
         4
     }
 
     fn ccf(&mut self) -> u8 {
-        let (z, _, _, c) = self.regs.get_flags();
-        self.regs.set_flags(z, false, false, !c);
+        let (_, _, _, c) = self.regs.get_flags();
+        self.regs
+            .update_flags(None, Some(false), Some(false), Some(!c));
         4
     }
 
@@ -914,11 +940,10 @@ impl<M: Memory> CPU<M> {
         let reg = Self::r16(Self::op_reg16(opcode));
         let hl = self.read_reg16(Reg16::HL);
         let op2 = self.read_reg16(reg);
-        let (old_z, _, _, _) = self.regs.get_flags();
         let (result, c, h) = add_words(hl, op2, 0);
         self.write_reg16(Reg16::HL, result);
         self.tick_m();
-        self.regs.set_flags(old_z, false, h, c);
+        self.regs.update_flags(None, Some(false), Some(h), Some(c));
         8
     }
 
@@ -947,7 +972,8 @@ impl<M: Memory> CPU<M> {
         self.write_reg16(Reg16::SP, result);
         self.tick_m();
         self.tick_m();
-        self.regs.set_flags(false, false, h, c);
+        self.regs
+            .update_flags(Some(false), Some(false), Some(h), Some(c));
         16
     }
 
@@ -964,7 +990,8 @@ impl<M: Memory> CPU<M> {
             _ => unreachable!(),
         };
         self.write_reg8(Reg8::A, result);
-        self.regs.set_flags(false, false, false, new_carry);
+        self.regs
+            .update_flags(Some(false), Some(false), Some(false), Some(new_carry));
         4
     }
 
@@ -1181,14 +1208,19 @@ impl<M: Memory> CPU<M> {
                     _ => unreachable!(),
                 };
                 self.write_operand8(reg, result);
-                self.regs.set_flags(result == 0, false, false, new_carry);
+                self.regs.update_flags(
+                    Some(result == 0),
+                    Some(false),
+                    Some(false),
+                    Some(new_carry),
+                );
                 16
             }
             1 => {
                 // BIT n, r
-                let (_, _, _, old_c) = self.regs.get_flags();
                 let bit_set = bit(op, sub_op);
-                self.regs.set_flags(!bit_set, false, true, old_c);
+                self.regs
+                    .update_flags(Some(!bit_set), Some(false), Some(true), None);
                 12
             }
             2 => {
@@ -1252,7 +1284,8 @@ mod tests {
     fn get_flags() {
         let mut cpu = CPU::new(DummyMMU::new());
 
-        cpu.regs.set_flags(true, false, true, false);
+        cpu.regs
+            .update_flags(Some(true), Some(false), Some(true), Some(false));
         let (z, n, h, c) = cpu.regs.get_flags();
 
         assert!(z);
