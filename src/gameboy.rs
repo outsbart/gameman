@@ -1,7 +1,7 @@
 use crate::keypad::Button;
 
 use crate::cartridge::load_rom;
-use crate::cpu::{CPU, Operand};
+use crate::cpu::{CPU, Reg8, Reg16};
 use crate::gpu::GPU;
 use crate::mem::{Interrupt, MMU, Memory};
 use serde::{Deserialize, Serialize};
@@ -22,7 +22,7 @@ impl Gameboy {
         if cgb_mode {
             // GBC hardware signals its presence via A=0x11 after the bootrom.
             // Games like Pokemon Yellow check this to decide whether to enable CGB features.
-            cpu.write_reg(Operand::A, 0x11);
+            cpu.write_reg8(Reg8::A, 0x11);
         }
         Gameboy { cpu }
     }
@@ -42,14 +42,14 @@ impl Gameboy {
             self.cpu.mmu.gpu.cgb_mode = true;
         }
         self.cpu.mmu.set_bios(bios);
-        self.cpu.write_reg(Operand::PC, 0);
+        self.cpu.write_reg16(Reg16::PC, 0);
     }
 
     // fetch the operation, decodes it, and executes it.
     // returns the address of the executed instruction, the instruction opcode,
     // and t cycles passed during this step
     pub fn cpu_step(&mut self) -> (u16, u16, u8) {
-        let line_number = self.cpu.read_reg(Operand::PC);
+        let line_number = self.cpu.read_reg16(Reg16::PC);
 
         let (instr, cycles_this_step) = self.cpu.step();
 

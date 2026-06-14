@@ -242,10 +242,10 @@ fn main() {
             // Map the analog stick's i16 range [-32768, 32767] to MBC7's u16 range
             // centered at 0x8000 with ±0x2000 travel (≈ hardware tilt range).
             const SCALE: f32 = 8192.0_f32 / 32767.0_f32;
-            let ax =
-                (0x8000_i32 + (f32::from(gp.axis(Axis::LeftX)) * SCALE) as i32).clamp(0, 0xFFFF) as u16;
-            let ay =
-                (0x8000_i32 + (f32::from(gp.axis(Axis::LeftY)) * SCALE) as i32).clamp(0, 0xFFFF) as u16;
+            let ax = (0x8000_i32 + (f32::from(gp.axis(Axis::LeftX)) * SCALE) as i32)
+                .clamp(0, 0xFFFF) as u16;
+            let ay = (0x8000_i32 + (f32::from(gp.axis(Axis::LeftY)) * SCALE) as i32)
+                .clamp(0, 0xFFFF) as u16;
             gameboy.set_accelerometer(ax, ay);
         }
 

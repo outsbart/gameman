@@ -69,9 +69,9 @@ pub fn add_words(a: u16, b: u16, c: u16) -> (u16, bool, bool) {
     (res as u16, carry, halfcarry)
 }
 
-pub fn add_word_with_signed(a: u16, b: u16, _: u16) -> (u16, bool, bool) {
+pub fn add_word_with_signed(a: u16, b: u8) -> (u16, bool, bool) {
     let a = i32::from(a);
-    let b = i32::from(b as u8 as i8);
+    let b = i32::from(b as i8);
     let res = a.wrapping_add(b);
 
     let carry = (a ^ b ^ res) & 0x100 != 0;
@@ -80,23 +80,22 @@ pub fn add_word_with_signed(a: u16, b: u16, _: u16) -> (u16, bool, bool) {
     (res as u32 as u16, carry, halfcarry)
 }
 
-pub fn add_bytes(a: u16, b: u16, c: u16) -> (u16, bool, bool) {
-    let res = a.wrapping_add(b).wrapping_add(c);
+pub fn add_bytes(a: u8, b: u8, c: u8) -> (u8, bool, bool) {
+    let res = u16::from(a) + u16::from(b) + u16::from(c);
     let carry = res & 0x100 != 0;
-    let halfcarry = (a ^ b ^ res) & 0x10 != 0;
+    let halfcarry = (a ^ b ^ (res as u8)) & 0x10 != 0;
 
-    (res, carry, halfcarry)
+    (res as u8, carry, halfcarry)
 }
 
-pub fn sub_bytes(a: u16, b: u16, c: u16) -> (u16, bool, bool) {
-    let a = u32::from(a);
-    let b = u32::from(b);
-
-    let res = a.wrapping_sub(b).wrapping_sub(u32::from(c));
+pub fn sub_bytes(a: u8, b: u8, c: u8) -> (u8, bool, bool) {
+    let res = u16::from(a)
+        .wrapping_sub(u16::from(b))
+        .wrapping_sub(u16::from(c));
     let carry = res & 0x100 != 0;
-    let halfcarry = (a ^ b ^ res) & 0x10 != 0;
+    let halfcarry = (a ^ b ^ (res as u8)) & 0x10 != 0;
 
-    (res as u16, carry, halfcarry)
+    (res as u8, carry, halfcarry)
 }
 
 #[allow(overflowing_literals)]

@@ -1,6 +1,6 @@
 #![allow(dead_code, unused_macros)]
 
-use gameman::cpu::Operand;
+use gameman::cpu::Reg8;
 use gameman::gameboy::Gameboy;
 
 const CLOCKS_IN_A_FRAME: u32 = 70224;
@@ -89,7 +89,7 @@ impl GameboyTestExt for Gameboy {
             frames += 1;
 
             if ld_b_b > 1 {
-                return self.cpu.read_reg(Operand::B) == 3;
+                return self.cpu.read_reg8(Reg8::B) == 3;
             }
 
             if frames > 500 {
